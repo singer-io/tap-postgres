@@ -1,0 +1,11 @@
+machine:
+  python:
+    version: 3.4.4
+
+dependencies:
+  pre:
+    - pip install pylint
+
+test:
+  post:
+    - pylint tap_oracle -d C,W,unexpected-keyword-arg
