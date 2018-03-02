@@ -8,22 +8,26 @@ import singer.metadata as metadata
 import singer.metrics as metrics
 from singer.schema import Schema
 import tap_postgres.db as post_db
+import psycopg2
 import copy
 import pdb
 import pytz
 import time
+from select import select
+import json
 
 LOGGER = singer.get_logger()
 
 UPDATE_BOOKMARK_PERIOD = 1000
 
-def fetch_current_scn(connection):
-   cur = connection.cursor()
-   current_scn = cur.execute("SELECT current_scn FROM V$DATABASE").fetchall()[0][0]
-   return current_scn
+def fetch_current_lsn(connection):
+   with  connection.cursor() as cur:
+      cur.execute("SELECT pg_current_xlog_location();")
+      current_scn = cur.fetchone()[0]
+      file, index =  current_scn.split('/')
+      return int('ff000000',16) * int(file,16) + int(index,16)
 
 def add_automatic_properties(stream):
-   stream.schema.properties['scn'] = Schema(type = ['integer'])
    stream.schema.properties['_sdc_deleted_at'] = Schema(
             type=['null', 'string'], format='date-time')
 
@@ -63,79 +67,75 @@ def row_to_singer_message(stream, row, version, columns, time_extracted):
         version=version,
         time_extracted=time_extracted)
 
-def sync_table(connection, stream, state, desired_columns):
+def consume_message(stream, state, msg, time_extracted):
+   payload = json.loads(msg.payload)
+   lsn = msg.data_start
    stream_version = get_stream_version(stream.tap_stream_id, state)
-   cur = connection.cursor()
-   cur.execute("ALTER SESSION SET TIME_ZONE = '00:00'")
-   cur.execute("""ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD"T00:00:00.00+00:00"'""")
-   cur.execute("""ALTER SESSION SET NLS_TIMESTAMP_FORMAT='YYYY-MM-DD"T"HH24:MI:SSXFF"+00:00"'""")
-   cur.execute("""ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT  = 'YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM'""")
 
-   end_scn = fetch_current_scn(connection)
+   # pdb.set_trace()
+   for c in payload['change']:
+      if c['kind'] == 'insert':
+         col_vals  = c['columnvalues'] + [None]
+         col_names = c['columnnames'] + ['_sdc_deleted_at']
+         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted)
+      elif c['kind'] == 'update':
+         col_vals  = c['columnvalues'] + [None]
+         col_names = c['columnnames'] + ['_sdc_deleted_at']
+         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted)
+      elif c['kind'] == 'delete':
+         col_names = c['oldkeys']['keynames'] + ['_sdc_deleted_at']
+         col_vals  = c['oldkeys']['keyvalues']  + [singer.utils.strftime(time_extracted)]
+         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted)
+      else:
+         raise Exception("unrecognized replication operation: {}".format(c['kind']))
+
+      singer.write_message(record_message)
+
+      # LOGGER.info('RING3: record: %s with lsn %s', c, lsn)
+      state = singer.write_bookmark(state,
+                                    stream.tap_stream_id,
+                                    'lsn',
+                                    lsn)
+      msg.cursor.send_feedback(flush_lsn=msg.data_start)
+
+   return state
+
+def sync_table(rep_conn, connection, stream, state, desired_columns):
+   end_lsn = fetch_current_lsn(connection)
    time_extracted = utils.now()
 
-   cur = connection.cursor()
+   with rep_conn.cursor() as cur:
+      LOGGER.info("starting Logical Replication")
+      try:
+         # test_decoding produces textual output
+         cur.start_replication(slot_name='stitch', decode=True, start_lsn=get_bookmark(state, stream.tap_stream_id, 'lsn'))
+      except psycopg2.ProgrammingError:
+         cur.create_replication_slot('stitch', output_plugin='wal2json')
+         # cur.create_replication_slot('stitch', output_plugin='test_decoding')
+         cur.start_replication(slot_name='stitch', decode=True, start_lsn=get_bookmark(state, stream.tap_stream_id, 'lsn'))
 
-   start_logmnr_sql = """BEGIN
-                         DBMS_LOGMNR.START_LOGMNR(
-                                 startScn => {},
-                                 endScn => {},
-                                 OPTIONS => DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG +
-                                            DBMS_LOGMNR.COMMITTED_DATA_ONLY +
-                                            DBMS_LOGMNR.CONTINUOUS_MINE);
-                         END;""".format(get_bookmark(state, stream.tap_stream_id, 'scn'), end_scn)
+      keepalive_interval = 10.0
+      rows_saved = 0
 
-   LOGGER.info("starting LogMiner: {}".format(start_logmnr_sql))
-   cur.execute(start_logmnr_sql)
+      while True:
+         LOGGER.info('reading message')
+         msg = cur.read_message()
+         if msg:
+            state = consume_message(stream, state, msg, time_extracted)
+            rows_saved = rows_saved + 1
 
-   #mine changes
-   cur = connection.cursor()
-   redo_value_sql_clause = ",\n ".join(["""DBMS_LOGMNR.MINE_VALUE(REDO_VALUE, :{})""".format(idx+1)
-                                  for idx,c in enumerate(desired_columns)])
+            if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
+               singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
-   undo_value_sql_clause = ",\n ".join(["""DBMS_LOGMNR.MINE_VALUE(UNDO_VALUE, :{})""".format(idx+1)
-                                  for idx,c in enumerate(desired_columns)])
-
-   schema_name = metadata.to_map(stream.metadata).get(()).get('schema-name')
-
-   mine_sql = """
-      SELECT OPERATION, SQL_REDO, SCN, CSCN, COMMIT_TIMESTAMP,  {}, {} from v$logmnr_contents where table_name = :table_name AND operation in ('INSERT', 'UPDATE', 'DELETE')
-   """.format(redo_value_sql_clause, undo_value_sql_clause)
-   binds = [orc_db.fully_qualified_column_name(schema_name, stream.table, c) for c in desired_columns] + \
-           [orc_db.fully_qualified_column_name(schema_name, stream.table, c) for c in desired_columns] + \
-           [stream.table]
-
-
-   rows_saved = 0
-   columns_for_record = desired_columns + ['scn', '_sdc_deleted_at']
-   with metrics.record_counter(None) as counter:
-      for op, redo, scn, cscn, commit_ts, *col_vals in cur.execute(mine_sql, binds):
-         redo_vals = col_vals[0:len(desired_columns)]
-         undo_vals = col_vals[len(desired_columns):]
-         if op == 'INSERT':
-            redo_vals += [cscn, None]
-            record_message = row_to_singer_message(stream, redo_vals, stream_version, columns_for_record, time_extracted)
-
-         elif op == 'UPDATE':
-            redo_vals += [cscn, None]
-            record_message = row_to_singer_message(stream, redo_vals, stream_version, columns_for_record, time_extracted)
-         elif op == 'DELETE':
-            undo_vals += [cscn, singer.utils.strftime(commit_ts.replace(tzinfo=pytz.UTC))]
-            record_message = row_to_singer_message(stream, undo_vals, stream_version, columns_for_record, time_extracted)
          else:
-            raise Exception("unrecognized logminer operation: {}".format(op))
+            now = datetime.datetime.now()
+            timeout = keepalive_interval - (now - cur.io_timestamp).total_seconds()
+            try:
+               sel = select([cur], [], [], max(0, timeout))
+               if not any(sel):
+                  break
+            except InterruptedError:
+               pass  # recalculate timeout and continue
 
-         singer.write_message(record_message)
-         rows_saved = rows_saved + 1
-         counter.increment()
-
-         state = singer.write_bookmark(state,
-                                       stream.tap_stream_id,
-                                       'scn',
-                                       int(cscn))
-
-
-         if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
-            singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
-
+   singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
    return state

@@ -9,6 +9,8 @@ import pdb
 import time
 import decimal
 import psycopg2
+import psycopg2.extras
+import tap_postgres.db as post_db
 
 LOGGER = singer.get_logger()
 
@@ -40,21 +42,17 @@ def OutputTypeHandler(cursor, name, defaultType, size, precision, scale):
 
 
 def prepare_columns_sql(stream, c):
-   column_name = """ "{}" """.format(c)
-   if 'string' in stream.schema.properties[c].type and stream.schema.properties[c].format == 'date-time':
-      return "to_char({})".format(column_name)
+   column_name = """ "{}" """.format(post_db.canonicalize_identifier(c))
 
    return column_name
 
 def sync_table(connection, stream, state, desired_columns):
-   connection.outputtypehandler = OutputTypeHandler
-
    stream_metadata = metadata.to_map(stream.metadata)
 
-   cur = connection.cursor()
-   cur.execute("""ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD"T00:00:00.00+00:00"'""")
-   cur.execute("""ALTER SESSION SET NLS_TIMESTAMP_FORMAT='YYYY-MM-DD"T"HH24:MI:SSXFF"+00:00"'""")
-   cur.execute("""ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT  = 'YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM'""")
+   # cur = connection.cursor()
+   # cur.execute("""ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD"T00:00:00.00+00:00"'""")
+   # cur.execute("""ALTER SESSION SET NLS_TIMESTAMP_FORMAT='YYYY-MM-DD"T"HH24:MI:SSXFF"+00:00"'""")
+   # cur.execute("""ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT  = 'YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM'""")
    time_extracted = utils.now()
 
    #before writing the table version to state, check if we had one to begin with
@@ -68,17 +66,14 @@ def sync_table(connection, stream, state, desired_columns):
                                  nascent_stream_version)
    singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
-   cur = connection.cursor()
    md = metadata.to_map(stream.metadata)
    schema_name = md.get(()).get('schema-name')
 
    escaped_columns = map(lambda c: prepare_columns_sql(stream, c), desired_columns)
-   escaped_schema  = schema_name
-   escaped_table   = stream.table
 
-   select_sql      = 'SELECT {} FROM {}.{}'.format(','.join(escaped_columns),
-                                                   escaped_schema,
-                                                   escaped_table)
+   select_sql      = 'SELECT {} FROM {}'.format(','.join(escaped_columns),
+                                                post_db.fully_qualified_table_name(schema_name, stream.table))
+
 
 
    #LOGGER.info("select: %s", select_sql)
@@ -90,10 +85,15 @@ def sync_table(connection, stream, state, desired_columns):
       singer.write_message(activate_version_message)
 
    with metrics.record_counter(None) as counter:
-      for row in cur.execute(select_sql):
-         record_message = row_to_singer_message(stream, row, nascent_stream_version, desired_columns, time_extracted)
-         singer.write_message(record_message)
-         counter.increment()
+      with connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+         cur.execute(select_sql)
+         rec = cur.fetchone()
+         while rec is not None:
+            record_message = row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted)
+            singer.write_message(record_message)
+            counter.increment()
+            rec = cur.fetchone()
+
 
    #always send the activate version whether first run or subsequent
    singer.write_message(activate_version_message)

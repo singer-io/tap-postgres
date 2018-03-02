@@ -50,14 +50,17 @@ REQUIRED_CONFIG_KEYS = [
 ]
 
 
-def open_connection(config):
+def open_connection(config, logical_replication=False):
     conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(config['host'],
                                                                                    config['database'],
                                                                                    config['user'],
                                                                                    config['password'],
                                                                                    config['port'])
+    if logical_replication:
+       conn = psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
+    else:
+       conn = psycopg2.connect(conn_string)
 
-    conn = psycopg2.connect(conn_string)
     return conn
 
 DEFAULT_NUMERIC_PRECISION=38
@@ -249,19 +252,21 @@ def do_sync(connection, catalog, default_replication_method, state):
 
       replication_method = stream_metadata.get((), {}).get('replication-method', default_replication_method)
       if replication_method == 'LOG_BASED':
-         if get_bookmark(state, stream.tap_stream_id, 'scn'):
+         if get_bookmark(state, stream.tap_stream_id, 'lsn'):
             logical_replication.add_automatic_properties(stream)
-            send_schema_message(stream, ['scn'])
-            state = logical_replication.sync_table(connection, stream, state, desired_columns)
-
+            send_schema_message(stream, ['lsn'])
+            args = utils.parse_args(REQUIRED_CONFIG_KEYS)
+            rep_connection = open_connection(args.config, True)
+            state = logical_replication.sync_table(rep_connection, connection, stream, state, desired_columns)
          else:
             #start off with full-table replication
-            end_scn = logical_replication.fetch_current_scn(connection)
+            end_lsn = logical_replication.fetch_current_lsn(connection)
+            # LOGGER.info('RING3: lsn %s', end_lsn)
             send_schema_message(stream, [])
             state = full_table.sync_table(connection, stream, state, desired_columns)
 
-            #once we are done with full table, write the scn to the state
-            state = singer.write_bookmark(state, stream.tap_stream_id, 'scn', end_scn)
+            #once we are done with full table, write the lsn to the state
+            state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
 
       elif replication_method == 'FULL_TABLE':
          send_schema_message(stream, [])
