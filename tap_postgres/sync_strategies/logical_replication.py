@@ -101,6 +101,7 @@ def consume_message(stream, state, msg, time_extracted):
    return state
 
 def sync_table(rep_conn, connection, stream, state, desired_columns):
+
    end_lsn = fetch_current_lsn(connection)
    time_extracted = utils.now()
 

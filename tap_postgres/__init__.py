@@ -264,7 +264,10 @@ def do_sync(connection, catalog, default_replication_method, state):
             # LOGGER.info('RING3: lsn %s', end_lsn)
             send_schema_message(stream, [])
             state = full_table.sync_table(connection, stream, state, desired_columns)
-
+            state = singer.write_bookmark(state,
+                                          stream.tap_stream_id,
+                                          'xmin',
+                                          None)
             #once we are done with full table, write the lsn to the state
             state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
 
