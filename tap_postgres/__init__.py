@@ -35,10 +35,6 @@ Column = collections.namedtuple('Column', [
    "numeric_scale"
 ])
 
-STRING_TYPES = set([
-   'character varying',
-])
-
 
 REQUIRED_CONFIG_KEYS = [
     'database',
@@ -57,9 +53,9 @@ def open_connection(config, logical_replication=False):
                                                                                    config['password'],
                                                                                    config['port'])
     if logical_replication:
-       conn = psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
+        conn = psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
     else:
-       conn = psycopg2.connect(conn_string)
+        conn = psycopg2.connect(conn_string)
 
     return conn
 
@@ -81,8 +77,8 @@ def schema_for_column(c):
 
    if data_type == 'integer':
       result.type = nullable_column(c.column_name, 'integer', c.is_primary_key)
-      result.minimum = -1 * (10**c.numeric_precision - 1)
-      result.maximum = (10**c.numeric_precision - 1)
+      result.minimum = -1 * (2**(c.numeric_precision - 1))
+      result.maximum = 2**(c.numeric_precision - 1) - 1
 
       return result
 
@@ -106,10 +102,15 @@ def schema_for_column(c):
    #    result.type = nullable_column(c.column_name, 'number', is_primary_key)
    #    return result
 
-   elif data_type in STRING_TYPES:
+   elif data_type == 'text':
       result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
 
       return result
+
+   elif data_type == 'character varying':
+       result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
+       result.maxLength = c.character_maximum_length
+       return result
 
 
    return Schema(None)
@@ -127,11 +128,11 @@ SELECT
   i.indisprimary AS primary_key,
   format_type(a.atttypid, NULL::integer) as data_type,
   information_schema._pg_char_max_length(information_schema._pg_truetypid(a.*, t.*),
-  information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS character_maximum_length,
+                                         information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS character_maximum_length,
   information_schema._pg_numeric_precision(information_schema._pg_truetypid(a.*, t.*),
-  information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS numeric_precision,
-  information_schema._pg_numeric_scale(information_schema._pg_truetypid(a.*, t.*),
-  information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS numeric_scale
+                                           information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS numeric_precision,
+ information_schema._pg_numeric_scale(information_schema._pg_truetypid(a.*, t.*),
+                                      information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS numeric_scale
 FROM   pg_attribute a
 LEFT JOIN pg_type t on a.atttypid = t.oid
 JOIN pg_class
@@ -145,7 +146,7 @@ WHERE attnum > 0
 AND NOT a.attisdropped
 AND pg_class.relkind IN ('r', 'v')
 AND n.nspname NOT in ('pg_toast', 'pg_catalog', 'information_schema')
-AND has_table_privilege(pg_class.oid, 'SELECT') = true; """)
+AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
       for row in cur.fetchall():
          row_count, is_view, schema_name, table_name, *col_info = row
 
@@ -173,23 +174,32 @@ def discover_columns(connection, table_info):
          mdata = {}
          columns = table_info[schema_name][table_name]['columns']
          table_pks = [col_name for col_name, col_info in columns.items() if col_info.is_primary_key]
-         database_name = 'change-me'
+         with connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+             cur.execute(" SELECT current_database()")
+             database_name = cur.fetchone()[0]
 
          metadata.write(mdata, (), 'key-properties', table_pks)
          metadata.write(mdata, (), 'schema-name', schema_name)
          metadata.write(mdata, (), 'database-name', database_name)
          metadata.write(mdata, (), 'row-count', table_info[schema_name][table_name]['row_count'])
+         metadata.write(mdata, (), 'is-view', table_info[schema_name][table_name].get('is_view'))
 
+         # if table_name == 'CHICKEN TIMES':
+         #     pdb.set_trace()
          column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
          schema = Schema(type='object', properties=column_schemas)
-
          for c_name in column_schemas.keys():
-            if column_schemas[c_name].type is None:
-               metadata.write(mdata, ('properties', c_name), 'inclusion', 'unsupported')
-            elif table_info[schema_name][table_name]['columns'][c_name].is_primary_key:
-               metadata.write(mdata, ('properties', c_name), 'inclusion', 'automatic')
-            else:
-               metadata.write(mdata, ('properties', c_name), 'inclusion', 'available')
+
+             mdata =metadata.write(mdata, ('properties', c_name), 'sql-datatype', columns[c_name].sql_data_type)
+             if column_schemas[c_name].type is None:
+                 mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'unsupported')
+                 mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', False)
+             elif table_info[schema_name][table_name]['columns'][c_name].is_primary_key:
+                 mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'automatic')
+                 mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', True)
+             else:
+                 mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'available')
+                 mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', True)
 
          entry = CatalogEntry(
             table=table_name,

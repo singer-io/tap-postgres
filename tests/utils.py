@@ -1,50 +1,53 @@
 from singer import get_logger, metadata
 from nose.tools import nottest
-
-import cx_Oracle
+import psycopg2
 import singer
 import os
 import decimal
 import math
 import datetime
+import pdb
+from psycopg2.extensions import quote_ident
 
 LOGGER = get_logger()
 
 def get_test_connection():
     creds = {}
-    missing_envs = [x for x in [os.getenv('TAP_ORACLE_HOST'),
-                                os.getenv('TAP_ORACLE_USER'),
-                                os.getenv('TAP_ORACLE_PASSWORD'),
-                                os.getenv('TAP_ORACLE_PORT'),
-                                os.getenv('TAP_ORACLE_SID')] if x == None]
+    missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
+                                os.getenv('TAP_POSTGRES_USER'),
+                                os.getenv('TAP_POSTGRES_PASSWORD'),
+                                os.getenv('TAP_POSTGRES_PORT')
+                                # os.getenv('TAP_POSTGRES_DATABASE')
+    ] if x == None]
     if len(missing_envs) != 0:
         #pylint: disable=line-too-long
-        raise Exception("set TAP_ORACLE_HOST, TAP_ORACLE_USER, TAP_ORACLE_PASSWORD, TAP_ORACLE_PORT, TAP_ORACLE_SID")
+        raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT, TAP_POSTGRES_DB")
 
-    creds['host'] = os.environ.get('TAP_ORACLE_HOST')
-    creds['user'] = os.environ.get('TAP_ORACLE_USER')
-    creds['password'] = os.environ.get('TAP_ORACLE_PASSWORD')
-    creds['port'] = os.environ.get('TAP_ORACLE_PORT')
-    creds['sid'] = os.environ.get('TAP_ORACLE_SID')
+    creds['host'] = os.environ.get('TAP_POSTGRES_HOST')
+    creds['user'] = os.environ.get('TAP_POSTGRES_USER')
+    creds['password'] = os.environ.get('TAP_POSTGRES_PASSWORD')
+    creds['port'] = os.environ.get('TAP_POSTGRES_PORT')
+    # creds['DB'] = os.environ.get('TAP_POSTGRES_DB')
+    conn_string = "host='{}'  user='{}' password='{}' port='{}'".format(creds['host'],
+                                                                        creds['user'],
+                                                                        creds['password'],
+                                                                        creds['port'])
 
-    conn_string = '(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={})(PORT={}))(CONNECT_DATA=(SID={})))'.format(creds['host'], creds['port'], creds['sid'])
-
-    conn = cx_Oracle.connect(creds['user'], creds['password'], conn_string)
+    conn = psycopg2.connect(conn_string)
 
     return conn
 
 def build_col_sql( col):
     col_sql = "{} {}".format(col['name'], col['type'])
-    if col.get("identity"):
-        col_sql += " GENERATED ALWAYS as IDENTITY(START with 1 INCREMENT by 1)"
+
     return col_sql
 
-def build_table(table):
-    create_sql = "CREATE TABLE {}\n".format(table['name'])
+def build_table(table, cur):
+    create_sql = "CREATE TABLE {}\n".format(quote_ident(table['name'], cur))
     col_sql = map(build_col_sql, table['columns'])
     pks = [c['name'] for c in table['columns'] if c.get('primary_key')]
     if len(pks) != 0:
-        pk_sql = ",\n CONSTRAINT {}_pk  PRIMARY KEY({})".format(table['name'], " ,".join(pks))
+        pk_sql = ",\n CONSTRAINT {}  PRIMARY KEY({})".format(quote_ident(table['name'] + "_pk", cur), " ,".join(pks))
     else:
        pk_sql = ""
 
@@ -54,16 +57,26 @@ def build_table(table):
 
 @nottest
 def ensure_test_table(table_spec):
-    sql = build_table(table_spec)
+
 
     with get_test_connection() as conn:
-        cur = conn.cursor()
-        old_table = cur.execute("select * from all_tables where owner  = '{}' AND table_name = '{}'".format("ROOT", table_spec['name'])).fetchall()
-        if len(old_table) != 0:
-            cur.execute("DROP TABLE {}".format(table_spec['name']))
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            sql = """SELECT *
+                       FROM information_schema.tables
+                      WHERE table_schema = 'public'
+                        AND table_name = %s"""
 
-        print(sql)
-        cur.execute(sql)
+            cur.execute(sql,
+                        [table_spec['name']])
+            old_table = cur.fetchall()
+
+            if len(old_table) != 0:
+                drop_sql = "DROP TABLE {}".format(quote_ident(table_spec['name'], cur))
+                cur.execute(drop_sql)
+
+            sql = build_table(table_spec, cur)
+            LOGGER.info("create table sql: %s", sql)
+            cur.execute(sql)
 
 def unselect_column(our_stream, col):
     md = metadata.to_map(our_stream.metadata)

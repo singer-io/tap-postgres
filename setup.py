@@ -12,7 +12,8 @@ setup(name='tap-postgres',
           'singer-python==5.0.4',
           'requests==2.12.4',
 	  'psycopg2==2.7.4',
-	  'strict-rfc3339==0.7'
+	  'strict-rfc3339==0.7',
+	  'nose==1.3.7'
       ],
       entry_points='''
           [console_scripts]

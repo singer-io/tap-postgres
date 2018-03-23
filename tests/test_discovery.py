@@ -1,9 +1,10 @@
 import unittest
-import cx_Oracle, sys, string, datetime
-import tap_oracle
+import psycopg2
+import psycopg2.extras
+import tap_postgres
 import os
 import pdb
-from singer import get_logger
+from singer import get_logger, metadata
 from tests.utils import get_test_connection, ensure_test_table
 
 LOGGER = get_logger()
@@ -11,90 +12,69 @@ LOGGER = get_logger()
 def do_not_dump_catalog(catalog):
     pass
 
-tap_oracle.dump_catalog = do_not_dump_catalog
+tap_postgres.dump_catalog = do_not_dump_catalog
 
 class TestStringTableWithPK(unittest.TestCase):
     maxDiff = None
+    table_name = 'CHICKEN TIMES'
     def setUp(self):
-       table_spec = {"columns": [{"name" : "id", "type" : "integer", "primary_key" : True, "identity" : True},
-                                 #NLS_LENGTH_SEMANTICS = byte
-                                 {"name" : '"name-char-explicit-byte"',  "type": "char(250 byte)"},
-                                 {"name" : '"name-char-explicit-char"',  "type": "char(250 char)"},
-                                 {"name" : '"name-nchar"',               "type": "nchar(123)"},
-                                 {"name" : '"name-nvarchar2"',           "type": "nvarchar2(234)"},
+       table_spec = {"columns": [{"name" : "id", "type" : "integer", "primary_key" : True, "serial" : True},
 
-                                 {"name" : '"name-varchar-explicit-byte"',  "type": "varchar(250 byte)"},
-                                 {"name" : '"name-varchar-explicit-char"',  "type": "varchar(251 char)"},
-
-                                 {"name" : '"name-varchar2-explicit-byte"',  "type": "varchar2(250 byte)"},
-                                 {"name" : '"name-varchar2-explicit-char"',  "type": "varchar2(251 char)"}],
-                      "name" : "CHICKEN"}
+                                 {"name" : '"character-varying name"',  "type": "character varying"},
+                                 {"name" : '"varchar-name"',            "type": "varchar(28)"},
+                                 {"name" : '"text-name"',               "type": "text"}],
+                     "name" : TestStringTableWithPK.table_name}
        ensure_test_table(table_spec)
 
     def test_catalog(self):
         with get_test_connection() as conn:
-            catalog = tap_oracle.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
+            catalog = tap_postgres.do_discovery(conn)
+
+            chicken_streams = [s for s in catalog.streams if s.table == TestStringTableWithPK.table_name]
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
 
-            self.assertEqual('CHICKEN', stream_dict.get('table_name'))
-            self.assertEqual('CHICKEN', stream_dict.get('stream'))
-            self.assertEqual('ROOT-CHICKEN', stream_dict.get('tap_stream_id'))
+            self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
+            self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
+            self.assertEqual('public-{}'.format(TestStringTableWithPK.table_name), stream_dict.get('tap_stream_id'))
 
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual(stream_dict.get('metadata'),
-                             [{'metadata': {'key-properties': ['ID'],
-                                            'database-name': os.getenv('TAP_ORACLE_SID'),
-                                            'schema-name': 'ROOT',
-                                            'is-view': False,
-                                            'row-count': 0},
-                               'breadcrumb': ()},
-                              {'metadata': {'inclusion': 'automatic'}, 'breadcrumb': ('properties', 'ID')},
-                              {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'name-char-explicit-byte')},
-                              {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'name-char-explicit-char')},
-                              {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'name-nchar')},
-                              {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'name-nvarchar2')},
-                              {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'name-varchar-explicit-byte')},
-                              {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'name-varchar-explicit-char')},
-                              {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'name-varchar2-explicit-byte')},
-                              {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'name-varchar2-explicit-char')}])
 
-            self.assertEqual({'properties': {'ID':                      {'type': ['integer'],
-                                                                         'maximum': 99999999999999999999999999999999999999,
-                                                                         'minimum': -99999999999999999999999999999999999999},
-                                             'name-char-explicit-byte': {'type': ['null', 'string']},
-                                             'name-char-explicit-char': {'type': ['null', 'string'], 'maxLength': 250},
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'key-properties': ['id'], 'database-name': 'vagrant',
+                                    'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'character-varying name') : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
+                              ('properties', 'id')                     : {'inclusion': 'automatic', 'sql-datatype' : 'integer', 'selected-by-default' : True},
+                              ('properties', 'varchar-name')           : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
+                              ('properties', 'text-name')              : {'inclusion': 'available', 'sql-datatype' : 'text', 'selected-by-default' : True}})
 
-                                             'name-nchar':     {'type': ['null', 'string'], 'maxLength': 123 },
-                                             'name-nvarchar2': {'type': ['null', 'string'], 'maxLength': 234 },
-
-                                             'name-varchar-explicit-byte': {'type': ['null', 'string']},
-                                             'name-varchar-explicit-char': {'type': ['null', 'string'], 'maxLength': 251},
-
-                                             'name-varchar2-explicit-byte': {'type': ['null', 'string']},
-                                             'name-varchar2-explicit-char': {'type': ['null', 'string'], 'maxLength': 251}},
-                              'type': 'object'},  stream_dict.get('schema'))
+            self.assertEqual({'properties': {'id':                      {'type': ['integer'],
+                                                                         'maximum':  2147483647,
+                                                                         'minimum': -2147483648},
+                                             'character-varying name': {'type': ['null', 'string']},
+                                             'varchar-name':           {'type': ['null', 'string'], 'maxLength': 28},
+                                             'text-name':              {'type': ['null', 'string']}},
+                                             'type': 'object'},  stream_dict.get('schema'))
 
 
 class TestIntegerTablePK(unittest.TestCase):
     maxDiff = None
 
     def setUp(self):
-       table_spec = {"columns": [{"name" :  "size_pk   ",            "type" : "number(4,0)", "primary_key" : True, "identity" : True},
+       table_spec = {"columns": [{"name" :  "size_pk   ",            "type" : "number(4,0)", "primary_key" : True, "serial" : True},
                                  {"name" : '"size_number_4_0"',      "type" : "number(4,0)"},
                                  {"name" : '"size_number_*_0"',      "type" : "number(*,0)"},
                                  {"name" : '"size_number_10_-1"',    "type" : "number(10,-1)"},
                                  {"name" : '"size_number_integer"',  "type" : "integer"},
                                  {"name" : '"size_number_int"',      "type" : "int"},
                                  {"name" : '"size_number_smallint"', "type" : "smallint"}],
-                     "name" : "CHICKEN"}
+                     "name" : '"CHICKEN"'}
        ensure_test_table(table_spec)
 
     def test_catalog(self):
         with get_test_connection() as conn:
-            catalog = tap_oracle.do_discovery(conn)
+            catalog = tap_postgres.do_discovery(conn)
             chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
@@ -121,7 +101,7 @@ class TestIntegerTablePK(unittest.TestCase):
                               'table_name': 'CHICKEN',
                               'tap_stream_id': 'ROOT-CHICKEN',
                               'metadata': [{'metadata': {'key-properties': ['SIZE_PK'],
-                                                         'database-name': os.getenv('TAP_ORACLE_SID'),
+                                                         'database-name': os.getenv('TAP_POSTGRES_SID'),
                                                          'schema-name': 'ROOT',
                                                          'is-view': False,
                                                          'row-count': 0},
@@ -150,7 +130,7 @@ class TestDecimalPK(unittest.TestCase):
 
     def test_catalog(self):
         with get_test_connection() as conn:
-            catalog = tap_oracle.do_discovery(conn)
+            catalog = tap_postgres.do_discovery(conn)
             chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
@@ -176,7 +156,7 @@ class TestDecimalPK(unittest.TestCase):
                               'tap_stream_id': 'ROOT-CHICKEN',
                               'metadata': [{'breadcrumb': (),
                                             'metadata': {'key-properties': ['our_number'],
-                                                         'database-name': os.getenv('TAP_ORACLE_SID'),
+                                                         'database-name': os.getenv('TAP_POSTGRES_SID'),
                                                          'schema-name': 'ROOT',
                                                          'is-view': False,
                                                          'row-count': 0}},
@@ -199,7 +179,7 @@ class TestDatesTablePK(unittest.TestCase):
 
     def test_catalog(self):
         with get_test_connection() as conn:
-            catalog = tap_oracle.do_discovery(conn)
+            catalog = tap_postgres.do_discovery(conn)
             chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
@@ -217,7 +197,7 @@ class TestDatesTablePK(unittest.TestCase):
                               'metadata':
                               [{'breadcrumb': (),
                                 'metadata': {'key-properties': ['our_date'],
-                                             'database-name': os.getenv('TAP_ORACLE_SID'),
+                                             'database-name': os.getenv('TAP_POSTGRES_SID'),
                                              'schema-name': 'ROOT',
                                              'is-view': 0,
                                              'row-count': 0}},
@@ -247,7 +227,7 @@ class TestFloatTablePK(unittest.TestCase):
 
     def test_catalog(self):
         with get_test_connection() as conn:
-            catalog = tap_oracle.do_discovery(conn)
+            catalog = tap_postgres.do_discovery(conn)
             chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
@@ -267,7 +247,7 @@ class TestFloatTablePK(unittest.TestCase):
                               'tap_stream_id': 'ROOT-CHICKEN',
                               'metadata': [{'breadcrumb': (),
                                             'metadata': {'key-properties': ["our_float"],
-                                                         'database-name': os.getenv('TAP_ORACLE_SID'),
+                                                         'database-name': os.getenv('TAP_POSTGRES_SID'),
                                                          'schema-name': 'ROOT',
                                                          'is-view': False,
                                                          'row-count': 0}},
@@ -278,6 +258,6 @@ class TestFloatTablePK(unittest.TestCase):
                                            {'breadcrumb': ('properties', 'our_real'), 'metadata': {'inclusion': 'available'}}]},
                              stream_dict)
 if __name__== "__main__":
-    test1 = TestFloatTablePK()
+    test1 = TestStringTableWithPK()
     test1.setUp()
     test1.test_catalog()
