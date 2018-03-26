@@ -104,9 +104,9 @@ class TestDecimalPK(unittest.TestCase):
     table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : '"our_decimal"',                "type" : "numeric", "primary_key": True},
-                                 {"name" : '"our_decimal_10_2"',           "type" : "decimal(10,2)"},
-                                 {"name" : '"our_decimal_38_4"',           "type" : "decimal(38,4)"}],
+       table_spec = {"columns": [{"name" : 'our_decimal',                "type" : "numeric", "primary_key": True},
+                                 {"name" : 'our_decimal_10_2',           "type" : "decimal(10,2)"},
+                                 {"name" : 'our_decimal_38_4',           "type" : "decimal(38,4)"}],
                      "name" : TestDecimalPK.table_name}
        ensure_test_table(table_spec)
 
@@ -150,49 +150,42 @@ class TestDecimalPK(unittest.TestCase):
 
 class TestDatesTablePK(unittest.TestCase):
     maxDiff = None
+    table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : '"our_date"',                   "type" : "DATE", "primary_key": True },
-                                 {"name" : '"our_ts"',                     "type" : "TIMESTAMP"},
-                                 {"name" : '"our_ts_tz"',                  "type" : "TIMESTAMP WITH TIME ZONE"},
-                                 {"name" : '"our_ts_tz_local"',            "type" : "TIMESTAMP WITH LOCAL TIME ZONE"}],
-                     "name" : "CHICKEN"}
+       table_spec = {"columns": [{"name" : 'our_date',                   "type" : "DATE", "primary_key": True },
+                                 {"name" : 'our_ts',                     "type" : "TIMESTAMP"},
+                                 {"name" : 'our_ts_tz',                  "type" : "TIMESTAMP WITH TIME ZONE"},
+                                 {"name" : 'our_time',                   "type" : "TIME"},
+                                 {"name" : 'our_time_tz',                "type" : "TIME WITH TIME ZONE"}],
+                     "name" : TestDatesTablePK.table_name}
        ensure_test_table(table_spec)
 
     def test_catalog(self):
         with get_test_connection() as conn:
             catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
+            chicken_streams = [s for s in catalog.streams if s.table == TestDatesTablePK.table_name]
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
 
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual({'schema': {'properties': {'our_date':               {'type': ['string'], 'format' : 'date-time'},
-                                                        'our_ts':                 {'type': ['null', 'string'], 'format' : 'date-time'},
-                                                        'our_ts_tz':              {'type': ['null', 'string'], 'format' : 'date-time'},
-                                                        'our_ts_tz_local':        {'type': ['null', 'string'], 'format' : 'date-time'}},
-                                         'type': 'object'},
-                              'stream': 'CHICKEN',
-                              'table_name': 'CHICKEN',
-                              'tap_stream_id': 'ROOT-CHICKEN',
-                              'metadata':
-                              [{'breadcrumb': (),
-                                'metadata': {'key-properties': ['our_date'],
-                                             'database-name': os.getenv('TAP_POSTGRES_SID'),
-                                             'schema-name': 'ROOT',
-                                             'is-view': 0,
-                                             'row-count': 0}},
-                               {'breadcrumb': ('properties', 'our_date'),
-                                'metadata': {'inclusion': 'automatic'}},
-                               {'breadcrumb': ('properties', 'our_ts'),
-                                'metadata': {'inclusion': 'available'}},
-                               {'breadcrumb': ('properties', 'our_ts_tz'),
-                                'metadata': {'inclusion': 'available'}},
-                               {'breadcrumb': ('properties', 'our_ts_tz_local'),
-                                'metadata': {'inclusion': 'available'}}]},
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'key-properties': ['our_date'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'our_date')           : {'inclusion': 'automatic', 'sql-datatype' : 'date', 'selected-by-default' : True},
+                              ('properties', 'our_ts')             : {'inclusion': 'available', 'sql-datatype' : 'timestamp without time zone', 'selected-by-default' : True},
+                              ('properties', 'our_ts_tz')          : {'inclusion': 'available', 'sql-datatype' : 'timestamp with time zone', 'selected-by-default' : True},
+                              ('properties', 'our_time')           : {'inclusion': 'available', 'sql-datatype' : 'time without time zone', 'selected-by-default' : True},
+                              ('properties', 'our_time_tz')        : {'inclusion': 'available', 'sql-datatype' : 'time with time zone', 'selected-by-default' : True}})
 
-                             stream_dict)
+            self.assertEqual({'properties': {'our_date':               {'type': ['string'], 'format' : 'date-time'},
+                                             'our_ts':                 {'type': ['null', 'string'], 'format' : 'date-time'},
+                                             'our_ts_tz':              {'type': ['null', 'string'], 'format' : 'date-time'},
+                                             'our_time':            {'type': ['null', 'string'], 'format' : 'date-time'},
+                                             'our_time_tz':            {'type': ['null', 'string'], 'format' : 'date-time'}},
+                                         'type': 'object'},
+                             stream_dict.get('schema'))
+
 
 
 class TestFloatTablePK(unittest.TestCase):
@@ -240,6 +233,6 @@ class TestFloatTablePK(unittest.TestCase):
                                            {'breadcrumb': ('properties', 'our_real'), 'metadata': {'inclusion': 'available'}}]},
                              stream_dict)
 if __name__== "__main__":
-    test1 = TestDecimalPK()
+    test1 = TestDatesTablePK()
     test1.setUp()
     test1.test_catalog()

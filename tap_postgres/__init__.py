@@ -100,7 +100,6 @@ def schema_for_column(c):
       else:
           precision = c.numeric_precision
 
-      # pdb.set_trace()
       result.exclusiveMaximum = True
       result.maximum = 10 ** (precision - scale)
       result.multipleOf = 10 ** (0 - scale)
@@ -108,11 +107,11 @@ def schema_for_column(c):
       result.minimum = -10 ** (precision - scale)
       return result
 
-   # elif data_type == 'date' or data_type.startswith("timestamp"):
-   #    result.type = nullable_column(c.column_name, 'string', is_primary_key)
+   elif data_type == 'date' or data_type.startswith("time"):
+      result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
 
-   #    result.format = 'date-time'
-   #    return result
+      result.format = 'date-time'
+      return result
 
    # elif data_type in FLOAT_TYPES:
    #    result.type = nullable_column(c.column_name, 'number', is_primary_key)

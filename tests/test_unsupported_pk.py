@@ -32,6 +32,8 @@ def expected_record(fixture_row):
 
     return expected_record
 
+#unsupported types: interval
+
 class UnsupportedPK(unittest.TestCase):
     maxDiff = None
     def setUp(self):
