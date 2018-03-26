@@ -84,7 +84,6 @@ def schema_for_column(c):
       result.type = nullable_column(c.column_name, 'integer', c.is_primary_key)
       result.minimum = -1 * (2**(c.numeric_precision - 1))
       result.maximum = 2**(c.numeric_precision - 1) - 1
-
       return result
 
    elif data_type in {'bit', 'boolean'}:
@@ -92,6 +91,10 @@ def schema_for_column(c):
        return result
 
    elif data_type == 'uuid':
+       result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
+       return result
+
+   elif data_type == 'hstore':
        result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
        return result
 

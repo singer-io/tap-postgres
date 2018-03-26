@@ -310,13 +310,54 @@ class TestUUIDTables(unittest.TestCase):
                               'type': 'object'},
                              stream_dict.get('schema'))
 
+class TestHStoreTable(unittest.TestCase):
+    maxDiff = None
+    table_name = 'CHICKEN TIMES'
+
+    def setUp(self):
+       table_spec = {"columns": [{"name" : 'our_pk',          "type" : "hstore", "primary_key" : True },
+                                 {"name" : 'our_hstore',      "type" : "hstore" }],
+                     "name" : TestHStoreTable.table_name}
+       with get_test_connection() as conn:
+           cur = conn.cursor()
+           cur.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
+           if cur.fetchone()[0] is None:
+               cur.execute(""" CREATE EXTENSION hstore; """)
+
+
+       ensure_test_table(table_spec)
+
+    def test_catalog(self):
+        with get_test_connection() as conn:
+            catalog = tap_postgres.do_discovery(conn)
+            chicken_streams = [s for s in catalog.streams if s.table == TestHStoreTable.table_name]
+            self.assertEqual(len(chicken_streams), 1)
+            stream_dict = chicken_streams[0].to_dict()
+            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+
+            # with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            #     cur.execute("""INSERT INTO "CHICKEN TIMES" (our_pk, our_hstore) VALUES ('size=>"small",name=>"betty"', 'size=>"big",name=>"fred"')""")
+            #     cur.execute("""SELECT * FROM  "CHICKEN TIMES" """)
+            #     wtf = cur.fetchall()
+
+
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'key-properties': ['our_pk'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'our_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'hstore',  'selected-by-default' : True},
+                              ('properties', 'our_hstore') : {'inclusion': 'available', 'sql-datatype' : 'hstore',  'selected-by-default' : True}})
+
+
+            self.assertEqual({'properties': {'our_hstore':                  {'type': ['null', 'string']},
+                                             'our_pk':                    {'type': ['string']}},
+                              'type': 'object'},
+                             stream_dict.get('schema'))
+
 
 
 #TODO:
-#uuid
 #hstore
 
 if __name__== "__main__":
-    test1 = TestUUIDTables()
+    test1 = TestHStoreTable()
     test1.setUp()
     test1.test_catalog()
