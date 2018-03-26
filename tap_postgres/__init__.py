@@ -91,6 +91,10 @@ def schema_for_column(c):
        result.type = nullable_column(c.column_name, 'boolean', c.is_primary_key)
        return result
 
+   elif data_type == 'uuid':
+       result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
+       return result
+
    elif data_type in JSON_TYPES:
        result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
        return result
