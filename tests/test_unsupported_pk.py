@@ -32,7 +32,7 @@ def expected_record(fixture_row):
 
     return expected_record
 
-#unsupported types: interval
+#unsupported types: interval, bits(n)
 
 class UnsupportedPK(unittest.TestCase):
     maxDiff = None

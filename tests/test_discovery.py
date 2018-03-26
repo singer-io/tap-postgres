@@ -249,17 +249,49 @@ class TestBoolsAndBits(unittest.TestCase):
                               'type': 'object'},
                              stream_dict.get('schema'))
 
+class TestJsonTables(unittest.TestCase):
+    maxDiff = None
+    table_name = 'CHICKEN TIMES'
+
+    def setUp(self):
+       table_spec = {"columns": [{"name" : 'our_secrets',        "type" : "json" },
+                                 {"name" : 'our_secrets_b',     "type" : "jsonb" }],
+                     "name" : TestJsonTables.table_name}
+       ensure_test_table(table_spec)
+
+    def test_catalog(self):
+        with get_test_connection() as conn:
+            catalog = tap_postgres.do_discovery(conn)
+            chicken_streams = [s for s in catalog.streams if s.table == TestJsonTables.table_name]
+            self.assertEqual(len(chicken_streams), 1)
+            stream_dict = chicken_streams[0].to_dict()
+
+            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("""insert into "CHICKEN TIMES" (our_secrets) values ('{"age": "old"}')""")
+
+
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'key-properties': [], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'our_secrets')          : {'inclusion': 'available', 'sql-datatype' : 'json',  'selected-by-default' : True},
+                              ('properties', 'our_secrets_b')        : {'inclusion': 'available', 'sql-datatype' : 'jsonb', 'selected-by-default' : True}})
+
+
+            self.assertEqual({'properties': {'our_secrets':                  {'type': ['null', 'string']},
+                                             'our_secrets_b':                {'type': ['null', 'string']}},
+                              'type': 'object'},
+                             stream_dict.get('schema'))
+
 
 
 #TODO:
-#Bit
-#Char
 #json
 #jsonb
 #uuid
 #hstore
 
 if __name__== "__main__":
-    test1 = TestBoolsAndBits()
+    test1 = TestJsonTables()
     test1.setUp()
     test1.test_catalog()

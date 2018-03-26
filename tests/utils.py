@@ -34,6 +34,7 @@ def get_test_connection():
                                                                         creds['port'])
 
     conn = psycopg2.connect(conn_string)
+    conn.autocommit = True
 
     return conn
 
