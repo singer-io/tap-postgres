@@ -79,13 +79,17 @@ def schema_for_column(c):
    data_type = c.sql_data_type.lower()
    result = Schema()
 
-
+   # pdb.set_trace()
    if data_type in INTEGER_TYPES:
       result.type = nullable_column(c.column_name, 'integer', c.is_primary_key)
       result.minimum = -1 * (2**(c.numeric_precision - 1))
       result.maximum = 2**(c.numeric_precision - 1) - 1
 
       return result
+
+   elif data_type in {'bit', 'boolean'}:
+       result.type = nullable_column(c.column_name, 'boolean', c.is_primary_key)
+       return result
 
    elif data_type == 'numeric':
       result.type = nullable_column(c.column_name, 'number', c.is_primary_key)

@@ -219,7 +219,47 @@ class TestFloatTablePK(unittest.TestCase):
                                              'our_double':       {'type': ['null', 'number']}},
                                          'type': 'object'},
                              stream_dict.get('schema'))
+
+class TestBoolsAndBits(unittest.TestCase):
+    maxDiff = None
+    table_name = 'CHICKEN TIMES'
+
+    def setUp(self):
+       table_spec = {"columns": [{"name" : 'our_bool',     "type" : "boolean" },
+                                 {"name" : 'our_bit',     "type" : "bit" }],
+                     "name" : TestBoolsAndBits.table_name}
+       ensure_test_table(table_spec)
+
+    def test_catalog(self):
+        with get_test_connection() as conn:
+            catalog = tap_postgres.do_discovery(conn)
+            chicken_streams = [s for s in catalog.streams if s.table == TestFloatTablePK.table_name]
+            self.assertEqual(len(chicken_streams), 1)
+            stream_dict = chicken_streams[0].to_dict()
+
+            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'key-properties': [], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'our_bool')          : {'inclusion': 'available', 'sql-datatype' : 'boolean', 'selected-by-default' : True},
+                              ('properties', 'our_bit')           : {'inclusion': 'available', 'sql-datatype' : 'bit', 'selected-by-default' : True}})
+
+
+            self.assertEqual({'properties': {'our_bool':               {'type': ['null', 'boolean']},
+                                             'our_bit':                {'type': ['null', 'boolean']}},
+                              'type': 'object'},
+                             stream_dict.get('schema'))
+
+
+
+#TODO:
+#Bit
+#Char
+#json
+#jsonb
+#uuid
+#hstore
+
 if __name__== "__main__":
-    test1 = TestFloatTablePK()
+    test1 = TestBoolsAndBits()
     test1.setUp()
     test1.test_catalog()
