@@ -48,6 +48,13 @@ REQUIRED_CONFIG_KEYS = [
 
 INTEGER_TYPES= {'integer', 'smallint', 'bigint'}
 
+#NB> numeric/decimal columns in postgres without a specified scale && precision
+#default to 'up to 131072 digits before the decimal point; up to 16383
+#digits after the decimal point'. For practical reasons, we are capping this at 74/38
+#  https://www.postgresql.org/docs/10/static/datatype-numeric.html#DATATYPE-NUMERIC-TABLE
+MAX_SCALE=38
+MAX_PRECISION=74
+
 def open_connection(config, logical_replication=False):
     conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(config['host'],
                                                                                    config['database'],
@@ -61,9 +68,6 @@ def open_connection(config, logical_replication=False):
 
     return conn
 
-DEFAULT_NUMERIC_PRECISION=38
-DEFAULT_NUMERIC_SCALE=0
-
 def nullable_column(col_name, col_type, pk):
    if pk:
       return  [col_type]
@@ -74,8 +78,6 @@ def schema_for_column(c):
    data_type = c.sql_data_type.lower()
    result = Schema()
 
-   numeric_scale = c.numeric_scale or DEFAULT_NUMERIC_SCALE
-   numeric_precision = c.numeric_precision or DEFAULT_NUMERIC_PRECISION
 
    if data_type in INTEGER_TYPES:
       result.type = nullable_column(c.column_name, 'integer', c.is_primary_key)
@@ -86,12 +88,22 @@ def schema_for_column(c):
 
    elif data_type == 'numeric':
       result.type = nullable_column(c.column_name, 'number', c.is_primary_key)
+      if c.numeric_scale is None or c.numeric_scale > MAX_SCALE:
+          scale = MAX_SCALE
+      else:
+          scale = c.numeric_scale
 
+      if c.numeric_precision is None or c.numeric_precision > MAX_PRECISION:
+          precision = MAX_PRECISION
+      else:
+          precision = c.numeric_precision
+
+      # pdb.set_trace()
       result.exclusiveMaximum = True
-      result.maximum = 10 ** (c.numeric_precision - c.numeric_scale)
-      result.multipleOf = 10 ** (0 - c.numeric_scale)
+      result.maximum = 10 ** (precision - scale)
+      result.multipleOf = 10 ** (0 - scale)
       result.exclusiveMinimum = True
-      result.minimum = -10 ** (c.numeric_precision - c.numeric_scale)
+      result.minimum = -10 ** (precision - scale)
       return result
 
    # elif data_type == 'date' or data_type.startswith("timestamp"):
@@ -122,13 +134,13 @@ def produce_table_info(conn):
       table_info = {}
       cur.execute("""
 SELECT
-  pg_class.reltuples::BIGINT AS approximate_row_count,
-  pg_class.relkind = 'v' AS is_view,
-  n.nspname as schema_name,
-  pg_class.relname as table_name,
-  attname as column_name,
-  i.indisprimary AS primary_key,
-  format_type(a.atttypid, NULL::integer) as data_type,
+  pg_class.reltuples::BIGINT             AS approximate_row_count,
+  pg_class.relkind = 'v'                 AS is_view,
+  n.nspname                              AS schema_name,
+  pg_class.relname                       AS table_name,
+  attname                                AS column_name,
+  i.indisprimary                         AS primary_key,
+  format_type(a.atttypid, NULL::integer) AS data_type,
   information_schema._pg_char_max_length(information_schema._pg_truetypid(a.*, t.*),
                                          information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS character_maximum_length,
   information_schema._pg_numeric_precision(information_schema._pg_truetypid(a.*, t.*),
@@ -154,6 +166,9 @@ AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
 
          if table_info.get(schema_name) is None:
             table_info[schema_name] = {}
+
+         # if table_name == 'CHICKEN TIMES':
+         #    pdb.set_trace()
 
          if table_info[schema_name].get(table_name) is None:
             table_info[schema_name][table_name] = {'is_view': is_view, 'row_count' : row_count, 'columns' : {}}

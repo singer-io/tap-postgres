@@ -101,50 +101,51 @@ class TestIntegerTable(unittest.TestCase):
 
 class TestDecimalPK(unittest.TestCase):
     maxDiff = None
+    table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : '"our_number"',                "type" : "number", "primary_key": True},
-                                 {"name" : '"our_number_10_2"',           "type" : "number(10,2)"},
-                                 {"name" : '"our_number_38_4"',           "type" : "number(38,4)"}],
-                     "name" : "CHICKEN"}
+       table_spec = {"columns": [{"name" : '"our_decimal"',                "type" : "numeric", "primary_key": True},
+                                 {"name" : '"our_decimal_10_2"',           "type" : "decimal(10,2)"},
+                                 {"name" : '"our_decimal_38_4"',           "type" : "decimal(38,4)"}],
+                     "name" : TestDecimalPK.table_name}
        ensure_test_table(table_spec)
 
     def test_catalog(self):
         with get_test_connection() as conn:
             catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
+            chicken_streams = [s for s in catalog.streams if s.table == TestDecimalPK.table_name]
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
+
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
-            self.assertEqual({'schema': {'properties': {'our_number': {'maximum': 99999999999999999999999999999999999999,
-                                                                       'minimum': -99999999999999999999999999999999999999,
-                                                                       'type': [ 'integer']},
-                                                        'our_number_10_2': {'exclusiveMaximum': True,
-                                                                            'exclusiveMinimum': True,
+
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'key-properties': ['our_decimal'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'our_decimal')             : {'inclusion': 'automatic', 'sql-datatype' : 'numeric', 'selected-by-default' : True},
+                              ('properties', 'our_decimal_38_4')        : {'inclusion': 'available', 'sql-datatype' : 'numeric', 'selected-by-default' : True},
+                              ('properties', 'our_decimal_10_2')        : {'inclusion': 'available', 'sql-datatype' : 'numeric', 'selected-by-default' : True}})
+
+            self.assertEqual({'properties': {'our_decimal': {'exclusiveMaximum': True,
+                                                             'exclusiveMinimum': True,
+                                                             'multipleOf': 10 ** (0 - tap_postgres.MAX_SCALE),
+                                                             'maximum': 10 ** (tap_postgres.MAX_PRECISION - tap_postgres.MAX_SCALE),
+                                                             'minimum': -10 ** (tap_postgres.MAX_PRECISION - tap_postgres.MAX_SCALE),
+                                                             'type': ['number']},
+                                                        'our_decimal_10_2': {'exclusiveMaximum': True,
+                                                                             'exclusiveMinimum': True,
                                                                             'maximum': 100000000,
                                                                             'minimum': -100000000,
                                                                             'multipleOf': 0.01,
                                                                             'type': ['null', 'number']},
-                                                        'our_number_38_4': {'exclusiveMaximum': True,
+                                                        'our_decimal_38_4': {'exclusiveMaximum': True,
                                                                              'exclusiveMinimum': True,
                                                                              'maximum': 10000000000000000000000000000000000,
                                                                              'minimum': -10000000000000000000000000000000000,
                                                                              'multipleOf': 0.0001,
                                                                              'type': ['null', 'number']}},
                                          'type': 'object'},
-                              'stream': 'CHICKEN',
-                              'table_name': 'CHICKEN',
-                              'tap_stream_id': 'ROOT-CHICKEN',
-                              'metadata': [{'breadcrumb': (),
-                                            'metadata': {'key-properties': ['our_number'],
-                                                         'database-name': os.getenv('TAP_POSTGRES_SID'),
-                                                         'schema-name': 'ROOT',
-                                                         'is-view': False,
-                                                         'row-count': 0}},
-                                           {'breadcrumb': ('properties', 'our_number'), 'metadata': {'inclusion': 'automatic'}},
-                                           {'breadcrumb': ('properties', 'our_number_10_2'), 'metadata': {'inclusion': 'available'}},
-                                           {'breadcrumb': ('properties', 'our_number_38_4'), 'metadata': {'inclusion': 'available'}}]},
-                             stream_dict)
+                             stream_dict.get('schema'))
+
 
 
 class TestDatesTablePK(unittest.TestCase):
@@ -239,6 +240,6 @@ class TestFloatTablePK(unittest.TestCase):
                                            {'breadcrumb': ('properties', 'our_real'), 'metadata': {'inclusion': 'available'}}]},
                              stream_dict)
 if __name__== "__main__":
-    test1 = TestIntegerTable()
+    test1 = TestDecimalPK()
     test1.setUp()
     test1.test_catalog()
