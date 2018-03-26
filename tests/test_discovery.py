@@ -190,49 +190,36 @@ class TestDatesTablePK(unittest.TestCase):
 
 class TestFloatTablePK(unittest.TestCase):
     maxDiff = None
+    table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : '"our_float"',                 "type" : "float", "primary_key": True },
-                                 {"name" : '"our_double_precision"',      "type" : "double precision"},
-                                 {"name" : '"our_real"',                  "type" : "real"},
-                                 {"name" : '"our_binary_float"',          "type" : "binary_float"},
-                                 {"name" : '"our_binary_double"',         "type" : "binary_double"}],
-                     "name" : "CHICKEN"}
+       table_spec = {"columns": [{"name" : 'our_float',     "type" : "float", "primary_key": True },
+                                 {"name" : 'our_real',      "type" : "real"},
+                                 {"name" : 'our_double',    "type" : "double precision"}],
+                     "name" : TestFloatTablePK.table_name}
        ensure_test_table(table_spec)
 
     def test_catalog(self):
         with get_test_connection() as conn:
             catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
+            chicken_streams = [s for s in catalog.streams if s.table == TestFloatTablePK.table_name]
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
 
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
-            self.assertEqual({'schema': {'properties': {'our_float':               {'type': ['number'],
-                                                                                    'multipleOf': 1e-38},
-                                                        'our_double_precision':    {'type': ['null', 'number'],
-                                                                                    'multipleOf': 1e-38},
-                                                        'our_real':                {'type': ['null', 'number'],
-                                                                                    'multipleOf': 1e-18},
-                                                        'our_binary_float':        {'type': ['null', 'number']},
-                                                        'our_binary_double':       {'type': ['null', 'number']}},
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'key-properties': ['our_float'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'our_float')          : {'inclusion': 'automatic', 'sql-datatype' : 'double precision', 'selected-by-default' : True},
+                              ('properties', 'our_real')           : {'inclusion': 'available', 'sql-datatype' : 'real', 'selected-by-default' : True},
+                              ('properties', 'our_double')         : {'inclusion': 'available', 'sql-datatype' : 'double precision', 'selected-by-default' : True}})
+
+
+            self.assertEqual({'properties': {'our_float':               {'type': ['number']},
+                                             'our_real':                {'type': ['null', 'number']},
+                                             'our_double':       {'type': ['null', 'number']}},
                                          'type': 'object'},
-                              'stream': 'CHICKEN',
-                              'table_name': 'CHICKEN',
-                              'tap_stream_id': 'ROOT-CHICKEN',
-                              'metadata': [{'breadcrumb': (),
-                                            'metadata': {'key-properties': ["our_float"],
-                                                         'database-name': os.getenv('TAP_POSTGRES_SID'),
-                                                         'schema-name': 'ROOT',
-                                                         'is-view': False,
-                                                         'row-count': 0}},
-                                           {'breadcrumb': ('properties', 'our_binary_double'), 'metadata': {'inclusion': 'available'}},
-                                           {'breadcrumb': ('properties', 'our_binary_float'), 'metadata': {'inclusion': 'available'}},
-                                           {'breadcrumb': ('properties', 'our_double_precision'), 'metadata': {'inclusion': 'available'}},
-                                           {'breadcrumb': ('properties', 'our_float'), 'metadata': {'inclusion': 'automatic'}},
-                                           {'breadcrumb': ('properties', 'our_real'), 'metadata': {'inclusion': 'available'}}]},
-                             stream_dict)
+                             stream_dict.get('schema'))
 if __name__== "__main__":
-    test1 = TestDatesTablePK()
+    test1 = TestFloatTablePK()
     test1.setUp()
     test1.test_catalog()

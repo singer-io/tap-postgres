@@ -47,6 +47,7 @@ REQUIRED_CONFIG_KEYS = [
 
 
 INTEGER_TYPES= {'integer', 'smallint', 'bigint'}
+FLOAT_TYPES= {'real', 'double precision'}
 
 #NB> numeric/decimal columns in postgres without a specified scale && precision
 #default to 'up to 131072 digits before the decimal point; up to 16383
@@ -113,9 +114,9 @@ def schema_for_column(c):
       result.format = 'date-time'
       return result
 
-   # elif data_type in FLOAT_TYPES:
-   #    result.type = nullable_column(c.column_name, 'number', is_primary_key)
-   #    return result
+   elif data_type in FLOAT_TYPES:
+      result.type = nullable_column(c.column_name, 'number', c.is_primary_key)
+      return result
 
    elif data_type == 'text':
       result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
