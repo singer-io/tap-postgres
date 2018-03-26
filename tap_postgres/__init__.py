@@ -53,7 +53,7 @@ INTEGER_TYPES= {'integer', 'smallint', 'bigint'}
 #digits after the decimal point'. For practical reasons, we are capping this at 74/38
 #  https://www.postgresql.org/docs/10/static/datatype-numeric.html#DATATYPE-NUMERIC-TABLE
 MAX_SCALE=38
-MAX_PRECISION=74
+MAX_PRECISION=100
 
 def open_connection(config, logical_replication=False):
     conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(config['host'],
@@ -89,11 +89,13 @@ def schema_for_column(c):
    elif data_type == 'numeric':
       result.type = nullable_column(c.column_name, 'number', c.is_primary_key)
       if c.numeric_scale is None or c.numeric_scale > MAX_SCALE:
+          LOGGER.warn('capping decimal scale to 38.  THIS MAY CAUSE TRUNCATION')
           scale = MAX_SCALE
       else:
           scale = c.numeric_scale
 
       if c.numeric_precision is None or c.numeric_precision > MAX_PRECISION:
+          LOGGER.warn('capping decimal precision to 100.  THIS MAY CAUSE TRUNCATION')
           precision = MAX_PRECISION
       else:
           precision = c.numeric_precision
