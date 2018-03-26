@@ -46,6 +46,8 @@ REQUIRED_CONFIG_KEYS = [
 ]
 
 
+INTEGER_TYPES= {'integer', 'smallint', 'bigint'}
+
 def open_connection(config, logical_replication=False):
     conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(config['host'],
                                                                                    config['database'],
@@ -75,7 +77,7 @@ def schema_for_column(c):
    numeric_scale = c.numeric_scale or DEFAULT_NUMERIC_SCALE
    numeric_precision = c.numeric_precision or DEFAULT_NUMERIC_PRECISION
 
-   if data_type == 'integer':
+   if data_type in INTEGER_TYPES:
       result.type = nullable_column(c.column_name, 'integer', c.is_primary_key)
       result.minimum = -1 * (2**(c.numeric_precision - 1))
       result.maximum = 2**(c.numeric_precision - 1) - 1
@@ -190,7 +192,7 @@ def discover_columns(connection, table_info):
          schema = Schema(type='object', properties=column_schemas)
          for c_name in column_schemas.keys():
 
-             mdata =metadata.write(mdata, ('properties', c_name), 'sql-datatype', columns[c_name].sql_data_type)
+             mdata = metadata.write(mdata, ('properties', c_name), 'sql-datatype', columns[c_name].sql_data_type)
              if column_schemas[c_name].type is None:
                  mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'unsupported')
                  mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', False)

@@ -19,8 +19,7 @@ class TestStringTableWithPK(unittest.TestCase):
     table_name = 'CHICKEN TIMES'
     def setUp(self):
        table_spec = {"columns": [{"name" : "id", "type" : "integer", "primary_key" : True, "serial" : True},
-
-                                 {"name" : '"character-varying name"',  "type": "character varying"},
+                                 {"name" : '"character-varying_name"',  "type": "character varying"},
                                  {"name" : '"varchar-name"',            "type": "varchar(28)"},
                                  {"name" : '"text-name"',               "type": "text"}],
                      "name" : TestStringTableWithPK.table_name}
@@ -44,7 +43,7 @@ class TestStringTableWithPK(unittest.TestCase):
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
                              {() : {'key-properties': ['id'], 'database-name': 'vagrant',
                                     'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'character-varying name') : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
+                              ('properties', 'character-varying_name') : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
                               ('properties', 'id')                     : {'inclusion': 'automatic', 'sql-datatype' : 'integer', 'selected-by-default' : True},
                               ('properties', 'varchar-name')           : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
                               ('properties', 'text-name')              : {'inclusion': 'available', 'sql-datatype' : 'text', 'selected-by-default' : True}})
@@ -52,69 +51,51 @@ class TestStringTableWithPK(unittest.TestCase):
             self.assertEqual({'properties': {'id':                      {'type': ['integer'],
                                                                          'maximum':  2147483647,
                                                                          'minimum': -2147483648},
-                                             'character-varying name': {'type': ['null', 'string']},
+                                             'character-varying_name': {'type': ['null', 'string']},
                                              'varchar-name':           {'type': ['null', 'string'], 'maxLength': 28},
                                              'text-name':              {'type': ['null', 'string']}},
                                              'type': 'object'},  stream_dict.get('schema'))
 
 
-class TestIntegerTablePK(unittest.TestCase):
+class TestIntegerTable(unittest.TestCase):
     maxDiff = None
+    table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" :  "size_pk   ",            "type" : "number(4,0)", "primary_key" : True, "serial" : True},
-                                 {"name" : '"size_number_4_0"',      "type" : "number(4,0)"},
-                                 {"name" : '"size_number_*_0"',      "type" : "number(*,0)"},
-                                 {"name" : '"size_number_10_-1"',    "type" : "number(10,-1)"},
-                                 {"name" : '"size_number_integer"',  "type" : "integer"},
-                                 {"name" : '"size_number_int"',      "type" : "int"},
-                                 {"name" : '"size_number_smallint"', "type" : "smallint"}],
-                     "name" : '"CHICKEN"'}
+       table_spec = {"columns": [{"name" : "id",                "type" : "integer",  "serial" : True},
+                                 {"name" : 'size integer',      "type" : "integer",  "quoted" : True},
+                                 {"name" : 'size smallint',     "type" : "smallint", "quoted" : True},
+                                 {"name" : 'size bigint',       "type" : "bigint",   "quoted" : True}],
+                     "name" : TestIntegerTable.table_name}
        ensure_test_table(table_spec)
 
     def test_catalog(self):
         with get_test_connection() as conn:
             catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == 'CHICKEN']
+            chicken_streams = [s for s in catalog.streams if s.table == TestIntegerTable.table_name]
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
 
+            self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
+            self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
+            self.assertEqual('public-{}'.format(TestStringTableWithPK.table_name), stream_dict.get('tap_stream_id'))
+
+
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual({'schema': {'properties': {'size_number_10_-1':    {'maximum': 9999999999, 'minimum': -9999999999,
-                                                                                 'type': ['null', 'integer'],
-                                                                                 'multipleOf': 10 },
-                                                        'size_number_*_0':      {'maximum': 99999999999999999999999999999999999999, 'minimum': -99999999999999999999999999999999999999,
-                                                                                 'type': ['null', 'integer']},
-                                                        'size_number_integer':  {'maximum': 99999999999999999999999999999999999999, 'minimum': -99999999999999999999999999999999999999,
-                                                                                 'type': ['null', 'integer']},
-                                                        'size_number_4_0':      {'maximum': 9999, 'minimum': -9999,
-                                                                                 'type': ['null', 'integer']},
-                                                        'size_number_int':      {'maximum': 99999999999999999999999999999999999999, 'minimum': -99999999999999999999999999999999999999,
-                                                                                 'type': ['null', 'integer']},
-                                                        'size_number_smallint': {'maximum': 99999999999999999999999999999999999999, 'minimum': -99999999999999999999999999999999999999,
-                                                                                 'type': ['null', 'integer']},
-                                                        'SIZE_PK':               {'maximum': 9999, 'minimum': -9999,
-                                                                                  'type': ['integer']}},
-                                         'type': 'object'},
-                              'stream': 'CHICKEN',
-                              'table_name': 'CHICKEN',
-                              'tap_stream_id': 'ROOT-CHICKEN',
-                              'metadata': [{'metadata': {'key-properties': ['SIZE_PK'],
-                                                         'database-name': os.getenv('TAP_POSTGRES_SID'),
-                                                         'schema-name': 'ROOT',
-                                                         'is-view': False,
-                                                         'row-count': 0},
-                                            'breadcrumb': ()},
-                                           {'metadata': {'inclusion': 'automatic'}, 'breadcrumb': ('properties', 'SIZE_PK')},
-                                           {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'size_number_*_0')},
-                                           {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'size_number_10_-1')},
-                                           {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'size_number_4_0')},
-                                           {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'size_number_int')},
-                                           {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'size_number_integer')},
-                                           {'metadata': {'inclusion': 'available'}, 'breadcrumb': ('properties', 'size_number_smallint')}]},
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'key-properties': [], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'id')                     : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True},
+                              ('properties', 'size integer')         : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True},
+                              ('properties', 'size smallint')        : {'inclusion': 'available', 'sql-datatype' : 'smallint', 'selected-by-default' : True},
+                              ('properties', 'size bigint')          : {'inclusion': 'available', 'sql-datatype' : 'bigint',   'selected-by-default' : True}})
 
-                             stream_dict)
+            self.assertEqual({'type': 'object',
+                              'properties': {'id': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647},
+                                             'size smallint': {'type': ['null', 'integer'], 'minimum': -32768, 'maximum': 32767},
+                                             'size integer': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647},
+                                             'size bigint': {'type': ['null', 'integer'], 'minimum': -9223372036854775808, 'maximum': 9223372036854775807}}},
+                             stream_dict.get('schema'))
 
 
 
@@ -258,6 +239,6 @@ class TestFloatTablePK(unittest.TestCase):
                                            {'breadcrumb': ('properties', 'our_real'), 'metadata': {'inclusion': 'available'}}]},
                              stream_dict)
 if __name__== "__main__":
-    test1 = TestStringTableWithPK()
+    test1 = TestIntegerTable()
     test1.setUp()
     test1.test_catalog()

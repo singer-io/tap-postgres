@@ -37,14 +37,17 @@ def get_test_connection():
 
     return conn
 
-def build_col_sql( col):
-    col_sql = "{} {}".format(col['name'], col['type'])
+def build_col_sql(col, cur):
+    if col.get('quoted'):
+        col_sql = "{} {}".format(quote_ident(col['name'], cur), col['type'])
+    else:
+        col_sql = "{} {}".format(col['name'], col['type'])
 
     return col_sql
 
 def build_table(table, cur):
     create_sql = "CREATE TABLE {}\n".format(quote_ident(table['name'], cur))
-    col_sql = map(build_col_sql, table['columns'])
+    col_sql = map(lambda c: build_col_sql(c, cur), table['columns'])
     pks = [c['name'] for c in table['columns'] if c.get('primary_key')]
     if len(pks) != 0:
         pk_sql = ",\n CONSTRAINT {}  PRIMARY KEY({})".format(quote_ident(table['name'] + "_pk", cur), " ,".join(pks))
@@ -57,8 +60,6 @@ def build_table(table, cur):
 
 @nottest
 def ensure_test_table(table_spec):
-
-
     with get_test_connection() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             sql = """SELECT *
