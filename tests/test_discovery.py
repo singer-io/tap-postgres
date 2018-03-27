@@ -21,6 +21,7 @@ class TestStringTableWithPK(unittest.TestCase):
        table_spec = {"columns": [{"name" : "id", "type" : "integer", "primary_key" : True, "serial" : True},
                                  {"name" : '"character-varying_name"',  "type": "character varying"},
                                  {"name" : '"varchar-name"',            "type": "varchar(28)"},
+                                 {"name" :  'char_name',                "type": "char(10)"},
                                  {"name" : '"text-name"',               "type": "text"}],
                      "name" : TestStringTableWithPK.table_name}
        ensure_test_table(table_spec)
@@ -32,7 +33,6 @@ class TestStringTableWithPK(unittest.TestCase):
             chicken_streams = [s for s in catalog.streams if s.table == TestStringTableWithPK.table_name]
             self.assertEqual(len(chicken_streams), 1)
             stream_dict = chicken_streams[0].to_dict()
-
             self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
             self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
             self.assertEqual('public-{}'.format(TestStringTableWithPK.table_name), stream_dict.get('tap_stream_id'))
@@ -46,13 +46,15 @@ class TestStringTableWithPK(unittest.TestCase):
                               ('properties', 'character-varying_name') : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
                               ('properties', 'id')                     : {'inclusion': 'automatic', 'sql-datatype' : 'integer', 'selected-by-default' : True},
                               ('properties', 'varchar-name')           : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
-                              ('properties', 'text-name')              : {'inclusion': 'available', 'sql-datatype' : 'text', 'selected-by-default' : True}})
+                              ('properties', 'text-name')              : {'inclusion': 'available', 'sql-datatype' : 'text', 'selected-by-default' : True},
+                              ('properties', 'char_name'):               {'selected-by-default': True, 'inclusion': 'available', 'sql-datatype': 'character'}})
 
             self.assertEqual({'properties': {'id':                      {'type': ['integer'],
                                                                          'maximum':  2147483647,
                                                                          'minimum': -2147483648},
                                              'character-varying_name': {'type': ['null', 'string']},
                                              'varchar-name':           {'type': ['null', 'string'], 'maxLength': 28},
+                                             'char_name':              {'type': ['null', 'string'], 'maxLength': 10, 'minLength': 10},
                                              'text-name':              {'type': ['null', 'string']}},
                                              'type': 'object'},  stream_dict.get('schema'))
 
@@ -358,6 +360,6 @@ class TestHStoreTable(unittest.TestCase):
 #hstore
 
 if __name__== "__main__":
-    test1 = TestHStoreTable()
+    test1 = TestStringTableWithPK()
     test1.setUp()
     test1.test_catalog()

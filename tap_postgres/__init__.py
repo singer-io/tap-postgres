@@ -147,6 +147,11 @@ def schema_for_column(c):
        result.maxLength = c.character_maximum_length
        return result
 
+   elif data_type == 'character':
+       result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
+       result.maxLength = c.character_maximum_length
+       result.minLength = c.character_maximum_length
+       return result
 
    return Schema(None)
 

@@ -80,12 +80,12 @@ class CurrentlySyncing(unittest.TestCase):
 
             cur = conn.cursor()
 
-            cow_rec = {'NAME' : 'betty', 'colour' : 'blue'}
+            cow_rec = {'name' : 'betty', 'colour' : 'blue'}
             insert_record(cur, 'COW', cow_rec)
-            cow_rec = {'NAME' : 'smelly', 'colour' : 'brow'}
+            cow_rec = {'name' : 'smelly', 'colour' : 'brow'}
             insert_record(cur, 'COW', cow_rec)
 
-            chicken_rec = {'NAME' : 'fred', 'colour' : 'red'}
+            chicken_rec = {'name' : 'fred', 'colour' : 'red'}
             insert_record(cur, 'CHICKEN', chicken_rec)
 
             state = {}

@@ -73,8 +73,7 @@ def ensure_test_table(table_spec):
             old_table = cur.fetchall()
 
             if len(old_table) != 0:
-                drop_sql = "DROP TABLE {}".format(quote_ident(table_spec['name'], cur))
-                cur.execute(drop_sql)
+                cur.execute('DROP TABLE {}'.format(quote_ident(table_spec['name'], cur)))
 
             sql = build_table(table_spec, cur)
             LOGGER.info("create table sql: %s", sql)
@@ -111,7 +110,7 @@ def select_all_of_stream(stream):
 
 def crud_up_value(value):
     if isinstance(value, str):
-        return "'" + value + "'"
+        return value
     elif isinstance(value, int):
         return str(value)
     elif isinstance(value, float):
@@ -125,7 +124,6 @@ def crud_up_value(value):
             return "{:f}".format(value)
     elif isinstance(value, decimal.Decimal):
         return "{:f}".format(value)
-
     elif value is None:
         return 'NULL'
     elif isinstance(value, datetime.datetime) and value.tzinfo is None:
@@ -142,43 +140,16 @@ def insert_record(cursor, table_name, data):
     our_keys.sort()
     our_values = list(map( lambda k: data.get(k), our_keys))
 
-    columns_sql = ", \n".join(our_keys)
-    value_sql   = ", \n".join(map(crud_up_value, our_values))
+
+    columns_sql = ", \n".join(map(lambda k: quote_ident(k, cursor), our_keys))
+    value_sql = ",".join(["%s" for i in range(len(our_keys))])
+
     insert_sql = """ INSERT INTO {}
                             ( {} )
                      VALUES ( {} )""".format(quote_ident(table_name, cursor), columns_sql, value_sql)
     LOGGER.info("INSERT: {}".format(insert_sql))
-    cursor.execute(insert_sql)
+    cursor.execute(insert_sql, list(map(crud_up_value, our_values)))
 
-def crud_up_log_miner_fixtures(cursor, table_name, data, update_munger_fn):
-    #initial insert
-    insert_record(cursor, table_name, data)
-
-    our_keys = list(data.keys())
-    our_keys.sort()
-    our_values = list(map( lambda k: data.get(k), our_keys))
-
-    our_update_values = list(map(lambda v: crud_up_value(update_munger_fn(v)) , our_values))
-    set_fragments =  ["{} = {}".format(i,j) for i, j in list(zip(our_keys, our_update_values))]
-    set_clause = ", \n".join(set_fragments)
-
-
-    #insert another row for fun
-    insert_record(cursor, table_name, data)
-
-    #update both rows
-    update_sql = """UPDATE {}
-                       SET {}""".format(table_name, set_clause)
-
-    #now update
-    #LOGGER.info("crud_up_log_miner_fixtures UPDATE: {}".format(update_sql))
-    cursor.execute(update_sql)
-
-
-    #delete both rows
-    cursor.execute(""" DELETE FROM {}""".format(table_name))
-
-    return True
 
 def verify_crud_messages(that, caught_messages, pks):
 
