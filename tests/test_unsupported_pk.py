@@ -1,12 +1,12 @@
 import unittest
+import tap_postgres
+import psycopg2
+import psycopg2.extras
 import os
-import cx_Oracle, sys, string, datetime
-import tap_oracle
 import pdb
 import singer
 from singer import get_logger, metadata, write_bookmark
 from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, crud_up_log_miner_fixtures, verify_crud_messages, insert_record, unselect_column
-import tap_oracle.sync_strategies.log_miner as log_miner
 import decimal
 import math
 import pytz
@@ -15,81 +15,84 @@ import copy
 
 LOGGER = get_logger()
 
-CAUGHT_MESSAGES = []
-
 def do_not_dump_catalog(catalog):
     pass
 
-tap_oracle.dump_catalog = do_not_dump_catalog
+tap_postgres.dump_catalog = do_not_dump_catalog
 
-def singer_write_message(message):
-    CAUGHT_MESSAGES.append(message)
-
-def expected_record(fixture_row):
-    expected_record = {}
-    for k,v in fixture_row.items():
-        expected_record[k.replace('"', '')] = v
-
-    return expected_record
-
-#unsupported types: interval, bits(n)
-
-class UnsupportedPK(unittest.TestCase):
+class Unsupported(unittest.TestCase):
     maxDiff = None
+    table_name = 'CHICKEN TIMES'
+
     def setUp(self):
         with get_test_connection() as conn:
             cur = conn.cursor()
-            table_spec = {"columns": [{"name": "interval_column", "type": "INTERVAL DAY TO SECOND",
-                                       "primary_key": True },
-                                      {"name": "age", "type": "integer"}            ],
-                          "name": "CHICKEN"}
-
+            table_spec = {"columns": [{"name": "interval_col",   "type": "INTERVAL"},
+                                      {"name": "bit_string_col", "type": "bit(5)"},
+                                      {"name": "money_col",      "type": "money"},
+                                      {"name": "bytea_col",      "type": "bytea"},
+                                      {"name": "enum_col",       "type": "mood_enum"},
+                                      {"name": "point_col",      "type": "point"},
+                                      {"name": "line_col",      "type": "line"},
+                                      {"name": "lseg_col",      "type": "lseg"},
+                                      {"name": "box_col",      "type": "box"},
+                                      {"name": "polygon_col",      "type": "polygon"},
+                                      {"name": "circle_col",      "type": "circle"},
+                                      {"name": "cidr_col",      "type": "cidr"},
+                                      {"name": "inet_col",      "type": "inet"},
+                                      {"name": "macaddr_col",      "type": "macaddr"},
+                                      {"name": "xml_col",      "type": "xml"},
+                                      {"name": "array_int_col",      "type": "integer[]"},
+                                      {"name": "composite_col",      "type": "person_composite"},
+                                      {"name": "int_range_col",      "type": "int4range"},
+            ],
+                          "name": Unsupported.table_name}
+            with get_test_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("""     DROP TYPE IF EXISTS mood_enum CASCADE """)
+                cur.execute("""     CREATE TYPE mood_enum AS ENUM ('sad', 'ok', 'happy'); """)
+                cur.execute("""     DROP TYPE IF EXISTS person_composite CASCADE """)
+                cur.execute("""     CREATE TYPE person_composite AS (age int, name text) """)
 
             ensure_test_table(table_spec)
 
     def test_catalog(self):
-        singer.write_message = singer_write_message
-
         with get_test_connection() as conn:
             conn.autocommit = True
 
-            catalog = tap_oracle.do_discovery(conn)
-            chicken_stream = [s for s in catalog.streams if s.table == 'CHICKEN'][0]
-            key_properties = metadata.to_map(chicken_stream.metadata).get(()).get('key-properties')
+            catalog = tap_postgres.do_discovery(conn)
+            chicken_streams = [s for s in catalog.streams if s.table == Unsupported.table_name]
+            self.assertEqual(len(chicken_streams), 1)
+            stream_dict = chicken_streams[0].to_dict()
+            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            #interval_column SHOULD BE unsupported
-            self.assertEqual([], key_properties)
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {():                                   {'is-view': False, 'key-properties': [], 'row-count': 0, 'schema-name': 'public', 'database-name': 'vagrant'},
+                              ('properties', 'bytea_col'):          {'sql-datatype': 'bytea', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'bit_string_col'):     {'sql-datatype': 'bit(5)', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'array_int_col'):      {'sql-datatype': 'integer[]', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'line_col'):           {'sql-datatype': 'line', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'xml_col'):            {'sql-datatype': 'xml', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'enum_col'):           {'sql-datatype': 'mood_enum', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'macaddr_col'):        {'sql-datatype': 'macaddr', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'int_range_col'):      {'sql-datatype': 'int4range', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'circle_col'):         {'sql-datatype': 'circle', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'polygon_col'):        {'sql-datatype': 'polygon', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'box_col'):            {'sql-datatype': 'box', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'lseg_col'):           {'sql-datatype': 'lseg', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'composite_col'):      {'sql-datatype': 'person_composite', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'inet_col'):           {'sql-datatype': 'inet', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'cidr_col'):           {'sql-datatype': 'cidr', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'money_col'):          {'sql-datatype': 'money', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'interval_col'):       {'sql-datatype': 'interval', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                              ('properties', 'point_col'):          {'sql-datatype': 'point', 'selected-by-default': False, 'inclusion': 'unsupported'}}
+                             )
 
-            chicken_stream = select_all_of_stream(chicken_stream)
-
-            chicken_stream = set_replication_method_for_stream(chicken_stream, 'FULL_TABLE')
-            cur = conn.cursor()
-
-            cur.execute("""
-               INSERT INTO CHICKEN (AGE, INTERVAL_COLUMN) values (3,
-                   TIMESTAMP '2001-09-04 17:00:00.000000' - TIMESTAMP '2001-09-03 17:00:00.000000'
-               )""")
-
-            state = {}
-            tap_oracle.do_sync(conn, catalog, None, state)
-
-
-            #messages: ActivateVersion, SchemaMessage, Record, Record, State, ActivateVersion
-            self.assertEqual(6, len(CAUGHT_MESSAGES))
-            self.assertTrue(isinstance(CAUGHT_MESSAGES[0], singer.SchemaMessage))
-
-            self.assertEqual([], CAUGHT_MESSAGES[0].key_properties)
-            self.assertTrue(isinstance(CAUGHT_MESSAGES[1], singer.StateMessage))
-            self.assertTrue(isinstance(CAUGHT_MESSAGES[2], singer.ActivateVersionMessage))
-            self.assertTrue(isinstance(CAUGHT_MESSAGES[3], singer.RecordMessage))
-            self.assertEqual({'AGE': 3}, CAUGHT_MESSAGES[3].record)
-            self.assertTrue(isinstance(CAUGHT_MESSAGES[4], singer.ActivateVersionMessage))
-            self.assertTrue(isinstance(CAUGHT_MESSAGES[5], singer.StateMessage))
 
 
 
 
 if __name__== "__main__":
-    test1 = UnsupportedPK()
+    test1 = Unsupported()
     test1.setUp()
     test1.test_catalog()

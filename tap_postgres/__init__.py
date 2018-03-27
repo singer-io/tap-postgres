@@ -86,7 +86,11 @@ def schema_for_column(c):
       result.maximum = 2**(c.numeric_precision - 1) - 1
       return result
 
-   elif data_type in {'bit', 'boolean'}:
+   elif data_type == 'bit' and c.character_maximum_length == 1:
+       result.type = nullable_column(c.column_name, 'boolean', c.is_primary_key)
+       return result
+
+   elif data_type == 'boolean':
        result.type = nullable_column(c.column_name, 'boolean', c.is_primary_key)
        return result
 
@@ -201,6 +205,15 @@ def get_database_name(connection):
    rows = cur.execute("SELECT name FROM v$database").fetchall()
    return rows[0][0]
 
+def write_sql_data_type_md(mdata, col_info):
+    c_name = col_info.column_name
+    if col_info.sql_data_type == 'bit' and col_info.character_maximum_length > 1:
+        mdata = metadata.write(mdata, ('properties', c_name), 'sql-datatype', "bit({})".format(col_info.character_maximum_length))
+    else:
+        mdata = metadata.write(mdata, ('properties', c_name), 'sql-datatype', col_info.sql_data_type)
+
+    return mdata
+
 def discover_columns(connection, table_info):
    entries = []
    for schema_name in table_info.keys():
@@ -218,13 +231,13 @@ def discover_columns(connection, table_info):
          metadata.write(mdata, (), 'row-count', table_info[schema_name][table_name]['row_count'])
          metadata.write(mdata, (), 'is-view', table_info[schema_name][table_name].get('is_view'))
 
-         # if table_name == 'CHICKEN TIMES':
-         #     pdb.set_trace()
          column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
          schema = Schema(type='object', properties=column_schemas)
          for c_name in column_schemas.keys():
+             # if table_name == 'CHICKEN TIMES' and c_name == 'bit_string_col':
+             #     pdb.set_trace()
 
-             mdata = metadata.write(mdata, ('properties', c_name), 'sql-datatype', columns[c_name].sql_data_type)
+             mdata = write_sql_data_type_md(mdata, columns[c_name])
              if column_schemas[c_name].type is None:
                  mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'unsupported')
                  mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', False)
