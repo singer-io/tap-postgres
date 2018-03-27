@@ -48,18 +48,18 @@ def prepare_columns_sql(stream, c):
 
 def sync_table(connection, stream, state, desired_columns):
    stream_metadata = metadata.to_map(stream.metadata)
-
-   # cur = connection.cursor()
-   # cur.execute("""ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD"T00:00:00.00+00:00"'""")
-   # cur.execute("""ALTER SESSION SET NLS_TIMESTAMP_FORMAT='YYYY-MM-DD"T"HH24:MI:SSXFF"+00:00"'""")
-   # cur.execute("""ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT  = 'YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM'""")
    time_extracted = utils.now()
 
    #before writing the table version to state, check if we had one to begin with
    first_run = singer.get_bookmark(state, stream.tap_stream_id, 'version') is None
 
-   #pick a new table version
-   nascent_stream_version = int(time.time() * 1000)
+   #pick a new table version IFF we do not have an xmin in our state
+   #the presence of an xmin indicates that we were interrupted last time through
+   if singer.get_bookmark(state, stream.tap_stream_id, 'xmin') is None:
+      nascent_stream_version = int(time.time() * 1000)
+   else:
+      nascent_stream_version = singer.get_bookmark(state, stream.tap_stream_id, 'version')
+
    state = singer.write_bookmark(state,
                                  stream.tap_stream_id,
                                  'version',
@@ -86,13 +86,13 @@ def sync_table(connection, stream, state, desired_columns):
             select_sql      = 'SELECT {}, xmin::text::bigint FROM {} where xmin::text::bigint > {} order by xmin::text::bigint'.format(','.join(escaped_columns),
                                                                                                                                        post_db.fully_qualified_table_name(schema_name, stream.table),
                                                                                                                                        xmin)
-            cur.execute(select_sql)
          else:
             select_sql      = 'SELECT {}, xmin::text::bigint FROM {} order by xmin::text::bigint'.format(','.join(escaped_columns),
                                                                                                          post_db.fully_qualified_table_name(schema_name, stream.table))
-            cur.execute(select_sql)
 
 
+         LOGGER.info("select %s", select_sql)
+         cur.execute(select_sql)
 
          rows_saved = 0
          rec = cur.fetchone()
@@ -101,10 +101,7 @@ def sync_table(connection, stream, state, desired_columns):
             rec = rec[:-1]
             record_message = row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted)
             singer.write_message(record_message)
-            state = singer.write_bookmark(state,
-                                          stream.tap_stream_id,
-                                          'xmin',
-                                          xmin)
+            state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', xmin)
             rows_saved = rows_saved + 1
             if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
                singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
@@ -112,8 +109,10 @@ def sync_table(connection, stream, state, desired_columns):
             counter.increment()
             rec = cur.fetchone()
 
+   #once we have completed the full table replication, discard the xmin bookmark.
+   #the xmin bookmark only comes into play when a full table replication is interrupted
+   state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
 
-   singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
    #always send the activate version whether first run or subsequent
    singer.write_message(activate_version_message)
 

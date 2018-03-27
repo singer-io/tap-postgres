@@ -146,8 +146,8 @@ def insert_record(cursor, table_name, data):
     value_sql   = ", \n".join(map(crud_up_value, our_values))
     insert_sql = """ INSERT INTO {}
                             ( {} )
-                     VALUES ( {} )""".format(table_name, columns_sql, value_sql)
-    #LOGGER.info("INSERT: {}".format(insert_sql))
+                     VALUES ( {} )""".format(quote_ident(table_name, cursor), columns_sql, value_sql)
+    LOGGER.info("INSERT: {}".format(insert_sql))
     cursor.execute(insert_sql)
 
 def crud_up_log_miner_fixtures(cursor, table_name, data, update_munger_fn):

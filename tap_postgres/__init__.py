@@ -234,9 +234,6 @@ def discover_columns(connection, table_info):
          column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
          schema = Schema(type='object', properties=column_schemas)
          for c_name in column_schemas.keys():
-             # if table_name == 'CHICKEN TIMES' and c_name == 'bit_string_col':
-             #     pdb.set_trace()
-
              mdata = write_sql_data_type_md(mdata, columns[c_name])
              if column_schemas[c_name].type is None:
                  mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'unsupported')
@@ -329,8 +326,9 @@ def do_sync(connection, catalog, default_replication_method, state):
             state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
 
       elif replication_method == 'FULL_TABLE':
-         send_schema_message(stream, [])
-         state = full_table.sync_table(connection, stream, state, desired_columns)
+          LOGGER.info("stream %s is using full_table", stream.tap_stream_id)
+          send_schema_message(stream, [])
+          state = full_table.sync_table(connection, stream, state, desired_columns)
       else:
          raise Exception("only LOG_BASED and FULL_TABLE are supported right now :)")
 
