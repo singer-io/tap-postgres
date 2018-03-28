@@ -8,8 +8,10 @@ import copy
 import pdb
 import time
 import decimal
+import datetime
 import psycopg2
 import psycopg2.extras
+import json
 import tap_postgres.db as post_db
 
 LOGGER = singer.get_logger()
@@ -18,15 +20,44 @@ UPDATE_BOOKMARK_PERIOD = 1000
 
 def row_to_singer_message(stream, row, version, columns, time_extracted):
    row_to_persist = ()
+   md = metadata.to_map(stream.metadata)
+
    for idx, elem in enumerate(row):
       property_type = stream.schema.properties[columns[idx]].type
-      if elem is None:
-            row_to_persist += (elem,)
-      elif 'integer' in property_type or property_type == 'integer':
-         integer_representation = int(elem)
-         row_to_persist += (integer_representation,)
-      else:
+      sql_datatype = md.get(('properties', columns[idx]))['sql-datatype']
+
+      # if sql_datatype == 'boolean':
+      #    pdb.set_trace()
+
+      if isinstance(elem, datetime.datetime):
+         if sql_datatype == 'timestamp with time zone':
+            row_to_persist += (elem.isoformat(),)
+         else: #timestamp WITH OUT time zone
+            row_to_persist += (elem.isoformat() + '+00:00',)
+      elif isinstance(elem, datetime.date):
+         row_to_persist += (elem.isoformat() + 'T00:00:00+00:00',)
+      elif sql_datatype == 'bit':
+         row_to_persist += (elem == '1',)
+      elif sql_datatype == 'boolean':
          row_to_persist += (elem,)
+      elif elem is None:
+         row_to_persist += (elem,)
+      elif isinstance(elem, int):
+         row_to_persist += (elem,)
+      elif isinstance(elem, int):
+         row_to_persist += (elem,)
+      elif isinstance(elem, datetime.time):
+         row_to_persist += (str(elem),)
+      elif isinstance(elem, str):
+         row_to_persist += (elem,)
+      elif isinstance(elem, decimal.Decimal):
+         row_to_persist += (elem,)
+      elif isinstance(elem, float):
+         row_to_persist += (elem,)
+      elif isinstance(elem, dict):
+         row_to_persist += (str(elem),)
+      else:
+         raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
 
    rec = dict(zip(columns, row_to_persist))
 

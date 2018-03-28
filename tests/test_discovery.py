@@ -183,8 +183,8 @@ class TestDatesTablePK(unittest.TestCase):
             self.assertEqual({'properties': {'our_date':               {'type': ['string'], 'format' : 'date-time'},
                                              'our_ts':                 {'type': ['null', 'string'], 'format' : 'date-time'},
                                              'our_ts_tz':              {'type': ['null', 'string'], 'format' : 'date-time'},
-                                             'our_time':            {'type': ['null', 'string'], 'format' : 'date-time'},
-                                             'our_time_tz':            {'type': ['null', 'string'], 'format' : 'date-time'}},
+                                             'our_time':               {'type': ['null', 'string']},
+                                             'our_time_tz':            {'type': ['null', 'string']}},
                                          'type': 'object'},
                              stream_dict.get('schema'))
 
@@ -337,10 +337,10 @@ class TestHStoreTable(unittest.TestCase):
             stream_dict = chicken_streams[0].to_dict()
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            # with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            #     cur.execute("""INSERT INTO "CHICKEN TIMES" (our_pk, our_hstore) VALUES ('size=>"small",name=>"betty"', 'size=>"big",name=>"fred"')""")
-            #     cur.execute("""SELECT * FROM  "CHICKEN TIMES" """)
-            #     wtf = cur.fetchall()
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("""INSERT INTO "CHICKEN TIMES" (our_pk, our_hstore) VALUES ('size=>"small",name=>"betty"', 'size=>"big",name=>"fred"')""")
+                cur.execute("""SELECT * FROM  "CHICKEN TIMES" """)
+                wtf = cur.fetchall()
 
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
@@ -360,6 +360,6 @@ class TestHStoreTable(unittest.TestCase):
 #hstore
 
 if __name__== "__main__":
-    test1 = TestStringTableWithPK()
+    test1 = TestDatesTablePK()
     test1.setUp()
     test1.test_catalog()

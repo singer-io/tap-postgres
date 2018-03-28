@@ -37,7 +37,7 @@ Column = collections.namedtuple('Column', [
 
 
 REQUIRED_CONFIG_KEYS = [
-    'database',
+    # 'database',
     'host',
     'port',
     'user',
@@ -58,11 +58,10 @@ MAX_SCALE=38
 MAX_PRECISION=100
 
 def open_connection(config, logical_replication=False):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(config['host'],
-                                                                                   config['database'],
-                                                                                   config['user'],
-                                                                                   config['password'],
-                                                                                   config['port'])
+    conn_string = "host='{}' user='{}' password='{}' port='{}'".format(config['host'],
+                                                                       config['user'],
+                                                                       config['password'],
+                                                                       config['port'])
     if logical_replication:
         conn = psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
     else:
@@ -127,7 +126,12 @@ def schema_for_column(c):
       result.minimum = -10 ** (precision - scale)
       return result
 
-   elif data_type == 'date' or data_type.startswith("time"):
+   elif data_type in {'time without time zone', 'time with time zone'}:
+       #times are treated as ordinary strings as they can not possible match RFC3339
+       result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
+       return result
+
+   elif data_type in ('date', 'timestamp without time zone', 'timestamp with time zone'):
       result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
 
       result.format = 'date-time'
