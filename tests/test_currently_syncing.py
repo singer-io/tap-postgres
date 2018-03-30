@@ -5,7 +5,7 @@ import tap_postgres.sync_strategies.full_table as full_table
 import pdb
 import singer
 from singer import get_logger, metadata, write_bookmark
-from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, crud_up_log_miner_fixtures, verify_crud_messages, insert_record, unselect_column
+from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record
 import decimal
 import math
 import pytz
