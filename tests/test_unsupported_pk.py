@@ -6,7 +6,7 @@ import os
 import pdb
 import singer
 from singer import get_logger, metadata, write_bookmark
-from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, crud_up_log_miner_fixtures, verify_crud_messages, insert_record, unselect_column
+from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record
 import decimal
 import math
 import pytz
@@ -67,7 +67,7 @@ class Unsupported(unittest.TestCase):
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {():                                   {'is-view': False, 'key-properties': [], 'row-count': 0, 'schema-name': 'public', 'database-name': 'vagrant'},
+                             {():                                   {'is-view': False, 'table-key-properties': [], 'row-count': 0, 'schema-name': 'public', 'database-name': 'postgres'},
                               ('properties', 'bytea_col'):          {'sql-datatype': 'bytea', 'selected-by-default': False, 'inclusion': 'unsupported'},
                               ('properties', 'bit_string_col'):     {'sql-datatype': 'bit(5)', 'selected-by-default': False, 'inclusion': 'unsupported'},
                               ('properties', 'array_int_col'):      {'sql-datatype': 'integer[]', 'selected-by-default': False, 'inclusion': 'unsupported'},
