@@ -154,7 +154,6 @@ def schema_for_column(c):
    elif data_type == 'character':
        result.type = nullable_column(c.column_name, 'string', c.is_primary_key)
        result.maxLength = c.character_maximum_length
-       result.minLength = c.character_maximum_length
        return result
 
    return Schema(None)
@@ -234,7 +233,7 @@ def discover_columns(connection, table_info):
              cur.execute(" SELECT current_database()")
              database_name = cur.fetchone()[0]
 
-         metadata.write(mdata, (), 'key-properties', table_pks)
+         metadata.write(mdata, (), 'table-key-properties', table_pks)
          metadata.write(mdata, (), 'schema-name', schema_name)
          metadata.write(mdata, (), 'database-name', database_name)
          metadata.write(mdata, (), 'row-count', table_info[schema_name][table_name]['row_count'])
@@ -287,9 +286,16 @@ def should_sync_column(metadata, field_name):
    return False
 
 def send_schema_message(stream, bookmark_properties):
+   s_md = metadata.to_map(stream.metadata)
+   if s_md.get((), {}).get('is-view'):
+      key_properties = s_md.get((), {}).get('view-key-properties')
+   else:
+      key_properties = s_md.get((), {}).get('table-key-properties')
+
+
    schema_message = singer.SchemaMessage(stream=stream.stream,
                                          schema=stream.schema.to_dict(),
-                                         key_properties=metadata.to_map(stream.metadata).get((), {}).get('key-properties'),
+                                         key_properties=key_properties,
                                          bookmark_properties=bookmark_properties)
    singer.write_message(schema_message)
 
@@ -316,6 +322,7 @@ def do_sync(connection, catalog, default_replication_method, state):
       replication_method = stream_metadata.get((), {}).get('replication-method', default_replication_method)
       if replication_method == 'LOG_BASED':
          if get_bookmark(state, stream.tap_stream_id, 'lsn'):
+            LOGGER.info('END_LSN %s', logical_replication.fetch_current_lsn(connection))
             logical_replication.add_automatic_properties(stream)
             send_schema_message(stream, ['lsn'])
             args = utils.parse_args(REQUIRED_CONFIG_KEYS)
@@ -324,7 +331,7 @@ def do_sync(connection, catalog, default_replication_method, state):
          else:
             #start off with full-table replication
             end_lsn = logical_replication.fetch_current_lsn(connection)
-            # LOGGER.info('RING3: lsn %s', end_lsn)
+            LOGGER.info('END_LSN %s', end_lsn)
             send_schema_message(stream, [])
             state = full_table.sync_table(connection, stream, state, desired_columns)
             state = singer.write_bookmark(state,

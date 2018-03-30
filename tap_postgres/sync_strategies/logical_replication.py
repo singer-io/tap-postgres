@@ -8,6 +8,7 @@ import singer.metadata as metadata
 import singer.metrics as metrics
 from singer.schema import Schema
 import tap_postgres.db as post_db
+from dateutil.parser import parse
 import psycopg2
 import copy
 import pdb
@@ -23,9 +24,9 @@ UPDATE_BOOKMARK_PERIOD = 1000
 def fetch_current_lsn(connection):
    with  connection.cursor() as cur:
       cur.execute("SELECT pg_current_xlog_location();")
-      current_scn = cur.fetchone()[0]
-      file, index =  current_scn.split('/')
-      return int('ff000000',16) * int(file,16) + int(index,16)
+      current_lsn = cur.fetchone()[0]
+      file, index =  current_lsn.split('/')
+      return (int(file,16)  << 32) + int(index,16)
 
 def add_automatic_properties(stream):
    stream.schema.properties['_sdc_deleted_at'] = Schema(
@@ -41,24 +42,36 @@ def get_stream_version(tap_stream_id, state):
 
 def row_to_singer_message(stream, row, version, columns, time_extracted):
     row_to_persist = ()
+    md = metadata.to_map(stream.metadata)
+    md[('properties', '_sdc_deleted_at')] =  {'sql-datatype' : 'timestamp with time zone'}
+
     for idx, elem in enumerate(row):
         property_type = stream.schema.properties[columns[idx]].type
-        multiple_of = stream.schema.properties[columns[idx]].multipleOf
-        format = stream.schema.properties[columns[idx]].format #date-time
+        sql_datatype = md.get(('properties', columns[idx]))['sql-datatype']
+
+
         if elem is None:
-            row_to_persist += (elem,)
-        elif 'integer' in property_type or property_type == 'integer':
-            integer_representation = int(elem)
-            row_to_persist += (integer_representation,)
-        elif ('number' in property_type or property_type == 'number') and multiple_of:
-            decimal_representation = decimal.Decimal(elem)
-            row_to_persist += (decimal_representation,)
-        elif ('number' in property_type or property_type == 'number'):
-            row_to_persist += (float(elem),)
-        elif format == 'date-time':
-            row_to_persist += (elem,)
+           row_to_persist += (elem,)
+        elif sql_datatype == 'timestamp without time zone':
+           row_to_persist += (parse(elem).isoformat() + '+00:00',)
+        elif sql_datatype == 'timestamp with time zone':
+           row_to_persist += (parse(elem).isoformat(),)
+        elif sql_datatype == 'date':
+           row_to_persist += (parse(elem).isoformat() + "+00:00",)
+        elif sql_datatype == 'time with time zone':
+           row_to_persist += (parse(elem).isoformat().split('T')[1], )
+        elif sql_datatype == 'bit':
+           row_to_persist += (elem == '1',)
+        elif sql_datatype == 'boolean':
+           row_to_persist += (elem,)
+        elif isinstance(elem, int):
+           row_to_persist += (elem,)
+        elif isinstance(elem, float):
+           row_to_persist += (elem,)
+        elif isinstance(elem, str):
+           row_to_persist += (elem,)
         else:
-            row_to_persist += (elem,)
+           raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
 
     rec = dict(zip(columns, row_to_persist))
     return singer.RecordMessage(
@@ -72,8 +85,12 @@ def consume_message(stream, state, msg, time_extracted):
    lsn = msg.data_start
    stream_version = get_stream_version(stream.tap_stream_id, state)
 
-   # pdb.set_trace()
    for c in payload['change']:
+      md = metadata.to_map(stream.metadata).get((), 'schema-name')
+
+      if c['schema'] != metadata.to_map(stream.metadata).get(())['schema-name'] or c['table'] != stream.table:
+         continue
+
       if c['kind'] == 'insert':
          col_vals  = c['columnvalues'] + [None]
          col_names = c['columnnames'] + ['_sdc_deleted_at']
@@ -91,36 +108,38 @@ def consume_message(stream, state, msg, time_extracted):
 
       singer.write_message(record_message)
 
-      # LOGGER.info('RING3: record: %s with lsn %s', c, lsn)
+
       state = singer.write_bookmark(state,
                                     stream.tap_stream_id,
                                     'lsn',
                                     lsn)
+      LOGGER.info("Flushing log up to LSN  %s", msg.data_start)
       msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
    return state
 
 def sync_table(rep_conn, connection, stream, state, desired_columns):
 
+   start_lsn = get_bookmark(state, stream.tap_stream_id, 'lsn')
+
    end_lsn = fetch_current_lsn(connection)
    time_extracted = utils.now()
 
    with rep_conn.cursor() as cur:
-      LOGGER.info("starting Logical Replication")
+      LOGGER.info("starting Logical Replication with start lsn %s", start_lsn)
       try:
-         # test_decoding produces textual output
-         cur.start_replication(slot_name='stitch', decode=True, start_lsn=get_bookmark(state, stream.tap_stream_id, 'lsn'))
+         cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
       except psycopg2.ProgrammingError:
          cur.create_replication_slot('stitch', output_plugin='wal2json')
-         # cur.create_replication_slot('stitch', output_plugin='test_decoding')
          cur.start_replication(slot_name='stitch', decode=True, start_lsn=get_bookmark(state, stream.tap_stream_id, 'lsn'))
 
+      cur.send_feedback(flush_lsn=start_lsn)
       keepalive_interval = 10.0
       rows_saved = 0
 
       while True:
-         LOGGER.info('reading message')
          msg = cur.read_message()
+
          if msg:
             state = consume_message(stream, state, msg, time_extracted)
             rows_saved = rows_saved + 1

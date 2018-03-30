@@ -41,7 +41,7 @@ class TestStringTableWithPK(unittest.TestCase):
 
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': ['id'], 'database-name': 'vagrant',
+                             {() : {'key-properties': ['id'], 'database-name': 'postgres',
                                     'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'character-varying_name') : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
                               ('properties', 'id')                     : {'inclusion': 'automatic', 'sql-datatype' : 'integer', 'selected-by-default' : True},
@@ -54,7 +54,7 @@ class TestStringTableWithPK(unittest.TestCase):
                                                                          'minimum': -2147483648},
                                              'character-varying_name': {'type': ['null', 'string']},
                                              'varchar-name':           {'type': ['null', 'string'], 'maxLength': 28},
-                                             'char_name':              {'type': ['null', 'string'], 'maxLength': 10, 'minLength': 10},
+                                             'char_name':              {'type': ['null', 'string'], 'maxLength': 10},
                                              'text-name':              {'type': ['null', 'string']}},
                                              'type': 'object'},  stream_dict.get('schema'))
 
@@ -86,7 +86,7 @@ class TestIntegerTable(unittest.TestCase):
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': [], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                             {() : {'key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'id')                     : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True},
                               ('properties', 'size integer')         : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True},
                               ('properties', 'size smallint')        : {'inclusion': 'available', 'sql-datatype' : 'smallint', 'selected-by-default' : True},
@@ -122,7 +122,7 @@ class TestDecimalPK(unittest.TestCase):
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': ['our_decimal'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                             {() : {'key-properties': ['our_decimal'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'our_decimal')             : {'inclusion': 'automatic', 'sql-datatype' : 'numeric', 'selected-by-default' : True},
                               ('properties', 'our_decimal_38_4')        : {'inclusion': 'available', 'sql-datatype' : 'numeric', 'selected-by-default' : True},
                               ('properties', 'our_decimal_10_2')        : {'inclusion': 'available', 'sql-datatype' : 'numeric', 'selected-by-default' : True}})
@@ -173,7 +173,7 @@ class TestDatesTablePK(unittest.TestCase):
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': ['our_date'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                             {() : {'key-properties': ['our_date'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'our_date')           : {'inclusion': 'automatic', 'sql-datatype' : 'date', 'selected-by-default' : True},
                               ('properties', 'our_ts')             : {'inclusion': 'available', 'sql-datatype' : 'timestamp without time zone', 'selected-by-default' : True},
                               ('properties', 'our_ts_tz')          : {'inclusion': 'available', 'sql-datatype' : 'timestamp with time zone', 'selected-by-default' : True},
@@ -210,7 +210,7 @@ class TestFloatTablePK(unittest.TestCase):
 
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': ['our_float'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                             {() : {'key-properties': ['our_float'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'our_float')          : {'inclusion': 'automatic', 'sql-datatype' : 'double precision', 'selected-by-default' : True},
                               ('properties', 'our_real')           : {'inclusion': 'available', 'sql-datatype' : 'real', 'selected-by-default' : True},
                               ('properties', 'our_double')         : {'inclusion': 'available', 'sql-datatype' : 'double precision', 'selected-by-default' : True}})
@@ -241,7 +241,7 @@ class TestBoolsAndBits(unittest.TestCase):
 
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': [], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                             {() : {'key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'our_bool')          : {'inclusion': 'available', 'sql-datatype' : 'boolean', 'selected-by-default' : True},
                               ('properties', 'our_bit')           : {'inclusion': 'available', 'sql-datatype' : 'bit', 'selected-by-default' : True}})
 
@@ -271,7 +271,7 @@ class TestJsonTables(unittest.TestCase):
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': [], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                             {() : {'key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'our_secrets')          : {'inclusion': 'available', 'sql-datatype' : 'json',  'selected-by-default' : True},
                               ('properties', 'our_secrets_b')        : {'inclusion': 'available', 'sql-datatype' : 'jsonb', 'selected-by-default' : True}})
 
@@ -302,7 +302,7 @@ class TestUUIDTables(unittest.TestCase):
             stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': ['our_pk'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                             {() : {'key-properties': ['our_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'our_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'uuid',  'selected-by-default' : True},
                               ('properties', 'our_uuid') : {'inclusion': 'available', 'sql-datatype' : 'uuid',  'selected-by-default' : True}})
 
@@ -344,7 +344,7 @@ class TestHStoreTable(unittest.TestCase):
 
 
             self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'key-properties': ['our_pk'], 'database-name': os.getenv('TAP_POSTGRES_DATABASE'), 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                             {() : {'key-properties': ['our_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
                               ('properties', 'our_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'hstore',  'selected-by-default' : True},
                               ('properties', 'our_hstore') : {'inclusion': 'available', 'sql-datatype' : 'hstore',  'selected-by-default' : True}})
 

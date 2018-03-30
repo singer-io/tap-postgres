@@ -26,10 +26,13 @@ def row_to_singer_message(stream, row, version, columns, time_extracted):
       property_type = stream.schema.properties[columns[idx]].type
       sql_datatype = md.get(('properties', columns[idx]))['sql-datatype']
 
-      # if sql_datatype == 'boolean':
+
+      # if columns[idx] == 'our_json':
       #    pdb.set_trace()
 
-      if isinstance(elem, datetime.datetime):
+      if elem is None:
+         row_to_persist += (elem,)
+      elif isinstance(elem, datetime.datetime):
          if sql_datatype == 'timestamp with time zone':
             row_to_persist += (elem.isoformat(),)
          else: #timestamp WITH OUT time zone
@@ -39,10 +42,6 @@ def row_to_singer_message(stream, row, version, columns, time_extracted):
       elif sql_datatype == 'bit':
          row_to_persist += (elem == '1',)
       elif sql_datatype == 'boolean':
-         row_to_persist += (elem,)
-      elif elem is None:
-         row_to_persist += (elem,)
-      elif isinstance(elem, int):
          row_to_persist += (elem,)
       elif isinstance(elem, int):
          row_to_persist += (elem,)
@@ -55,7 +54,7 @@ def row_to_singer_message(stream, row, version, columns, time_extracted):
       elif isinstance(elem, float):
          row_to_persist += (elem,)
       elif isinstance(elem, dict):
-         row_to_persist += (str(elem),)
+         row_to_persist += (json.dumps(elem),)
       else:
          raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
 
