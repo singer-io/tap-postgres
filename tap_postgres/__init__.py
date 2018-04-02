@@ -57,11 +57,12 @@ JSON_TYPES= {'json', 'jsonb'}
 MAX_SCALE=38
 MAX_PRECISION=100
 
-def open_connection(config, logical_replication=False):
-    conn_string = "host='{}' user='{}' password='{}' port='{}'".format(config['host'],
-                                                                       config['user'],
-                                                                       config['password'],
-                                                                       config['port'])
+def open_connection(conn_config, logical_replication=False):
+    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(conn_config['host'],
+                                                                                   conn_config['dbname'],
+                                                                                   conn_config['user'],
+                                                                                   conn_config['password'],
+                                                                                   conn_config['port'])
     if logical_replication:
         conn = psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
     else:
@@ -257,21 +258,47 @@ def discover_columns(connection, table_info):
             table=table_name,
             stream=table_name,
             metadata=metadata.to_list(mdata),
-            tap_stream_id=schema_name + '-' + table_name,
+            tap_stream_id=database_name + '-' + schema_name + '-' + table_name,
             schema=schema)
 
          entries.append(entry)
 
-   return Catalog(entries)
+   return entries
 
 def dump_catalog(catalog):
    catalog.dump()
 
-def do_discovery(connection):
-   table_info = produce_table_info(connection)
-   catalog = discover_columns(connection, table_info)
-   dump_catalog(catalog)
-   return catalog
+def discover_db(connection):
+    table_info = produce_table_info(connection)
+    db_streams = discover_columns(connection, table_info)
+    return db_streams
+
+def do_discovery(conn_config):
+    all_streams = []
+    all_dbs = []
+    with open_connection(conn_config) as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            LOGGER.info("Fetching db's from cluster")
+            cur.execute("""
+            SELECT datname
+              FROM pg_database
+              WHERE datistemplate = false
+                AND CASE WHEN version() LIKE '%Redshift%' THEN true
+                         ELSE has_database_privilege(datname,'CONNECT')
+                    END = true """)
+            all_dbs = cur.fetchall()
+
+    for db_row in all_dbs:
+        dbname = db_row[0]
+        LOGGER.info("Discovering db %s", dbname)
+        conn_config['dbname'] = dbname
+        with open_connection(conn_config) as conn:
+            db_streams = discover_db(conn)
+            all_streams = all_streams + db_streams
+
+    cluster_catalog = Catalog(all_streams)
+    dump_catalog(cluster_catalog)
+    return cluster_catalog
 
 def should_sync_column(metadata, field_name):
    if metadata.get(('properties', field_name), {}).get('inclusion') == 'unsupported':
@@ -366,10 +393,16 @@ def do_sync(connection, catalog, default_replication_method, state):
 
 def main_impl():
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
-    connection = open_connection(args.config)
+    conn_config = {'host' : config['host'],
+                   'user' : config['user'],
+                   'password' : config['password'],
+                   'port' : config['port'],
+                   'database' : config['database']}
+
+    # connection = open_connection(args.config)
 
     if args.discover:
-        do_discovery(connection)
+        do_discovery(conn_config)
     elif args.catalog:
        state = args.state
        do_sync(connection, args.catalog, args.config.get('default_replication_method'), state)

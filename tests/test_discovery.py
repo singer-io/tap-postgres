@@ -5,7 +5,7 @@ import tap_postgres
 import os
 import pdb
 from singer import get_logger, metadata
-from tests.utils import get_test_connection, ensure_test_table
+from tests.utils import get_test_connection, ensure_test_table, get_test_connection_config
 
 LOGGER = get_logger()
 
@@ -27,36 +27,36 @@ class TestStringTableWithPK(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
 
-            chicken_streams = [s for s in catalog.streams if s.table == TestStringTableWithPK.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
-            self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
-            self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
-            self.assertEqual('public-{}'.format(TestStringTableWithPK.table_name), stream_dict.get('tap_stream_id'))
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == "postgres-public-CHICKEN TIMES"]
 
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
+        self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
+        self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
+
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
 
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': ['id'], 'database-name': 'postgres',
-                                    'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'character-varying_name') : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
-                              ('properties', 'id')                     : {'inclusion': 'automatic', 'sql-datatype' : 'integer', 'selected-by-default' : True},
-                              ('properties', 'varchar-name')           : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
-                              ('properties', 'text-name')              : {'inclusion': 'available', 'sql-datatype' : 'text', 'selected-by-default' : True},
-                              ('properties', 'char_name'):               {'selected-by-default': True, 'inclusion': 'available', 'sql-datatype': 'character'}})
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {() : {'table-key-properties': ['id'], 'database-name': 'postgres',
+                                'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                          ('properties', 'character-varying_name') : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
+                          ('properties', 'id')                     : {'inclusion': 'automatic', 'sql-datatype' : 'integer', 'selected-by-default' : True},
+                          ('properties', 'varchar-name')           : {'inclusion': 'available', 'sql-datatype' : 'character varying', 'selected-by-default' : True},
+                          ('properties', 'text-name')              : {'inclusion': 'available', 'sql-datatype' : 'text', 'selected-by-default' : True},
+                          ('properties', 'char_name'):               {'selected-by-default': True, 'inclusion': 'available', 'sql-datatype': 'character'}})
 
-            self.assertEqual({'properties': {'id':                      {'type': ['integer'],
-                                                                         'maximum':  2147483647,
-                                                                         'minimum': -2147483648},
-                                             'character-varying_name': {'type': ['null', 'string']},
-                                             'varchar-name':           {'type': ['null', 'string'], 'maxLength': 28},
-                                             'char_name':              {'type': ['null', 'string'], 'maxLength': 10},
-                                             'text-name':              {'type': ['null', 'string']}},
-                                             'type': 'object'},  stream_dict.get('schema'))
+        self.assertEqual({'properties': {'id':                      {'type': ['integer'],
+                                                                     'maximum':  2147483647,
+                                                                     'minimum': -2147483648},
+                                         'character-varying_name': {'type': ['null', 'string']},
+                                         'varchar-name':           {'type': ['null', 'string'], 'maxLength': 28},
+                                         'char_name':              {'type': ['null', 'string'], 'maxLength': 10},
+                                         'text-name':              {'type': ['null', 'string']}},
+                          'type': 'object'},  stream_dict.get('schema'))
 
 
 class TestIntegerTable(unittest.TestCase):
@@ -72,32 +72,32 @@ class TestIntegerTable(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == TestIntegerTable.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
 
-            self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
-            self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
-            self.assertEqual('public-{}'.format(TestStringTableWithPK.table_name), stream_dict.get('tap_stream_id'))
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
+
+        self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
+        self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
 
 
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'id')                     : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True},
-                              ('properties', 'size integer')         : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True},
-                              ('properties', 'size smallint')        : {'inclusion': 'available', 'sql-datatype' : 'smallint', 'selected-by-default' : True},
-                              ('properties', 'size bigint')          : {'inclusion': 'available', 'sql-datatype' : 'bigint',   'selected-by-default' : True}})
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                          ('properties', 'id')                     : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True},
+                          ('properties', 'size integer')         : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True},
+                          ('properties', 'size smallint')        : {'inclusion': 'available', 'sql-datatype' : 'smallint', 'selected-by-default' : True},
+                          ('properties', 'size bigint')          : {'inclusion': 'available', 'sql-datatype' : 'bigint',   'selected-by-default' : True}})
 
-            self.assertEqual({'type': 'object',
-                              'properties': {'id': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647},
-                                             'size smallint': {'type': ['null', 'integer'], 'minimum': -32768, 'maximum': 32767},
-                                             'size integer': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647},
-                                             'size bigint': {'type': ['null', 'integer'], 'minimum': -9223372036854775808, 'maximum': 9223372036854775807}}},
-                             stream_dict.get('schema'))
+        self.assertEqual({'type': 'object',
+                          'properties': {'id': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647},
+                                         'size smallint': {'type': ['null', 'integer'], 'minimum': -32768, 'maximum': 32767},
+                                         'size integer': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647},
+                                         'size bigint': {'type': ['null', 'integer'], 'minimum': -9223372036854775808, 'maximum': 9223372036854775807}}},
+                         stream_dict.get('schema'))
 
 
 
@@ -113,40 +113,40 @@ class TestDecimalPK(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == TestDecimalPK.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
 
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': ['our_decimal'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'our_decimal')             : {'inclusion': 'automatic', 'sql-datatype' : 'numeric', 'selected-by-default' : True},
-                              ('properties', 'our_decimal_38_4')        : {'inclusion': 'available', 'sql-datatype' : 'numeric', 'selected-by-default' : True},
-                              ('properties', 'our_decimal_10_2')        : {'inclusion': 'available', 'sql-datatype' : 'numeric', 'selected-by-default' : True}})
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                        {() : {'table-key-properties': ['our_decimal'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                         ('properties', 'our_decimal')             : {'inclusion': 'automatic', 'sql-datatype' : 'numeric', 'selected-by-default' : True},
+                         ('properties', 'our_decimal_38_4')        : {'inclusion': 'available', 'sql-datatype' : 'numeric', 'selected-by-default' : True},
+                         ('properties', 'our_decimal_10_2')        : {'inclusion': 'available', 'sql-datatype' : 'numeric', 'selected-by-default' : True}})
 
-            self.assertEqual({'properties': {'our_decimal': {'exclusiveMaximum': True,
-                                                             'exclusiveMinimum': True,
-                                                             'multipleOf': 10 ** (0 - tap_postgres.MAX_SCALE),
-                                                             'maximum': 10 ** (tap_postgres.MAX_PRECISION - tap_postgres.MAX_SCALE),
-                                                             'minimum': -10 ** (tap_postgres.MAX_PRECISION - tap_postgres.MAX_SCALE),
-                                                             'type': ['number']},
-                                                        'our_decimal_10_2': {'exclusiveMaximum': True,
-                                                                             'exclusiveMinimum': True,
-                                                                            'maximum': 100000000,
-                                                                            'minimum': -100000000,
-                                                                            'multipleOf': 0.01,
-                                                                            'type': ['null', 'number']},
-                                                        'our_decimal_38_4': {'exclusiveMaximum': True,
-                                                                             'exclusiveMinimum': True,
-                                                                             'maximum': 10000000000000000000000000000000000,
-                                                                             'minimum': -10000000000000000000000000000000000,
-                                                                             'multipleOf': 0.0001,
-                                                                             'type': ['null', 'number']}},
-                                         'type': 'object'},
-                             stream_dict.get('schema'))
+        self.assertEqual({'properties': {'our_decimal': {'exclusiveMaximum': True,
+                                                         'exclusiveMinimum': True,
+                                                         'multipleOf': 10 ** (0 - tap_postgres.MAX_SCALE),
+                                                         'maximum': 10 ** (tap_postgres.MAX_PRECISION - tap_postgres.MAX_SCALE),
+                                                         'minimum': -10 ** (tap_postgres.MAX_PRECISION - tap_postgres.MAX_SCALE),
+                                                         'type': ['number']},
+                                         'our_decimal_10_2': {'exclusiveMaximum': True,
+                                                              'exclusiveMinimum': True,
+                                                              'maximum': 100000000,
+                                                              'minimum': -100000000,
+                                                              'multipleOf': 0.01,
+                                                              'type': ['null', 'number']},
+                                         'our_decimal_38_4': {'exclusiveMaximum': True,
+                                                              'exclusiveMinimum': True,
+                                                              'maximum': 10000000000000000000000000000000000,
+                                                              'minimum': -10000000000000000000000000000000000,
+                                                              'multipleOf': 0.0001,
+                                                              'type': ['null', 'number']}},
+                          'type': 'object'},
+                         stream_dict.get('schema'))
 
 
 
@@ -164,31 +164,30 @@ class TestDatesTablePK(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == TestDatesTablePK.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
 
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
 
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': ['our_date'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'our_date')           : {'inclusion': 'automatic', 'sql-datatype' : 'date', 'selected-by-default' : True},
-                              ('properties', 'our_ts')             : {'inclusion': 'available', 'sql-datatype' : 'timestamp without time zone', 'selected-by-default' : True},
-                              ('properties', 'our_ts_tz')          : {'inclusion': 'available', 'sql-datatype' : 'timestamp with time zone', 'selected-by-default' : True},
-                              ('properties', 'our_time')           : {'inclusion': 'available', 'sql-datatype' : 'time without time zone', 'selected-by-default' : True},
-                              ('properties', 'our_time_tz')        : {'inclusion': 'available', 'sql-datatype' : 'time with time zone', 'selected-by-default' : True}})
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual({'properties': {'our_date':               {'type': ['string'], 'format' : 'date-time'},
-                                             'our_ts':                 {'type': ['null', 'string'], 'format' : 'date-time'},
-                                             'our_ts_tz':              {'type': ['null', 'string'], 'format' : 'date-time'},
-                                             'our_time':               {'type': ['null', 'string']},
-                                             'our_time_tz':            {'type': ['null', 'string']}},
-                                         'type': 'object'},
-                             stream_dict.get('schema'))
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {() : {'table-key-properties': ['our_date'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                          ('properties', 'our_date')           : {'inclusion': 'automatic', 'sql-datatype' : 'date', 'selected-by-default' : True},
+                          ('properties', 'our_ts')             : {'inclusion': 'available', 'sql-datatype' : 'timestamp without time zone', 'selected-by-default' : True},
+                          ('properties', 'our_ts_tz')          : {'inclusion': 'available', 'sql-datatype' : 'timestamp with time zone', 'selected-by-default' : True},
+                          ('properties', 'our_time')           : {'inclusion': 'available', 'sql-datatype' : 'time without time zone', 'selected-by-default' : True},
+                          ('properties', 'our_time_tz')        : {'inclusion': 'available', 'sql-datatype' : 'time with time zone', 'selected-by-default' : True}})
 
-
+        self.assertEqual({'properties': {'our_date':               {'type': ['string'], 'format' : 'date-time'},
+                                         'our_ts':                 {'type': ['null', 'string'], 'format' : 'date-time'},
+                                         'our_ts_tz':              {'type': ['null', 'string'], 'format' : 'date-time'},
+                                         'our_time':               {'type': ['null', 'string']},
+                                         'our_time_tz':            {'type': ['null', 'string']}},
+                          'type': 'object'},
+                         stream_dict.get('schema'))
 
 class TestFloatTablePK(unittest.TestCase):
     maxDiff = None
@@ -202,25 +201,25 @@ class TestFloatTablePK(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == TestFloatTablePK.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
 
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': ['our_float'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'our_float')          : {'inclusion': 'automatic', 'sql-datatype' : 'double precision', 'selected-by-default' : True},
-                              ('properties', 'our_real')           : {'inclusion': 'available', 'sql-datatype' : 'real', 'selected-by-default' : True},
-                              ('properties', 'our_double')         : {'inclusion': 'available', 'sql-datatype' : 'double precision', 'selected-by-default' : True}})
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {() : {'table-key-properties': ['our_float'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                          ('properties', 'our_float')          : {'inclusion': 'automatic', 'sql-datatype' : 'double precision', 'selected-by-default' : True},
+                          ('properties', 'our_real')           : {'inclusion': 'available', 'sql-datatype' : 'real', 'selected-by-default' : True},
+                          ('properties', 'our_double')         : {'inclusion': 'available', 'sql-datatype' : 'double precision', 'selected-by-default' : True}})
 
 
-            self.assertEqual({'properties': {'our_float':               {'type': ['number']},
-                                             'our_real':                {'type': ['null', 'number']},
-                                             'our_double':       {'type': ['null', 'number']}},
-                                         'type': 'object'},
-                             stream_dict.get('schema'))
+        self.assertEqual({'properties': {'our_float':               {'type': ['number']},
+                                         'our_real':                {'type': ['null', 'number']},
+                                         'our_double':       {'type': ['null', 'number']}},
+                          'type': 'object'},
+                         stream_dict.get('schema'))
 
 class TestBoolsAndBits(unittest.TestCase):
     maxDiff = None
@@ -233,23 +232,23 @@ class TestBoolsAndBits(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == TestFloatTablePK.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
 
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'our_bool')          : {'inclusion': 'available', 'sql-datatype' : 'boolean', 'selected-by-default' : True},
-                              ('properties', 'our_bit')           : {'inclusion': 'available', 'sql-datatype' : 'bit', 'selected-by-default' : True}})
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                          ('properties', 'our_bool')          : {'inclusion': 'available', 'sql-datatype' : 'boolean', 'selected-by-default' : True},
+                          ('properties', 'our_bit')           : {'inclusion': 'available', 'sql-datatype' : 'bit', 'selected-by-default' : True}})
 
 
-            self.assertEqual({'properties': {'our_bool':               {'type': ['null', 'boolean']},
-                                             'our_bit':                {'type': ['null', 'boolean']}},
-                              'type': 'object'},
-                             stream_dict.get('schema'))
+        self.assertEqual({'properties': {'our_bool':               {'type': ['null', 'boolean']},
+                                         'our_bit':                {'type': ['null', 'boolean']}},
+                          'type': 'object'},
+                         stream_dict.get('schema'))
 
 class TestJsonTables(unittest.TestCase):
     maxDiff = None
@@ -262,24 +261,24 @@ class TestJsonTables(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == TestJsonTables.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id  == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
 
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'our_secrets')          : {'inclusion': 'available', 'sql-datatype' : 'json',  'selected-by-default' : True},
-                              ('properties', 'our_secrets_b')        : {'inclusion': 'available', 'sql-datatype' : 'jsonb', 'selected-by-default' : True}})
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                          ('properties', 'our_secrets')          : {'inclusion': 'available', 'sql-datatype' : 'json',  'selected-by-default' : True},
+                          ('properties', 'our_secrets_b')        : {'inclusion': 'available', 'sql-datatype' : 'jsonb', 'selected-by-default' : True}})
 
 
-            self.assertEqual({'properties': {'our_secrets':                  {'type': ['null', 'string']},
-                                             'our_secrets_b':                {'type': ['null', 'string']}},
-                              'type': 'object'},
-                             stream_dict.get('schema'))
+        self.assertEqual({'properties': {'our_secrets':                  {'type': ['null', 'string']},
+                                         'our_secrets_b':                {'type': ['null', 'string']}},
+                          'type': 'object'},
+                         stream_dict.get('schema'))
 
 
 class TestUUIDTables(unittest.TestCase):
@@ -293,24 +292,24 @@ class TestUUIDTables(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == TestJsonTables.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == "postgres-public-CHICKEN TIMES"]
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
 
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': ['our_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'our_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'uuid',  'selected-by-default' : True},
-                              ('properties', 'our_uuid') : {'inclusion': 'available', 'sql-datatype' : 'uuid',  'selected-by-default' : True}})
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {() : {'table-key-properties': ['our_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                          ('properties', 'our_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'uuid',  'selected-by-default' : True},
+                          ('properties', 'our_uuid') : {'inclusion': 'available', 'sql-datatype' : 'uuid',  'selected-by-default' : True}})
 
 
-            self.assertEqual({'properties': {'our_uuid':                  {'type': ['null', 'string']},
-                                             'our_pk':                    {'type': ['string']}},
-                              'type': 'object'},
-                             stream_dict.get('schema'))
+        self.assertEqual({'properties': {'our_uuid':                  {'type': ['null', 'string']},
+                                         'our_pk':                    {'type': ['string']}},
+                          'type': 'object'},
+                         stream_dict.get('schema'))
 
 class TestHStoreTable(unittest.TestCase):
     maxDiff = None
@@ -330,36 +329,73 @@ class TestHStoreTable(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == TestHStoreTable.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
+        with get_test_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("""INSERT INTO "CHICKEN TIMES" (our_pk, our_hstore) VALUES ('size=>"small",name=>"betty"', 'size=>"big",name=>"fred"')""")
                 cur.execute("""SELECT * FROM  "CHICKEN TIMES" """)
-                wtf = cur.fetchall()
+
+                self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                                 {() : {'table-key-properties': ['our_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                                  ('properties', 'our_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'hstore',  'selected-by-default' : True},
+                                  ('properties', 'our_hstore') : {'inclusion': 'available', 'sql-datatype' : 'hstore',  'selected-by-default' : True}})
 
 
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {() : {'table-key-properties': ['our_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
-                              ('properties', 'our_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'hstore',  'selected-by-default' : True},
-                              ('properties', 'our_hstore') : {'inclusion': 'available', 'sql-datatype' : 'hstore',  'selected-by-default' : True}})
+                self.assertEqual({'properties': {'our_hstore':                  {'type': ['null', 'string']},
+                                                 'our_pk':                    {'type': ['string']}},
+                                  'type': 'object'},
+                                 stream_dict.get('schema'))
 
 
-            self.assertEqual({'properties': {'our_hstore':                  {'type': ['null', 'string']},
-                                             'our_pk':                    {'type': ['string']}},
+
+class TestMultiDB(unittest.TestCase):
+    maxDiff = None
+    table_name = 'different_chicken'
+
+    def setUp(self):
+       table_spec = {"columns": [{"name" : 'our_date',                   "type" : "DATE", "primary_key": True },
+                                 {"name" : 'our_ts',                     "type" : "TIMESTAMP"},
+                                 {"name" : 'our_ts_tz',                  "type" : "TIMESTAMP WITH TIME ZONE"},
+                                 {"name" : 'our_time',                   "type" : "TIME"},
+                                 {"name" : 'our_time_tz',                "type" : "TIME WITH TIME ZONE"}],
+                     "name" : TestMultiDB.table_name}
+       ensure_test_table(table_spec, 'dev')
+       ensure_test_table(table_spec, 'postgres')
+
+    def test_catalog(self):
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id in ('postgres-public-different_chicken', 'dev-public-different_chicken')]
+        self.assertEqual(len(chicken_streams), 2)
+
+        for s in chicken_streams:
+            stream_dict = s.to_dict()
+            self.assertEqual({'properties': {'our_date':               {'type': ['string'], 'format' : 'date-time'},
+                                             'our_ts':                 {'type': ['null', 'string'], 'format' : 'date-time'},
+                                             'our_ts_tz':              {'type': ['null', 'string'], 'format' : 'date-time'},
+                                             'our_time':               {'type': ['null', 'string']},
+                                             'our_time_tz':            {'type': ['null', 'string']}},
                               'type': 'object'},
                              stream_dict.get('schema'))
+            db_name = metadata.to_map(stream_dict.get('metadata')).get(()).get('database-name')
+
+            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                             {() : {'table-key-properties': ['our_date'], 'database-name': db_name, 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                              ('properties', 'our_date')           : {'inclusion': 'automatic', 'sql-datatype' : 'date', 'selected-by-default' : True},
+                              ('properties', 'our_ts')             : {'inclusion': 'available', 'sql-datatype' : 'timestamp without time zone', 'selected-by-default' : True},
+                              ('properties', 'our_ts_tz')          : {'inclusion': 'available', 'sql-datatype' : 'timestamp with time zone', 'selected-by-default' : True},
+                              ('properties', 'our_time')           : {'inclusion': 'available', 'sql-datatype' : 'time without time zone', 'selected-by-default' : True},
+                              ('properties', 'our_time_tz')        : {'inclusion': 'available', 'sql-datatype' : 'time with time zone', 'selected-by-default' : True}})
 
 
-
-#TODO:
-#hstore
 
 if __name__== "__main__":
-    test1 = TestDatesTablePK()
+    test1 = TestStringTableWithPK()
     test1.setUp()
     test1.test_catalog()

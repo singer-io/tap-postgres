@@ -11,27 +11,31 @@ from psycopg2.extensions import quote_ident
 
 LOGGER = get_logger()
 
-def get_test_connection():
-    creds = {}
+def get_test_connection_config(target_db='postgres'):
     missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
                                 os.getenv('TAP_POSTGRES_USER'),
                                 os.getenv('TAP_POSTGRES_PASSWORD'),
-                                os.getenv('TAP_POSTGRES_PORT')
-                                # os.getenv('TAP_POSTGRES_DATABASE')
-    ] if x == None]
+                                os.getenv('TAP_POSTGRES_PORT')] if x == None]
     if len(missing_envs) != 0:
         #pylint: disable=line-too-long
-        raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT, TAP_POSTGRES_DB")
+        raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
-    creds['host'] = os.environ.get('TAP_POSTGRES_HOST')
-    creds['user'] = os.environ.get('TAP_POSTGRES_USER')
-    creds['password'] = os.environ.get('TAP_POSTGRES_PASSWORD')
-    creds['port'] = os.environ.get('TAP_POSTGRES_PORT')
-    # creds['DB'] = os.environ.get('TAP_POSTGRES_DB')
-    conn_string = "host='{}'  user='{}' password='{}' port='{}'".format(creds['host'],
-                                                                        creds['user'],
-                                                                        creds['password'],
-                                                                        creds['port'])
+    conn_config = {}
+    conn_config['host'] = os.environ.get('TAP_POSTGRES_HOST')
+    conn_config['user'] = os.environ.get('TAP_POSTGRES_USER')
+    conn_config['password'] = os.environ.get('TAP_POSTGRES_PASSWORD')
+    conn_config['port'] = os.environ.get('TAP_POSTGRES_PORT')
+    conn_config['dbname'] = target_db
+    return conn_config
+
+def get_test_connection(target_db='postgres'):
+    conn_config = get_test_connection_config(target_db)
+    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(conn_config['host'],
+                                                                                   conn_config['dbname'],
+                                                                                   conn_config['user'],
+                                                                                   conn_config['password'],
+                                                                                   conn_config['port'])
+    LOGGER.info("connecting {}".format(conn_string))
 
     conn = psycopg2.connect(conn_string)
     conn.autocommit = True
@@ -60,8 +64,8 @@ def build_table(table, cur):
     return sql
 
 @nottest
-def ensure_test_table(table_spec):
-    with get_test_connection() as conn:
+def ensure_test_table(table_spec, target_db='postgres'):
+    with get_test_connection(target_db) as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             sql = """SELECT *
                        FROM information_schema.tables
