@@ -21,12 +21,13 @@ LOGGER = singer.get_logger()
 
 UPDATE_BOOKMARK_PERIOD = 1000
 
-def fetch_current_lsn(connection):
-   with  connection.cursor() as cur:
-      cur.execute("SELECT pg_current_xlog_location();")
-      current_lsn = cur.fetchone()[0]
-      file, index =  current_lsn.split('/')
-      return (int(file,16)  << 32) + int(index,16)
+def fetch_current_lsn(conn_config):
+   with post_db.open_connection(conn_config, True) as conn:
+      with connection.cursor() as cur:
+         cur.execute("SELECT pg_current_xlog_location();")
+         current_lsn = cur.fetchone()[0]
+         file, index =  current_lsn.split('/')
+         return (int(file,16)  << 32) + int(index,16)
 
 def add_automatic_properties(stream):
    stream.schema.properties['_sdc_deleted_at'] = Schema(
@@ -40,14 +41,13 @@ def get_stream_version(tap_stream_id, state):
 
    return stream_version
 
-def row_to_singer_message(stream, row, version, columns, time_extracted):
+def row_to_singer_message(stream, row, version, columns, time_extracted, md_map):
     row_to_persist = ()
-    md = metadata.to_map(stream.metadata)
-    md[('properties', '_sdc_deleted_at')] =  {'sql-datatype' : 'timestamp with time zone'}
+    md_map[('properties', '_sdc_deleted_at')] =  {'sql-datatype' : 'timestamp with time zone'}
 
     for idx, elem in enumerate(row):
         property_type = stream.schema.properties[columns[idx]].type
-        sql_datatype = md.get(('properties', columns[idx]))['sql-datatype']
+        sql_datatype = md_map.get(('properties', columns[idx]))['sql-datatype']
 
 
         if elem is None:
@@ -80,29 +80,27 @@ def row_to_singer_message(stream, row, version, columns, time_extracted):
         version=version,
         time_extracted=time_extracted)
 
-def consume_message(stream, state, msg, time_extracted):
+def consume_message(stream, state, msg, time_extracted, md_map):
    payload = json.loads(msg.payload)
    lsn = msg.data_start
    stream_version = get_stream_version(stream.tap_stream_id, state)
 
    for c in payload['change']:
-      md = metadata.to_map(stream.metadata).get((), 'schema-name')
-
       if c['schema'] != metadata.to_map(stream.metadata).get(())['schema-name'] or c['table'] != stream.table:
          continue
 
       if c['kind'] == 'insert':
          col_vals  = c['columnvalues'] + [None]
          col_names = c['columnnames'] + ['_sdc_deleted_at']
-         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted)
+         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map)
       elif c['kind'] == 'update':
          col_vals  = c['columnvalues'] + [None]
          col_names = c['columnnames'] + ['_sdc_deleted_at']
-         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted)
+         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map)
       elif c['kind'] == 'delete':
          col_names = c['oldkeys']['keynames'] + ['_sdc_deleted_at']
          col_vals  = c['oldkeys']['keyvalues']  + [singer.utils.strftime(time_extracted)]
-         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted)
+         record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map)
       else:
          raise Exception("unrecognized replication operation: {}".format(c['kind']))
 
@@ -118,44 +116,45 @@ def consume_message(stream, state, msg, time_extracted):
 
    return state
 
-def sync_table(rep_conn, connection, stream, state, desired_columns):
+def sync_table(con_info, stream, state, desired_columns, md_map):
 
    start_lsn = get_bookmark(state, stream.tap_stream_id, 'lsn')
 
    end_lsn = fetch_current_lsn(connection)
    time_extracted = utils.now()
 
-   with rep_conn.cursor() as cur:
-      LOGGER.info("Starting Logical Replication with start lsn %s", start_lsn)
-      try:
-         cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
-      except psycopg2.ProgrammingError:
-         cur.create_replication_slot('stitch', output_plugin='wal2json')
-         cur.start_replication(slot_name='stitch', decode=True, start_lsn=get_bookmark(state, stream.tap_stream_id, 'lsn'))
+   with post_db.open_connection(con_info) as conn:
+      with rep_conn.cursor() as cur:
+         LOGGER.info("Starting Logical Replication with start lsn %s", start_lsn)
+         try:
+            cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
+         except psycopg2.ProgrammingError:
+            cur.create_replication_slot('stitch', output_plugin='wal2json')
+            cur.start_replication(slot_name='stitch', decode=True, start_lsn=get_bookmark(state, stream.tap_stream_id, 'lsn'))
 
-      cur.send_feedback(flush_lsn=start_lsn)
-      keepalive_interval = 10.0
-      rows_saved = 0
+         cur.send_feedback(flush_lsn=start_lsn)
+         keepalive_interval = 10.0
+         rows_saved = 0
 
-      while True:
-         msg = cur.read_message()
+         while True:
+            msg = cur.read_message()
 
-         if msg:
-            state = consume_message(stream, state, msg, time_extracted)
-            rows_saved = rows_saved + 1
+            if msg:
+               state = consume_message(stream, state, msg, time_extracted, md_map)
+               rows_saved = rows_saved + 1
 
-            if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
-               singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
+               if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
+                  singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
-         else:
-            now = datetime.datetime.now()
-            timeout = keepalive_interval - (now - cur.io_timestamp).total_seconds()
-            try:
-               sel = select([cur], [], [], max(0, timeout))
-               if not any(sel):
-                  break
-            except InterruptedError:
-               pass  # recalculate timeout and continue
+            else:
+               now = datetime.datetime.now()
+               timeout = keepalive_interval - (now - cur.io_timestamp).total_seconds()
+               try:
+                  sel = select([cur], [], [], max(0, timeout))
+                  if not any(sel):
+                     break
+               except InterruptedError:
+                  pass  # recalculate timeout and continue
 
    singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
    return state
