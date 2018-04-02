@@ -6,7 +6,7 @@ import os
 import pdb
 import singer
 from singer import get_logger, metadata, write_bookmark
-from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record
+from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
 import decimal
 import math
 import pytz
@@ -57,39 +57,35 @@ class Unsupported(unittest.TestCase):
             ensure_test_table(table_spec)
 
     def test_catalog(self):
-        with get_test_connection() as conn:
-            conn.autocommit = True
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == "postgres-public-CHICKEN TIMES"]
 
-            catalog = tap_postgres.do_discovery(conn)
-            chicken_streams = [s for s in catalog.streams if s.table == Unsupported.table_name]
-            self.assertEqual(len(chicken_streams), 1)
-            stream_dict = chicken_streams[0].to_dict()
-            stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-            self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
-                             {():                                   {'is-view': False, 'table-key-properties': [], 'row-count': 0, 'schema-name': 'public', 'database-name': 'postgres'},
-                              ('properties', 'bytea_col'):          {'sql-datatype': 'bytea', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'bit_string_col'):     {'sql-datatype': 'bit(5)', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'array_int_col'):      {'sql-datatype': 'integer[]', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'line_col'):           {'sql-datatype': 'line', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'xml_col'):            {'sql-datatype': 'xml', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'enum_col'):           {'sql-datatype': 'mood_enum', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'macaddr_col'):        {'sql-datatype': 'macaddr', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'int_range_col'):      {'sql-datatype': 'int4range', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'circle_col'):         {'sql-datatype': 'circle', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'polygon_col'):        {'sql-datatype': 'polygon', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'box_col'):            {'sql-datatype': 'box', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'lseg_col'):           {'sql-datatype': 'lseg', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'composite_col'):      {'sql-datatype': 'person_composite', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'inet_col'):           {'sql-datatype': 'inet', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'cidr_col'):           {'sql-datatype': 'cidr', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'money_col'):          {'sql-datatype': 'money', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'interval_col'):       {'sql-datatype': 'interval', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                              ('properties', 'point_col'):          {'sql-datatype': 'point', 'selected-by-default': False, 'inclusion': 'unsupported'}}
-                             )
-
-
-
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {():                                   {'is-view': False, 'table-key-properties': [], 'row-count': 0, 'schema-name': 'public', 'database-name': 'postgres'},
+                          ('properties', 'bytea_col'):          {'sql-datatype': 'bytea', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'bit_string_col'):     {'sql-datatype': 'bit(5)', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'array_int_col'):      {'sql-datatype': 'integer[]', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'line_col'):           {'sql-datatype': 'line', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'xml_col'):            {'sql-datatype': 'xml', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'enum_col'):           {'sql-datatype': 'mood_enum', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'macaddr_col'):        {'sql-datatype': 'macaddr', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'int_range_col'):      {'sql-datatype': 'int4range', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'circle_col'):         {'sql-datatype': 'circle', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'polygon_col'):        {'sql-datatype': 'polygon', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'box_col'):            {'sql-datatype': 'box', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'lseg_col'):           {'sql-datatype': 'lseg', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'composite_col'):      {'sql-datatype': 'person_composite', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'inet_col'):           {'sql-datatype': 'inet', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'cidr_col'):           {'sql-datatype': 'cidr', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'money_col'):          {'sql-datatype': 'money', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'interval_col'):       {'sql-datatype': 'interval', 'selected-by-default': False, 'inclusion': 'unsupported'},
+                          ('properties', 'point_col'):          {'sql-datatype': 'point', 'selected-by-default': False, 'inclusion': 'unsupported'}}
+        )
 
 
 if __name__== "__main__":

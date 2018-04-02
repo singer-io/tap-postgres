@@ -394,7 +394,6 @@ class TestMultiDB(unittest.TestCase):
                               ('properties', 'our_time_tz')        : {'inclusion': 'available', 'sql-datatype' : 'time with time zone', 'selected-by-default' : True}})
 
 
-
 if __name__== "__main__":
     test1 = TestStringTableWithPK()
     test1.setUp()
