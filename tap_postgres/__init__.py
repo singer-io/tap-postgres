@@ -319,7 +319,16 @@ def do_sync(connection, catalog, default_replication_method, state):
       desired_columns =  [c for c in stream.schema.properties.keys() if should_sync_column(stream_metadata, c)]
       desired_columns.sort()
 
+      if len(desired_columns) == 0:
+         LOGGER.warning('There are no columns selected for stream %s, skipping it', stream.tap_stream_id)
+         continue
+
       replication_method = stream_metadata.get((), {}).get('replication-method', default_replication_method)
+      is_view = metadata.to_map(stream.metadata).get((), {}).get('is-view')
+      if replication_method == 'LOG_BASED' and is_view:
+         LOGGER.warning('Logical Replication is NOT supported for views. skipping stream %s', stream.tap_stream_id)
+         continue
+
       if replication_method == 'LOG_BASED':
          if get_bookmark(state, stream.tap_stream_id, 'lsn'):
             LOGGER.info('END_LSN %s', logical_replication.fetch_current_lsn(connection))
@@ -344,7 +353,10 @@ def do_sync(connection, catalog, default_replication_method, state):
       elif replication_method == 'FULL_TABLE':
           LOGGER.info("stream %s is using full_table", stream.tap_stream_id)
           send_schema_message(stream, [])
-          state = full_table.sync_table(connection, stream, state, desired_columns)
+          if is_view:
+              state = full_table.sync_view(connection, stream, state, desired_columns)
+          else:
+              state = full_table.sync_table(connection, stream, state, desired_columns)
       else:
          raise Exception("only LOG_BASED and FULL_TABLE are supported right now :)")
 

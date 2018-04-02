@@ -76,6 +76,61 @@ def prepare_columns_sql(stream, c):
 
    return column_name
 
+
+def sync_view(connection, stream, state, desired_columns):
+   stream_metadata = metadata.to_map(stream.metadata)
+   time_extracted = utils.now()
+
+   #before writing the table version to state, check if we had one to begin with
+   first_run = singer.get_bookmark(state, stream.tap_stream_id, 'version') is None
+   nascent_stream_version = int(time.time() * 1000)
+
+   state = singer.write_bookmark(state,
+                                 stream.tap_stream_id,
+                                 'version',
+                                 nascent_stream_version)
+   singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
+
+   md = metadata.to_map(stream.metadata)
+   schema_name = md.get(()).get('schema-name')
+
+   escaped_columns = map(lambda c: prepare_columns_sql(stream, c), desired_columns)
+
+   activate_version_message = singer.ActivateVersionMessage(
+      stream=stream.stream,
+      version=nascent_stream_version)
+
+   if first_run:
+      singer.write_message(activate_version_message)
+
+   with metrics.record_counter(None) as counter:
+      with connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+         select_sql      = 'SELECT {} FROM {}'.format(','.join(escaped_columns),
+                                                                                   post_db.fully_qualified_table_name(schema_name, stream.table))
+
+
+         LOGGER.info("select %s", select_sql)
+         cur.execute(select_sql)
+
+         rows_saved = 0
+         rec = cur.fetchone()
+         while rec is not None:
+            rec = rec[:-1]
+            record_message = row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted)
+            singer.write_message(record_message)
+            rows_saved = rows_saved + 1
+            if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
+               singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
+
+            counter.increment()
+            rec = cur.fetchone()
+
+   #always send the activate version whether first run or subsequent
+   singer.write_message(activate_version_message)
+
+   return state
+
+
 def sync_table(connection, stream, state, desired_columns):
    stream_metadata = metadata.to_map(stream.metadata)
    time_extracted = utils.now()
