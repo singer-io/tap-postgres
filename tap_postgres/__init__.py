@@ -331,7 +331,7 @@ def do_sync(connection, catalog, default_replication_method, state):
 
       if replication_method == 'LOG_BASED':
          if get_bookmark(state, stream.tap_stream_id, 'lsn'):
-            LOGGER.info('END_LSN %s', logical_replication.fetch_current_lsn(connection))
+            LOGGER.info("Stream %s is using logical replication. end lsn %s", stream.tap_stream_id, logical_replication.fetch_current_lsn(connection))
             logical_replication.add_automatic_properties(stream)
             send_schema_message(stream, ['lsn'])
             args = utils.parse_args(REQUIRED_CONFIG_KEYS)
@@ -340,7 +340,7 @@ def do_sync(connection, catalog, default_replication_method, state):
          else:
             #start off with full-table replication
             end_lsn = logical_replication.fetch_current_lsn(connection)
-            LOGGER.info('END_LSN %s', end_lsn)
+            LOGGER.info("Stream %s is using logical replication. performing initial full table sync", stream.tap_stream_id)
             send_schema_message(stream, [])
             state = full_table.sync_table(connection, stream, state, desired_columns)
             state = singer.write_bookmark(state,
@@ -351,7 +351,7 @@ def do_sync(connection, catalog, default_replication_method, state):
             state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
 
       elif replication_method == 'FULL_TABLE':
-          LOGGER.info("stream %s is using full_table", stream.tap_stream_id)
+          LOGGER.info("Stream %s is using full_table", stream.tap_stream_id)
           send_schema_message(stream, [])
           if is_view:
               state = full_table.sync_view(connection, stream, state, desired_columns)

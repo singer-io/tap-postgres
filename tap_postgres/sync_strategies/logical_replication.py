@@ -126,7 +126,7 @@ def sync_table(rep_conn, connection, stream, state, desired_columns):
    time_extracted = utils.now()
 
    with rep_conn.cursor() as cur:
-      LOGGER.info("starting Logical Replication with start lsn %s", start_lsn)
+      LOGGER.info("Starting Logical Replication with start lsn %s", start_lsn)
       try:
          cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
       except psycopg2.ProgrammingError:
