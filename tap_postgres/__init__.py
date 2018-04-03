@@ -185,9 +185,6 @@ AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
          if table_info.get(schema_name) is None:
             table_info[schema_name] = {}
 
-         # if table_name == 'CHICKEN TIMES':
-         #    pdb.set_trace()
-
          if table_info[schema_name].get(table_name) is None:
             table_info[schema_name][table_name] = {'is_view': is_view, 'row_count' : row_count, 'columns' : {}}
 
@@ -325,8 +322,6 @@ def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
         state = full_table.sync_view(conn_config, stream, state, desired_columns, md_map)
     else:
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
-
-
     return state
 
 def do_sync_logical_replication(conn_config, stream, state, desired_columns, md_map):
@@ -340,7 +335,7 @@ def do_sync_logical_replication(conn_config, stream, state, desired_columns, md_
         end_lsn = logical_replication.fetch_current_lsn(conn_config)
         LOGGER.info("Stream %s is using logical replication. performing initial full table sync", stream.tap_stream_id)
         send_schema_message(stream, [])
-        state = full_table.sync_table(conn_config, stream, state, desired_columns, stream_metadata)
+        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
         state = singer.write_bookmark(state,
                                       stream.tap_stream_id,
                                       'xmin',
@@ -391,11 +386,11 @@ def do_sync(conn_config, catalog, default_replication_method, state):
 
 def main_impl():
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
-    conn_config = {'host' : config['host'],
-                   'user' : config['user'],
-                   'password' : config['password'],
-                   'port' : config['port'],
-                   'database' : config['database']}
+    conn_config = {'host'     : args.config['host'],
+                   'user'     : args.config['user'],
+                   'password' : args.config['password'],
+                   'port'     : args.config['port'],
+                   'dbname'   : args.config['dbname']}
 
     if args.discover:
         do_discovery(conn_config)

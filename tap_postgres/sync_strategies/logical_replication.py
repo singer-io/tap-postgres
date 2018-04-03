@@ -22,9 +22,9 @@ LOGGER = singer.get_logger()
 UPDATE_BOOKMARK_PERIOD = 1000
 
 def fetch_current_lsn(conn_config):
-   with post_db.open_connection(conn_config, True) as conn:
-      with connection.cursor() as cur:
-         cur.execute("SELECT pg_current_xlog_location();")
+   with post_db.open_connection(conn_config, False) as conn:
+      with conn.cursor() as cur:
+         cur.execute("SELECT pg_current_xlog_location()")
          current_lsn = cur.fetchone()[0]
          file, index =  current_lsn.split('/')
          return (int(file,16)  << 32) + int(index,16)
@@ -116,21 +116,20 @@ def consume_message(stream, state, msg, time_extracted, md_map):
 
    return state
 
-def sync_table(con_info, stream, state, desired_columns, md_map):
-
+def sync_table(conn_info, stream, state, desired_columns, md_map):
    start_lsn = get_bookmark(state, stream.tap_stream_id, 'lsn')
-
-   end_lsn = fetch_current_lsn(connection)
+   # start_lsn = 1
+   end_lsn = fetch_current_lsn(conn_info)
    time_extracted = utils.now()
 
-   with post_db.open_connection(con_info) as conn:
-      with rep_conn.cursor() as cur:
-         LOGGER.info("Starting Logical Replication with start lsn %s", start_lsn)
+   with post_db.open_connection(conn_info, True) as conn:
+      with conn.cursor() as cur:
+
+         LOGGER.info("Starting Logical Replication: %s -> %s", start_lsn, end_lsn)
          try:
             cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
          except psycopg2.ProgrammingError:
-            cur.create_replication_slot('stitch', output_plugin='wal2json')
-            cur.start_replication(slot_name='stitch', decode=True, start_lsn=get_bookmark(state, stream.tap_stream_id, 'lsn'))
+            raise Exception("unable to start replication with logical replication slot 'stitch'")
 
          cur.send_feedback(flush_lsn=start_lsn)
          keepalive_interval = 10.0
@@ -138,7 +137,6 @@ def sync_table(con_info, stream, state, desired_columns, md_map):
 
          while True:
             msg = cur.read_message()
-
             if msg:
                state = consume_message(stream, state, msg, time_extracted, md_map)
                rows_saved = rows_saved + 1
