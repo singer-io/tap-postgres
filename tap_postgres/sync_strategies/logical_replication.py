@@ -106,7 +106,7 @@ def consume_message(stream, state, msg, time_extracted, md_map):
                                       stream.tap_stream_id,
                                       'lsn',
                                       lsn)
-        LOGGER.info("Flushing log up to LSN  %s", msg.data_start)
+        #LOGGER.info("Flushing log up to LSN  %s", msg.data_start)
         msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
     return state

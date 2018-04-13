@@ -38,7 +38,7 @@ Column = collections.namedtuple('Column', [
 
 
 REQUIRED_CONFIG_KEYS = [
-    # 'database',
+    'dbname',
     'host',
     'port',
     'user',
@@ -314,7 +314,7 @@ def is_selected_via_metadata(stream):
     return table_md.get('selected')
 
 def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
-    LOGGER.info("Stream %s is using full_table", stream.tap_stream_id)
+    LOGGER.info("Stream %s is using full_table replication", stream.tap_stream_id)
     send_schema_message(stream, [])
     if md_map.get((), {}).get('is-view'):
         state = full_table.sync_view(conn_config, stream, state, desired_columns, md_map)
@@ -323,23 +323,35 @@ def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
     return state
 
 def do_sync_logical_replication(conn_config, stream, state, desired_columns, md_map):
-    if get_bookmark(state, stream.tap_stream_id, 'lsn'):
-        LOGGER.info("Stream %s is using logical replication. end lsn %s", stream.tap_stream_id, logical_replication.fetch_current_lsn(conn_config))
+    LOGGER.info("Stream %s is using logical replication", stream.tap_stream_id)
+
+    if get_bookmark(state, stream.tap_stream_id, 'xmin') and get_bookmark(state, stream.tap_stream_id, 'lsn'):
+        #finishing previously interrupted full-table (first stage of logical replication)
+        LOGGER.info("Initial stage of full table sync was interrupted. resuming...")
+        send_schema_message(stream, [])
+        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
+
+    #inconsistent state
+    elif get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
+        raise Exception("Xmin found(%s) in state implying full-table replication but no lsn is present")
+
+    elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
+        #initial full-table phase of logical replication
+        end_lsn = logical_replication.fetch_current_lsn(conn_config)
+        LOGGER.info("Performing initial full table sync")
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
+
+        send_schema_message(stream, [])
+        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
+
+    elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and get_bookmark(state, stream.tap_stream_id, 'lsn'):
+        #initial stage of logical replication(full-table) has been completed. moving onto pure logical replication
+        LOGGER.info("Pure Logical Replication upto lsn %s", logical_replication.fetch_current_lsn(conn_config))
         logical_replication.add_automatic_properties(stream)
         send_schema_message(stream, ['lsn'])
         state = logical_replication.sync_table(conn_config, stream, state, desired_columns, md_map)
-    else:
-        #start off with full-table replication
-        end_lsn = logical_replication.fetch_current_lsn(conn_config)
-        LOGGER.info("Stream %s is using logical replication. performing initial full table sync", stream.tap_stream_id)
-        send_schema_message(stream, [])
-        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
-        state = singer.write_bookmark(state,
-                                      stream.tap_stream_id,
-                                      'xmin',
-                                      None)
-        #once we are done with full table, write the lsn to the state
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
 
     return state
 

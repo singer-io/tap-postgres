@@ -35,7 +35,7 @@ def get_test_connection(target_db='postgres'):
                                                                                    conn_config['user'],
                                                                                    conn_config['password'],
                                                                                    conn_config['port'])
-    LOGGER.info("connecting {}".format(conn_string))
+    LOGGER.info("connecting to {}".format(conn_config['host']))
 
     conn = psycopg2.connect(conn_string)
     conn.autocommit = True
