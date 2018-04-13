@@ -58,6 +58,10 @@ class LogicalInterruption(unittest.TestCase):
                                     {"name" : 'colour', "type": "character varying"}],
                         "name" : 'COW'}
         ensure_test_table(table_spec_1)
+        global COW_RECORD_COUNT
+        COW_RECORD_COUNT = 0
+        global CAUGHT_MESSAGES
+        CAUGHT_MESSAGES.clear()
 
     def test_catalog(self):
         singer.write_message = singer_write_message_no_cow
@@ -160,6 +164,11 @@ class FullTableInterruption(unittest.TestCase):
                                     {"name" : 'colour', "type": "character varying"}],
                         "name" : 'CHICKEN'}
         ensure_test_table(table_spec_2)
+
+        global COW_RECORD_COUNT
+        COW_RECORD_COUNT = 0
+        global CAUGHT_MESSAGES
+        CAUGHT_MESSAGES.clear()
 
     def test_catalog(self):
         singer.write_message = singer_write_message_no_cow
@@ -273,10 +282,6 @@ class FullTableInterruption(unittest.TestCase):
         self.assertIsNone(singer.get_currently_syncing( CAUGHT_MESSAGES[5].value))
         self.assertIsNone(CAUGHT_MESSAGES[5].value['bookmarks']['postgres-public-CHICKEN']['xmin'])
         self.assertIsNone(singer.get_currently_syncing( CAUGHT_MESSAGES[5].value))
-
-
-
-
 
 
 if __name__== "__main__":
