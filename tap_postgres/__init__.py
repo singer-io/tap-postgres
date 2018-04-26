@@ -370,6 +370,21 @@ def munge_state_for_replication_method(state, tap_stream_id, replication_key, re
     state = singer.write_bookmark(state, tap_stream_id, 'last_replication_method', replication_method)
     return state
 
+def clear_state_on_replication_change(state, tap_stream_id, replication_key, replication_method):
+    #user changed replication, nuke state
+    last_replication_method = singer.get_bookmark(state, tap_stream_id, 'last_replication_method')
+    if last_replication_method is not None and (replication_method is not last_replication_method):
+        state = singer.reset_stream(state, tap_stream_id)
+
+    #key changed
+    if replication_method == 'INCREMENTAL':
+        if replication_key is not singer.get_bookmark(state, tap_stream_id, 'replication_key'):
+            state = singer.reset_stream(state, tap_stream_id)
+
+    state = singer.write_bookmark(state, tap_stream_id, 'last_replication_method', replication_method)
+    return state
+
+
 def do_sync(conn_config, catalog, default_replication_method, state):
     streams = list(filter(is_selected_via_metadata, catalog.streams))
     streams.sort(key=lambda s: s.tap_stream_id)
@@ -395,7 +410,7 @@ def do_sync(conn_config, catalog, default_replication_method, state):
         replication_method = md_map.get((), {}).get('replication-method', default_replication_method)
         replication_key = md_map.get((), {}).get('replication-key')
 
-        state = munge_state_for_replication_method(state, stream.tap_stream_id, replication_key, replication_method)
+        state = clear_state_on_replication_change(state, stream.tap_stream_id, replication_key, replication_method)
 
         if replication_method == 'LOG_BASED' and md_map.get((), {}).get('is-view'):
             LOGGER.warning('Logical Replication is NOT supported for views. skipping stream %s', stream.tap_stream_id)
