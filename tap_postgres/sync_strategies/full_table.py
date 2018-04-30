@@ -17,50 +17,6 @@ LOGGER = singer.get_logger()
 
 UPDATE_BOOKMARK_PERIOD = 1000
 
-def row_to_singer_message(stream, row, version, columns, time_extracted, md_map):
-    row_to_persist = ()
-    for idx, elem in enumerate(row):
-        sql_datatype = md_map.get(('properties', columns[idx]))['sql-datatype']
-
-        if elem is None:
-            row_to_persist += (elem,)
-        elif isinstance(elem, datetime.datetime):
-            if sql_datatype == 'timestamp with time zone':
-                row_to_persist += (elem.isoformat(),)
-            else: #timestamp WITH OUT time zone
-                row_to_persist += (elem.isoformat() + '+00:00',)
-        elif isinstance(elem, datetime.date):
-            row_to_persist += (elem.isoformat() + 'T00:00:00+00:00',)
-        elif sql_datatype == 'bit':
-            row_to_persist += (elem == '1',)
-        elif sql_datatype == 'boolean':
-            row_to_persist += (elem,)
-        elif isinstance(elem, int):
-            row_to_persist += (elem,)
-        elif isinstance(elem, datetime.time):
-            row_to_persist += (str(elem),)
-        elif isinstance(elem, str):
-            row_to_persist += (elem,)
-        elif isinstance(elem, decimal.Decimal):
-            row_to_persist += (elem,)
-        elif isinstance(elem, float):
-            row_to_persist += (elem,)
-        elif isinstance(elem, dict):
-            row_to_persist += (json.dumps(elem),)
-        else:
-            raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
-
-    rec = dict(zip(columns, row_to_persist))
-
-    return singer.RecordMessage(
-        stream=stream.stream,
-        record=rec,
-        version=version,
-        time_extracted=time_extracted)
-
-def prepare_columns_sql(c):
-    column_name = """ "{}" """.format(post_db.canonicalize_identifier(c))
-    return column_name
 
 def sync_view(conn_info, stream, state, desired_columns, md_map):
     time_extracted = utils.now()
@@ -77,7 +33,7 @@ def sync_view(conn_info, stream, state, desired_columns, md_map):
 
     schema_name = md_map.get(()).get('schema-name')
 
-    escaped_columns = map(prepare_columns_sql, desired_columns)
+    escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
 
     activate_version_message = singer.ActivateVersionMessage(
         stream=stream.stream,
@@ -99,7 +55,7 @@ def sync_view(conn_info, stream, state, desired_columns, md_map):
                 rec = cur.fetchone()
                 while rec is not None:
                     rec = rec[:-1]
-                    record_message = row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted, md_map)
+                    record_message = post_db.selected_row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted, md_map)
                     singer.write_message(record_message)
                     rows_saved = rows_saved + 1
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
@@ -131,11 +87,12 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                                   stream.tap_stream_id,
                                   'version',
                                   nascent_stream_version)
+    # pdb.set_trace()
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
     schema_name = md_map.get(()).get('schema-name')
 
-    escaped_columns = map(prepare_columns_sql, desired_columns)
+    escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
 
     activate_version_message = singer.ActivateVersionMessage(
         stream=stream.stream,
@@ -171,7 +128,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                 while rec is not None:
                     xmin = rec['xmin']
                     rec = rec[:-1]
-                    record_message = row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted, md_map)
+                    record_message = post_db.selected_row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted, md_map)
                     singer.write_message(record_message)
                     state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', xmin)
                     rows_saved = rows_saved + 1
