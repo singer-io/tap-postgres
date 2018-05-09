@@ -54,7 +54,6 @@ def sync_view(conn_info, stream, state, desired_columns, md_map):
                 rows_saved = 0
                 rec = cur.fetchone()
                 while rec is not None:
-                    rec = rec[:-1]
                     record_message = post_db.selected_row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted, md_map)
                     singer.write_message(record_message)
                     rows_saved = rows_saved + 1
@@ -87,7 +86,6 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                                   stream.tap_stream_id,
                                   'version',
                                   nascent_stream_version)
-    # pdb.set_trace()
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
     schema_name = md_map.get(()).get('schema-name')
