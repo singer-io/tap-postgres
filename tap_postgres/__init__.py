@@ -330,13 +330,12 @@ def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
 #Possible state keys: replication_key, replication_key_value, version
 def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
     replication_key = md_map.get((), {}).get('replication-key')
-    replication_key_value = singer.get_bookmark(state, stream.tap_stream_id, 'replication_key_value')
     LOGGER.info("Stream %s is using incremental replication with replication key %s", stream.tap_stream_id, replication_key)
 
     stream_state = state.get('bookmarks', {}).get(stream.tap_stream_id)
     illegal_bk_keys = set(stream_state.keys()).difference(set(['replication_key', 'replication_key_value', 'version', 'last_replication_method']))
     if len(illegal_bk_keys) != 0:
-        raise Exception("invalid keys found in state: %s", illegal_bk_keys)
+        raise Exception("invalid keys found in state: {}".format(illegal_bk_keys))
 
     state = singer.write_bookmark(state, stream.tap_stream_id, 'replication_key', replication_key)
     if md_map.get((), {}).get('is-view'):

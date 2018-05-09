@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 # pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code
 
-import decimal
-import datetime
 import copy
 import time
 import psycopg2
 import psycopg2.extras
-import json
 import singer
 from singer import utils
 import singer.metrics as metrics

@@ -1,13 +1,12 @@
-import tap_postgres.db as post_db
+import copy
+import time
 import psycopg2
 import psycopg2.extras
-from psycopg2.extensions import quote_ident
-import json
 import singer
 from singer import utils
-import copy
 import singer.metrics as metrics
-import time
+import tap_postgres.db as post_db
+
 
 LOGGER = singer.get_logger()
 
@@ -63,18 +62,16 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                                     FROM {}
                                     WHERE {} >= '{}'::{}
                                     ORDER BY {} ASC""".format(','.join(escaped_columns),
-                                                            post_db.fully_qualified_table_name(schema_name, stream.table),
-                                                            post_db.prepare_columns_sql(replication_key), replication_key_value, replication_key_sql_datatype,
-                                                            post_db.prepare_columns_sql(replication_key))
+                                                              post_db.fully_qualified_table_name(schema_name, stream.table),
+                                                              post_db.prepare_columns_sql(replication_key), replication_key_value, replication_key_sql_datatype,
+                                                              post_db.prepare_columns_sql(replication_key))
                 else:
                     #if not replication_key_value
                     select_sql = """SELECT {}
                                     FROM {}
                                     ORDER BY {} ASC""".format(','.join(escaped_columns),
-                                                            post_db.fully_qualified_table_name(schema_name, stream.table),
-                                                            post_db.prepare_columns_sql(replication_key))
-
-
+                                                              post_db.fully_qualified_table_name(schema_name, stream.table),
+                                                              post_db.prepare_columns_sql(replication_key))
 
                 LOGGER.info("SELECT STATEMENT: %s", select_sql)
                 cur.execute(select_sql)

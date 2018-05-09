@@ -1,8 +1,8 @@
-import psycopg2
-import psycopg2.extras
 import datetime
 import decimal
 import json
+import psycopg2
+import psycopg2.extras
 import singer
 
 #from the postgres docs:
@@ -33,9 +33,10 @@ def prepare_columns_sql(c):
     column_name = """ "{}" """.format(canonicalize_identifier(c))
     return column_name
 
+#pylint: disable=too-many-branches,too-many-nested-blocks
 def selected_value_to_singer_value(elem, sql_datatype):
     if elem is None:
-        cleaned_elem  = elem
+        cleaned_elem = elem
     elif isinstance(elem, datetime.datetime):
         if sql_datatype == 'timestamp with time zone':
             cleaned_elem = elem.isoformat()
@@ -64,6 +65,7 @@ def selected_value_to_singer_value(elem, sql_datatype):
 
     return cleaned_elem
 
+#pylint: disable=too-many-arguments
 def selected_row_to_singer_message(stream, row, version, columns, time_extracted, md_map):
     row_to_persist = ()
     for idx, elem in enumerate(row):
