@@ -23,6 +23,7 @@ from singer.catalog import Catalog, CatalogEntry
 
 import tap_postgres.sync_strategies.logical_replication as logical_replication
 import tap_postgres.sync_strategies.full_table as full_table
+import tap_postgres.sync_strategies.incremental as incremental
 import tap_postgres.db as post_db
 LOGGER = singer.get_logger()
 
@@ -284,6 +285,10 @@ def do_discovery(conn_config):
     return cluster_catalog
 
 def should_sync_column(md_map, field_name):
+    #always sync replidation_keys
+    if md_map.get((), {}).get('replication-key') == field_name:
+        return True
+
     if md_map.get(('properties', field_name), {}).get('inclusion') == 'unsupported':
         return False
 
@@ -322,6 +327,27 @@ def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
     return state
 
+#Possible state keys: replication_key, replication_key_value, version
+def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
+    replication_key = md_map.get((), {}).get('replication-key')
+    LOGGER.info("Stream %s is using incremental replication with replication key %s", stream.tap_stream_id, replication_key)
+
+    stream_state = state.get('bookmarks', {}).get(stream.tap_stream_id)
+    illegal_bk_keys = set(stream_state.keys()).difference(set(['replication_key', 'replication_key_value', 'version', 'last_replication_method']))
+    if len(illegal_bk_keys) != 0:
+        raise Exception("invalid keys found in state: {}".format(illegal_bk_keys))
+
+    state = singer.write_bookmark(state, stream.tap_stream_id, 'replication_key', replication_key)
+    if md_map.get((), {}).get('is-view'):
+        pks = md_map.get(()).get('table-key-properties')
+    else:
+        pks = md_map.get(()).get('table-key-properties')
+
+    send_schema_message(stream, pks)
+    state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map)
+
+    return state
+
 def do_sync_logical_replication(conn_config, stream, state, desired_columns, md_map):
     LOGGER.info("Stream %s is using logical replication", stream.tap_stream_id)
 
@@ -355,6 +381,21 @@ def do_sync_logical_replication(conn_config, stream, state, desired_columns, md_
 
     return state
 
+def clear_state_on_replication_change(state, tap_stream_id, replication_key, replication_method):
+    #user changed replication, nuke state
+    last_replication_method = singer.get_bookmark(state, tap_stream_id, 'last_replication_method')
+    if last_replication_method is not None and (replication_method != last_replication_method):
+        state = singer.reset_stream(state, tap_stream_id)
+
+    #key changed
+    if replication_method == 'INCREMENTAL':
+        if replication_key != singer.get_bookmark(state, tap_stream_id, 'replication_key'):
+            state = singer.reset_stream(state, tap_stream_id)
+
+    state = singer.write_bookmark(state, tap_stream_id, 'last_replication_method', replication_method)
+    return state
+
+
 def do_sync(conn_config, catalog, default_replication_method, state):
     streams = list(filter(is_selected_via_metadata, catalog.streams))
     streams.sort(key=lambda s: s.tap_stream_id)
@@ -378,15 +419,20 @@ def do_sync(conn_config, catalog, default_replication_method, state):
             continue
 
         replication_method = md_map.get((), {}).get('replication-method', default_replication_method)
+        replication_key = md_map.get((), {}).get('replication-key')
+
+        state = clear_state_on_replication_change(state, stream.tap_stream_id, replication_key, replication_method)
+
         if replication_method == 'LOG_BASED' and md_map.get((), {}).get('is-view'):
             LOGGER.warning('Logical Replication is NOT supported for views. skipping stream %s', stream.tap_stream_id)
             continue
-
 
         if replication_method == 'LOG_BASED':
             state = do_sync_logical_replication(conn_config, stream, state, desired_columns, md_map)
         elif replication_method == 'FULL_TABLE':
             state = do_sync_full_table(conn_config, stream, state, desired_columns, md_map)
+        elif replication_method == 'INCREMENTAL':
+            state = do_sync_incremental(conn_config, stream, state, desired_columns, md_map)
         else:
             raise Exception("only LOG_BASED and FULL_TABLE are supported right now :)")
 
