@@ -7,6 +7,7 @@ import singer
 from singer import utils
 import copy
 import singer.metrics as metrics
+import time
 
 LOGGER = singer.get_logger()
 
@@ -57,12 +58,20 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
         with post_db.open_connection(conn_info) as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 LOGGER.info("Beginning new incremental replication sync %s", stream_version)
-                select_sql = """SELECT {}
-                                  FROM {}
-                                  WHERE {} >= '{}'::{}
-                                  ORDER BY {} ASC""".format(','.join(escaped_columns),
+                if replication_key_value:
+                    select_sql = """SELECT {}
+                                    FROM {}
+                                    WHERE {} >= '{}'::{}
+                                    ORDER BY {} ASC""".format(','.join(escaped_columns),
                                                             post_db.fully_qualified_table_name(schema_name, stream.table),
                                                             post_db.prepare_columns_sql(replication_key), replication_key_value, replication_key_sql_datatype,
+                                                            post_db.prepare_columns_sql(replication_key))
+                else:
+                    #if not replication_key_value
+                    select_sql = """SELECT {}
+                                    FROM {}
+                                    ORDER BY {} ASC""".format(','.join(escaped_columns),
+                                                            post_db.fully_qualified_table_name(schema_name, stream.table),
                                                             post_db.prepare_columns_sql(replication_key))
 
 
@@ -91,8 +100,5 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
 
                     counter.increment()
                     rec = cur.fetchone()
-
-    #always send the activate version whether first run or subsequent
-    singer.write_message(activate_version_message)
 
     return state

@@ -285,6 +285,10 @@ def do_discovery(conn_config):
     return cluster_catalog
 
 def should_sync_column(md_map, field_name):
+    #always sync replidation_keys
+    if md_map.get((), {}).get('replication-key') == field_name:
+        return True
+
     if md_map.get(('properties', field_name), {}).get('inclusion') == 'unsupported':
         return False
 
@@ -323,40 +327,22 @@ def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
     return state
 
+#Possible state keys: replication_key, replication_key_value, version
 def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
     replication_key = md_map.get((), {}).get('replication-key')
-    state = singer.write_bookmark(state, stream.tap_stream_id, 'replication_key', replication_key)
-    LOGGER.info("Stream %s is using incremental replication with replication key %s", stream.tap_stream_id, replication_key)
     replication_key_value = singer.get_bookmark(state, stream.tap_stream_id, 'replication_key_value')
+    LOGGER.info("Stream %s is using incremental replication with replication key %s", stream.tap_stream_id, replication_key)
+
+    stream_state = state.get('bookmarks', {}).get(stream.tap_stream_id)
+    illegal_bk_keys = set(stream_state.keys()).difference(set(['replication_key', 'replication_key_value', 'version', 'last_replication_method']))
+    if len(illegal_bk_keys) != 0:
+        raise Exception("invalid keys found in state: %s", illegal_bk_keys)
+
+    state = singer.write_bookmark(state, stream.tap_stream_id, 'replication_key', replication_key)
     pks = md_map.get(()).get('table-key-properties')
 
-    if get_bookmark(state, stream.tap_stream_id, 'xmin') and replication_key_value is not None:
-        #finishing previously interrupted full-table (first stage of logical replication)
-        LOGGER.info("Initial phase of full table sync was interrupted. resuming...")
-        send_schema_message(stream, pks)
-        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
-
-    #inconsistent state
-    elif get_bookmark(state, stream.tap_stream_id, 'xmin') and replication_key_value is None:
-        raise Exception("Xmin found(%s) in state implying full-table replication but no replication_key_value is present")
-
-    elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and replication_key_value is None:
-        #initial full-table phase of logical replication
-        schema_name = md_map.get(()).get('schema-name')
-        end_bk_value = incremental.fetch_max_replication_key(conn_config, replication_key, schema_name, stream.stream)
-        replication_key_sql_datatype = md_map.get(('properties', replication_key))['sql-datatype']
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'replication_key_value', post_db.selected_value_to_singer_value(end_bk_value, replication_key_sql_datatype))
-        LOGGER.info("Starting incremental replication initial phase(full table sync)")
-        send_schema_message(stream, pks)
-        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
-
-    elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and replication_key_value is not None:
-        #initial stage of incremnetal replication(full-table) has been completed. moving onto pure incremental
-        LOGGER.info("Starting incremental replication phase 2 (pure)")
-        send_schema_message(stream, pks)
-        state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map)
+    send_schema_message(stream, pks)
+    state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map)
 
     return state
 
