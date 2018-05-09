@@ -43,8 +43,7 @@ REQUIRED_CONFIG_KEYS = [
     'host',
     'port',
     'user',
-    'password',
-    'default_replication_method'
+    'password'
 ]
 
 
@@ -419,6 +418,9 @@ def do_sync(conn_config, catalog, default_replication_method, state):
             continue
 
         replication_method = md_map.get((), {}).get('replication-method', default_replication_method)
+        if replication_method not in set(['LOG_BASED', 'FULL_TABLE', 'INCREMENTAL']):
+            raise Exception("Unrecognized replication_method {}".format(replication_method))
+
         replication_key = md_map.get((), {}).get('replication-key')
 
         state = clear_state_on_replication_change(state, stream.tap_stream_id, replication_key, replication_method)
@@ -433,8 +435,6 @@ def do_sync(conn_config, catalog, default_replication_method, state):
             state = do_sync_full_table(conn_config, stream, state, desired_columns, md_map)
         elif replication_method == 'INCREMENTAL':
             state = do_sync_incremental(conn_config, stream, state, desired_columns, md_map)
-        else:
-            raise Exception("only LOG_BASED and FULL_TABLE are supported right now :)")
 
         state = singer.set_currently_syncing(state, None)
         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
