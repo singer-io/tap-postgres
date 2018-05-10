@@ -89,6 +89,10 @@ def schema_for_column(c):
         result.type = nullable_column('string', c.is_primary_key)
         return result
 
+    elif data_type == 'citext':
+        result.type = nullable_column('string', c.is_primary_key)
+        return result
+
     elif data_type in JSON_TYPES:
         result.type = nullable_column('string', c.is_primary_key)
         return result
