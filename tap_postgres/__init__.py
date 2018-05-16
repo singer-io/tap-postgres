@@ -262,14 +262,13 @@ def discover_db(connection):
 
 def do_discovery(conn_config):
     all_streams = []
-    dbs_to_discover = []
 
-    if conn_config.get('dbs_to_discover'):
-        dbs_to_discover = conn_config['dbs_to_discover']
+    if conn_config.get('filter_dbs'):
+        filter_dbs = conn_config['filter_dbs']
     else:
         with post_db.open_connection(conn_config) as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                LOGGER.info("Fetching all db's, to specify a single db include dbs_to_discover in config.json")
+                LOGGER.info("Fetching all db's, to specify a single db include filter_dbs in config.json")
 
                 cur.execute("""
                 SELECT datname
@@ -278,9 +277,9 @@ def do_discovery(conn_config):
                     AND CASE WHEN version() LIKE '%Redshift%' THEN true
                             ELSE has_database_privilege(datname,'CONNECT')
                         END = true """)
-                dbs_to_discover = (row[0] for row in cur.fetchall())
+                filter_dbs = (row[0] for row in cur.fetchall())
 
-    for db_row in dbs_to_discover:
+    for db_row in filter_dbs:
         dbname = db_row
         LOGGER.info("Discovering db %s", dbname)
         conn_config['dbname'] = dbname
@@ -293,7 +292,7 @@ def do_discovery(conn_config):
     return cluster_catalog
 
 def should_sync_column(md_map, field_name):
-    #always sync replidation_keys
+    #always sync replication_keys
     if md_map.get((), {}).get('replication-key') == field_name:
         return True
 
@@ -456,7 +455,7 @@ def main_impl():
                    'password' : args.config['password'],
                    'port'     : args.config['port'],
                    'dbname'   : args.config['dbname'],
-                   'dbs_to_discover' : args.config.get('dbs_to_discover')}
+                   'filter_dbs' : args.config.get('filter_dbs')}
 
     if args.discover:
         do_discovery(conn_config)
