@@ -263,21 +263,23 @@ def discover_db(connection):
 def do_discovery(conn_config):
     all_streams = []
 
-    if conn_config.get('filter_dbs'):
-        filter_dbs = conn_config['filter_dbs']
-    else:
-        with post_db.open_connection(conn_config) as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                LOGGER.info("Fetching all db's, to specify a single db include filter_dbs in config.json")
+    with post_db.open_connection(conn_config) as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            LOGGER.info("Fetching all db's, to specify a single db include filter_dbs in config.json")
 
-                cur.execute("""
-                SELECT datname
-                FROM pg_database
-                WHERE datistemplate = false
-                    AND CASE WHEN version() LIKE '%Redshift%' THEN true
-                            ELSE has_database_privilege(datname,'CONNECT')
-                        END = true """)
-                filter_dbs = (row[0] for row in cur.fetchall())
+            sql = """SELECT datname
+            FROM pg_database
+            WHERE datistemplate = false
+                AND CASE WHEN version() LIKE '%Redshift%' THEN true
+                        ELSE has_database_privilege(datname,'CONNECT')
+                    END = true """
+
+            if conn_config.get('filter_dbs'):
+                sql = db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
+                print(sql)
+            
+            cur.execute(sql)
+            filter_dbs = (row[0] for row in cur.fetchall())
 
     for db_row in filter_dbs:
         dbname = db_row
