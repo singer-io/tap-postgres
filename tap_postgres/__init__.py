@@ -265,8 +265,6 @@ def do_discovery(conn_config):
 
     with post_db.open_connection(conn_config) as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            LOGGER.info("Fetching all db's, to specify a single db include filter_dbs in config.json")
-
             sql = """SELECT datname
             FROM pg_database
             WHERE datistemplate = false
@@ -276,8 +274,10 @@ def do_discovery(conn_config):
 
             if conn_config.get('filter_dbs'):
                 sql = post_db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
-                print(sql)
-            
+
+
+            LOGGER.info("Running DB discovery: %s", sql)
+
             cur.execute(sql)
             filter_dbs = (row[0] for row in cur.fetchall())
 
