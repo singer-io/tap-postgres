@@ -33,6 +33,10 @@ def prepare_columns_sql(c):
     column_name = """ "{}" """.format(canonicalize_identifier(c))
     return column_name
 
+def filter_dbs_sql_clause(sql, filter_dbs):
+    in_clause = " AND datname in (" + ",".join(["'{}'".format(b.strip(' ')) for b in filter_dbs.split(',')]) + ")"
+    return sql + in_clause
+
 #pylint: disable=too-many-branches,too-many-nested-blocks
 def selected_value_to_singer_value(elem, sql_datatype):
     if elem is None:

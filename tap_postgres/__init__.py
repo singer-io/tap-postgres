@@ -262,21 +262,27 @@ def discover_db(connection):
 
 def do_discovery(conn_config):
     all_streams = []
-    all_dbs = []
+
     with post_db.open_connection(conn_config) as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            LOGGER.info("Fetching db's from cluster")
-            cur.execute("""
-            SELECT datname
-              FROM pg_database
-              WHERE datistemplate = false
-                AND CASE WHEN version() LIKE '%Redshift%' THEN true
-                         ELSE has_database_privilege(datname,'CONNECT')
-                    END = true """)
-            all_dbs = cur.fetchall()
+            LOGGER.info("Fetching all db's, to specify a single db include filter_dbs in config.json")
 
-    for db_row in all_dbs:
-        dbname = db_row[0]
+            sql = """SELECT datname
+            FROM pg_database
+            WHERE datistemplate = false
+                AND CASE WHEN version() LIKE '%Redshift%' THEN true
+                        ELSE has_database_privilege(datname,'CONNECT')
+                    END = true """
+
+            if conn_config.get('filter_dbs'):
+                sql = post_db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
+                print(sql)
+            
+            cur.execute(sql)
+            filter_dbs = (row[0] for row in cur.fetchall())
+
+    for db_row in filter_dbs:
+        dbname = db_row
         LOGGER.info("Discovering db %s", dbname)
         conn_config['dbname'] = dbname
         with post_db.open_connection(conn_config) as conn:
@@ -288,7 +294,7 @@ def do_discovery(conn_config):
     return cluster_catalog
 
 def should_sync_column(md_map, field_name):
-    #always sync replidation_keys
+    #always sync replication_keys
     if md_map.get((), {}).get('replication-key') == field_name:
         return True
 
@@ -450,7 +456,8 @@ def main_impl():
                    'user'     : args.config['user'],
                    'password' : args.config['password'],
                    'port'     : args.config['port'],
-                   'dbname'   : args.config['dbname']}
+                   'dbname'   : args.config['dbname'],
+                   'filter_dbs' : args.config.get('filter_dbs')}
 
     if args.discover:
         do_discovery(conn_config)
