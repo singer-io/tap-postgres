@@ -275,7 +275,7 @@ def do_discovery(conn_config):
                     END = true """
 
             if conn_config.get('filter_dbs'):
-                sql = db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
+                sql = post_db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
                 print(sql)
             
             cur.execute(sql)
