@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition
+# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-statements
 
 import datetime
 import pdb
@@ -145,6 +145,10 @@ def schema_for_column(c):
     elif data_type == 'character':
         result.type = nullable_column('string', c.is_primary_key)
         result.maxLength = c.character_maximum_length
+        return result
+
+    elif data_type in {'cidr', 'inet', 'macaddr'}:
+        result.type = nullable_column('string', c.is_primary_key)
         return result
 
     return Schema(None)
