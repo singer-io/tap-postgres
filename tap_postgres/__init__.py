@@ -147,6 +147,10 @@ def schema_for_column(c):
         result.maxLength = c.character_maximum_length
         return result
 
+    elif data_type in {'cidr', 'inet', 'macaddr'}:
+        result.type = nullable_column('string', c.is_primary_key)
+        return result
+
     return Schema(None)
 
 def produce_table_info(conn):
