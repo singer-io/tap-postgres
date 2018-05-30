@@ -64,6 +64,8 @@ def selected_value_to_singer_value(elem, sql_datatype):
         cleaned_elem = elem
     elif isinstance(elem, dict):
         cleaned_elem = json.dumps(elem)
+    elif isinstance(elem, list):
+        cleaned_elem = json.dumps(elem)
     else:
         raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
 
