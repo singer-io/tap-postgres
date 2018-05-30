@@ -5,6 +5,8 @@ import psycopg2
 import psycopg2.extras
 import singer
 
+cursor_iter_size = 20000
+
 #from the postgres docs:
 #Quoted identifiers can contain any character, except the character with code zero. (To include a double #quote, write two double quotes.)
 def canonicalize_identifier(identifier):
