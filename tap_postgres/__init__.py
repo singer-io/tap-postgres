@@ -154,7 +154,8 @@ def schema_for_column(c):
     return Schema(None)
 
 def produce_table_info(conn):
-    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
+        cur.itersize = post_db.cursor_iter_size
         table_info = {}
         cur.execute("""
 SELECT
@@ -268,7 +269,8 @@ def do_discovery(conn_config):
     all_streams = []
 
     with post_db.open_connection(conn_config) as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
+            cur.itersize = post_db.cursor_iter_size
             sql = """SELECT datname
             FROM pg_database
             WHERE datistemplate = false
@@ -463,6 +465,7 @@ def main_impl():
                    'dbname'   : args.config['dbname'],
                    'filter_dbs' : args.config.get('filter_dbs')}
 
+    post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
     if args.discover:
         do_discovery(conn_config)
     elif args.catalog:
