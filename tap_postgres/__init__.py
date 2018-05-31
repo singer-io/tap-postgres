@@ -86,7 +86,8 @@ def schema_for_column(c):
         return result
 
     elif data_type == 'hstore':
-        result.type = nullable_column('string', c.is_primary_key)
+        result.type = nullable_column('object', c.is_primary_key)
+        result.properties = {}
         return result
 
     elif data_type == 'citext':
@@ -233,6 +234,8 @@ def discover_columns(connection, table_info):
             metadata.write(mdata, (), 'is-view', table_info[schema_name][table_name].get('is_view'))
 
             column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
+
+
             schema = Schema(type='object', properties=column_schemas)
             for c_name in column_schemas.keys():
                 mdata = write_sql_data_type_md(mdata, columns[c_name])

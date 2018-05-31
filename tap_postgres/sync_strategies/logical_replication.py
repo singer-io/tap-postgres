@@ -11,6 +11,7 @@ from dateutil.parser import parse
 import psycopg2
 import copy
 from select import select
+from functools import reduce
 import json
 
 LOGGER = singer.get_logger()
@@ -37,13 +38,26 @@ def get_stream_version(tap_stream_id, state):
 
     return stream_version
 
-def row_to_singer_message(stream, row, version, columns, time_extracted, md_map):
+def tuples_to_map(accum,t):
+    accum[t[0]] = t[1]
+    return accum
+
+def create_hstore_elem(conn_info, elem):
+    with post_db.open_connection(conn_info) as conn:
+        with conn.cursor() as cur:
+            sql = """SELECT hstore_to_array('{}')""".format(elem)
+            cur.execute(sql)
+            res = cur.fetchone()[0]
+            hstore_elem = reduce(tuples_to_map, [res[i:i + 2] for i in range(0, len(res), 2)], {})
+            return hstore_elem
+
+def row_to_singer_message(stream, row, version, columns, time_extracted, md_map, conn_info):
     row_to_persist = ()
     md_map[('properties', '_sdc_deleted_at')] = {'sql-datatype' : 'timestamp with time zone'}
 
+
     for idx, elem in enumerate(row):
         sql_datatype = md_map.get(('properties', columns[idx]))['sql-datatype']
-
 
         if elem is None:
             row_to_persist += (elem,)
@@ -59,6 +73,8 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map)
             row_to_persist += (elem == '1',)
         elif sql_datatype == 'boolean':
             row_to_persist += (elem,)
+        elif sql_datatype == 'hstore':
+            row_to_persist += (create_hstore_elem(conn_info, elem),)
         elif isinstance(elem, int):
             row_to_persist += (elem,)
         elif isinstance(elem, float):
@@ -75,7 +91,7 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map)
         version=version,
         time_extracted=time_extracted)
 
-def consume_message(stream, state, msg, time_extracted, md_map):
+def consume_message(stream, state, msg, time_extracted, md_map, conn_info):
     payload = json.loads(msg.payload)
     lsn = msg.data_start
     stream_version = get_stream_version(stream.tap_stream_id, state)
@@ -87,15 +103,15 @@ def consume_message(stream, state, msg, time_extracted, md_map):
         if c['kind'] == 'insert':
             col_vals = c['columnvalues'] + [None]
             col_names = c['columnnames'] + ['_sdc_deleted_at']
-            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map)
+            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map, conn_info)
         elif c['kind'] == 'update':
             col_vals = c['columnvalues'] + [None]
             col_names = c['columnnames'] + ['_sdc_deleted_at']
-            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map)
+            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map, conn_info)
         elif c['kind'] == 'delete':
             col_names = c['oldkeys']['keynames'] + ['_sdc_deleted_at']
             col_vals = c['oldkeys']['keyvalues']  + [singer.utils.strftime(time_extracted)]
-            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map)
+            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map, conn_info)
         else:
             raise Exception("unrecognized replication operation: {}".format(c['kind']))
 
@@ -119,7 +135,6 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
 
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
-
             LOGGER.info("Starting Logical Replication: %s -> %s", start_lsn, end_lsn)
             try:
                 cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
@@ -133,7 +148,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
             while True:
                 msg = cur.read_message()
                 if msg:
-                    state = consume_message(stream, state, msg, time_extracted, md_map)
+                    state = consume_message(stream, state, msg, time_extracted, md_map, conn_info)
                     rows_saved = rows_saved + 1
 
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:

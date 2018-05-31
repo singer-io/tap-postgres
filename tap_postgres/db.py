@@ -65,7 +65,10 @@ def selected_value_to_singer_value(elem, sql_datatype):
     elif isinstance(elem, float):
         cleaned_elem = elem
     elif isinstance(elem, dict):
-        cleaned_elem = json.dumps(elem)
+        if sql_datatype == 'hstore':
+            cleaned_elem = elem
+        else:
+            cleaned_elem = json.dumps(elem)
     elif isinstance(elem, list):
         cleaned_elem = json.dumps(elem)
     else:
