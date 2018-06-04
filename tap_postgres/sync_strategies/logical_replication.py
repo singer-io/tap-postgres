@@ -51,40 +51,82 @@ def create_hstore_elem(conn_info, elem):
             hstore_elem = reduce(tuples_to_map, [res[i:i + 2] for i in range(0, len(res), 2)], {})
             return hstore_elem
 
+def create_array_elem(elem, sql_datatype, conn_info):
+    if elem is None:
+        return None
+
+    with post_db.open_connection(conn_info) as conn:
+        with conn.cursor() as cur:
+            # import pdb
+            # pdb.set_trace()
+            sql = """SELECT '{}'::{}""".format(elem, sql_datatype)
+            cur.execute(sql)
+            res = cur.fetchone()[0]
+            return res
+
+#pylint: disable=too-many-branches,too-many-nested-blocks
+def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
+    sql_datatype = og_sql_datatype.replace('[]', '')
+    if elem is None:
+        return elem
+    elif sql_datatype == 'timestamp without time zone':
+        return parse(elem).isoformat() + '+00:00'
+    elif sql_datatype == 'timestamp with time zone':
+        if isinstance(elem, datetime.datetime):
+            return elem.isoformat()
+        else:
+            return parse(elem).isoformat()
+    elif sql_datatype == 'date':
+        if  isinstance(elem, datetime.date):
+            #logical replication gives us dates as strings UNLESS they from an array
+            return elem.isoformat() + 'T00:00:00+00:00'
+        else:
+            return parse(elem).isoformat() + "+00:00"
+    elif sql_datatype == 'time with time zone':
+        return parse(elem).isoformat().split('T')[1]
+    elif sql_datatype == 'bit':
+        return elem == '1'
+    elif sql_datatype == 'boolean':
+        return elem
+    elif sql_datatype == 'hstore':
+        return create_hstore_elem(conn_info, elem)
+    elif isinstance(elem, int):
+        return elem
+    elif isinstance(elem, float):
+        return elem
+    elif isinstance(elem, str):
+        return elem
+    else:
+        raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
+
+def selected_array_to_singer_value(elem, sql_datatype, conn_info):
+    if isinstance(elem, list):
+        return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype, conn_info), elem))
+    else:
+        return selected_value_to_singer_value_impl(elem, sql_datatype, conn_info)
+
+def selected_value_to_singer_value(elem, sql_datatype, conn_info):
+    #are we dealing with an array?
+    if sql_datatype.find('[]') > 0:
+        cleaned_elem =  create_array_elem(elem, sql_datatype, conn_info)
+        # import pdb
+        # pdb.set_trace()
+
+        return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype, conn_info), (cleaned_elem or [])))
+    else:
+        return selected_value_to_singer_value_impl(elem, sql_datatype, conn_info)
+
 def row_to_singer_message(stream, row, version, columns, time_extracted, md_map, conn_info):
     row_to_persist = ()
     md_map[('properties', '_sdc_deleted_at')] = {'sql-datatype' : 'timestamp with time zone'}
 
-
     for idx, elem in enumerate(row):
         sql_datatype = md_map.get(('properties', columns[idx]))['sql-datatype']
-
-        if elem is None:
-            row_to_persist += (elem,)
-        elif sql_datatype == 'timestamp without time zone':
-            row_to_persist += (parse(elem).isoformat() + '+00:00',)
-        elif sql_datatype == 'timestamp with time zone':
-            row_to_persist += (parse(elem).isoformat(),)
-        elif sql_datatype == 'date':
-            row_to_persist += (parse(elem).isoformat() + "+00:00",)
-        elif sql_datatype == 'time with time zone':
-            row_to_persist += (parse(elem).isoformat().split('T')[1], )
-        elif sql_datatype == 'bit':
-            row_to_persist += (elem == '1',)
-        elif sql_datatype == 'boolean':
-            row_to_persist += (elem,)
-        elif sql_datatype == 'hstore':
-            row_to_persist += (create_hstore_elem(conn_info, elem),)
-        elif isinstance(elem, int):
-            row_to_persist += (elem,)
-        elif isinstance(elem, float):
-            row_to_persist += (elem,)
-        elif isinstance(elem, str):
-            row_to_persist += (elem,)
-        else:
-            raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
+        cleaned_elem = selected_value_to_singer_value(elem, sql_datatype, conn_info)
+        row_to_persist += (cleaned_elem,)
 
     rec = dict(zip(columns, row_to_persist))
+
     return singer.RecordMessage(
         stream=stream.stream,
         record=rec,

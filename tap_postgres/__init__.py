@@ -34,7 +34,8 @@ Column = collections.namedtuple('Column', [
     "sql_data_type",
     "character_maximum_length",
     "numeric_precision",
-    "numeric_scale"
+    "numeric_scale",
+    "array_dimensions"
 ])
 
 
@@ -63,43 +64,50 @@ def nullable_column(col_type, pk):
         return  [col_type]
     return ['null', col_type]
 
-def schema_for_column(c):
-    data_type = c.sql_data_type.lower()
-    result = Schema()
+
+def schema_for_column_datatype(c):
+    schema = {}
+    #remove any array notation from type information as we use a separate field for that
+    data_type = c.sql_data_type.lower().replace('[]','')
 
     if data_type in INTEGER_TYPES:
-        result.type = nullable_column('integer', c.is_primary_key)
-        result.minimum = -1 * (2**(c.numeric_precision - 1))
-        result.maximum = 2**(c.numeric_precision - 1) - 1
-        return result
+        # if c.numeric_precision is None:
+        # if c.column_name == 'our_squares':
+            # import ipdb
+            # ipdb.set_trace()
+
+        schema['type'] = nullable_column('integer', c.is_primary_key)
+        schema['minimum'] = -1 * (2**(c.numeric_precision - 1))
+        schema['maximum'] = 2**(c.numeric_precision - 1) - 1
+        return schema
 
     elif data_type == 'bit' and c.character_maximum_length == 1:
-        result.type = nullable_column('boolean', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('boolean', c.is_primary_key)
+        return schema
 
     elif data_type == 'boolean':
-        result.type = nullable_column('boolean', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('boolean', c.is_primary_key)
+        return schema
 
     elif data_type == 'uuid':
-        result.type = nullable_column('string', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        return schema
 
     elif data_type == 'hstore':
-        result.type = nullable_column('object', c.is_primary_key)
-        result.properties = {}
-        return result
+        schema['type'] = nullable_column('object', c.is_primary_key)
+        schema['properties'] = {}
+        return schema
 
     elif data_type == 'citext':
-        result.type = nullable_column('string', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        return schema
 
     elif data_type in JSON_TYPES:
-        result.type = nullable_column('string', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        return schema
 
     elif data_type == 'numeric':
-        result.type = nullable_column('number', c.is_primary_key)
+        schema['type'] = nullable_column('number', c.is_primary_key)
         if c.numeric_scale is None or c.numeric_scale > MAX_SCALE:
             LOGGER.warning('capping decimal scale to 38.  THIS MAY CAUSE TRUNCATION')
             scale = MAX_SCALE
@@ -112,52 +120,72 @@ def schema_for_column(c):
         else:
             precision = c.numeric_precision
 
-        result.exclusiveMaximum = True
-        result.maximum = 10 ** (precision - scale)
-        result.multipleOf = 10 ** (0 - scale)
-        result.exclusiveMinimum = True
-        result.minimum = -10 ** (precision - scale)
-        return result
+        schema['exclusiveMaximum'] = True
+        schema['maximum'] = 10 ** (precision - scale)
+        schema['multipleOf'] = 10 ** (0 - scale)
+        schema['exclusiveMinimum'] = True
+        schema['minimum'] = -10 ** (precision - scale)
+        return schema
 
     elif data_type in {'time without time zone', 'time with time zone'}:
         #times are treated as ordinary strings as they can not possible match RFC3339
-        result.type = nullable_column('string', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        return schema
 
     elif data_type in ('date', 'timestamp without time zone', 'timestamp with time zone'):
-        result.type = nullable_column('string', c.is_primary_key)
+        schema['type'] = nullable_column('string', c.is_primary_key)
 
-        result.format = 'date-time'
-        return result
+        schema['format'] = 'date-time'
+        return schema
 
     elif data_type in FLOAT_TYPES:
-        result.type = nullable_column('number', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('number', c.is_primary_key)
+        return schema
 
     elif data_type == 'text':
-        result.type = nullable_column('string', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        return schema
 
     elif data_type == 'character varying':
-        result.type = nullable_column('string', c.is_primary_key)
-        result.maxLength = c.character_maximum_length
-        return result
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        schema['maxLength'] = c.character_maximum_length
+        return schema
 
     elif data_type == 'character':
-        result.type = nullable_column('string', c.is_primary_key)
-        result.maxLength = c.character_maximum_length
-        return result
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        schema['maxLength'] = c.character_maximum_length
+        return schema
 
     elif data_type in {'cidr', 'inet', 'macaddr'}:
-        result.type = nullable_column('string', c.is_primary_key)
-        return result
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        return schema
 
-    return Schema(None)
+    return schema
 
+def schema_for_column(c):
+    column_schema = {}
+
+    #NB> from the post postgres docs: The current implementation does not enforce the declared number of dimensions either.
+    #these means we can say nothing about an array column. its items may be more arrays or primitive types like integers
+    #and this can vary on a row by row basis
+    if c.array_dimensions > 0:
+        column_schema["type"] = ["null", "array"]
+        column_schema["items"] = {}
+        return Schema.from_dict(column_schema)
+    else:
+        return Schema.from_dict(schema_for_column_datatype(c))
+
+#typlen  -1  == variable length arrays
+#typelem != 0 points to subtypes. 23 in the case of arrays
+# so integer arrays are typlen = -1, typelem = 23 because integer types are oid 23
+
+#this seems to identify all arrays:
+#select typname from pg_attribute  as pga join pg_type as pgt on pgt.oid = pga.atttypid  where typlen = -1 and typelem != 0 and pga.attndims > 0;
 def produce_table_info(conn):
     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
         cur.itersize = post_db.cursor_iter_size
         table_info = {}
+          # SELECT CASE WHEN $2.typtype = 'd' THEN $2.typbasetype ELSE $1.atttypid END
         cur.execute("""
 SELECT
   pg_class.reltuples::BIGINT             AS approximate_row_count,
@@ -166,22 +194,33 @@ SELECT
   pg_class.relname                       AS table_name,
   attname                                AS column_name,
   i.indisprimary                         AS primary_key,
+
   format_type(a.atttypid, NULL::integer) AS data_type,
-  information_schema._pg_char_max_length(information_schema._pg_truetypid(a.*, t.*),
-                                         information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS character_maximum_length,
-  information_schema._pg_numeric_precision(information_schema._pg_truetypid(a.*, t.*),
-                                           information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS numeric_precision,
- information_schema._pg_numeric_scale(information_schema._pg_truetypid(a.*, t.*),
-                                      information_schema._pg_truetypmod(a.*, t.*))::information_schema.cardinal_number AS numeric_scale
-FROM   pg_attribute a
-LEFT JOIN pg_type t on a.atttypid = t.oid
+  information_schema._pg_char_max_length(CASE WHEN COALESCE(subpgt.typtype, pgt.typtype) = 'd'
+                                              THEN COALESCE(subpgt.typbasetype, pgt.typbasetype) ELSE COALESCE(subpgt.oid, pgt.oid)
+                                          END,
+                                          information_schema._pg_truetypmod(a.*, pgt.*))::information_schema.cardinal_number AS character_maximum_length,
+  information_schema._pg_numeric_precision(CASE WHEN COALESCE(subpgt.typtype, pgt.typtype) = 'd'
+                                                THEN COALESCE(subpgt.typbasetype, pgt.typbasetype) ELSE COALESCE(subpgt.oid, pgt.oid)
+                                            END,
+                                           information_schema._pg_truetypmod(a.*, pgt.*))::information_schema.cardinal_number AS numeric_precision,
+  information_schema._pg_numeric_scale(CASE WHEN COALESCE(subpgt.typtype, pgt.typtype) = 'd'
+                                                THEN COALESCE(subpgt.typbasetype, pgt.typbasetype) ELSE COALESCE(subpgt.oid, pgt.oid)
+                                        END,
+                                       information_schema._pg_truetypmod(a.*, pgt.*))::information_schema.cardinal_number AS numeric_scale,
+  a.attndims                           AS array_dimensions
+FROM pg_attribute a
+LEFT JOIN pg_type AS pgt ON a.atttypid = pgt.oid
 JOIN pg_class
   ON pg_class.oid = a.attrelid
 JOIN pg_catalog.pg_namespace n
   ON n.oid = pg_class.relnamespace
-left outer join  pg_index as i
-  on a.attrelid = i.indrelid
- and a.attnum = ANY(i.indkey)
+LEFT OUTER JOIN pg_index as i
+  ON a.attrelid = i.indrelid
+ AND a.attnum = ANY(i.indkey)
+LEFT OUTER JOIN pg_type AS subpgt
+  ON pgt.typelem = subpgt.oid
+ AND pgt.typelem != 0
 WHERE attnum > 0
 AND NOT a.attisdropped
 AND pg_class.relkind IN ('r', 'v')
@@ -197,6 +236,12 @@ AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
                 table_info[schema_name][table_name] = {'is_view': is_view, 'row_count' : row_count, 'columns' : {}}
 
             col_name = col_info[0]
+
+            # if table_name == 'postgres_full_table_replication_test' and col_name == 'our_decimal':
+            #     import pdb
+
+            #     pdb.set_trace()
+
             table_info[schema_name][table_name]['columns'][col_name] = Column(*col_info)
 
         return table_info
@@ -234,7 +279,9 @@ def discover_columns(connection, table_info):
             metadata.write(mdata, (), 'is-view', table_info[schema_name][table_name].get('is_view'))
 
             column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
-
+            # if table_name == "postgres_full_table_replication_test":
+            #     import ipdb
+            #     ipdb.set_trace()
 
             schema = Schema(type='object', properties=column_schemas)
             for c_name in column_schemas.keys():
