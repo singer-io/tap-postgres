@@ -31,7 +31,6 @@ class Unsupported(unittest.TestCase):
                                       {"name": "bit_string_col", "type": "bit(5)"},
                                       {"name": "money_col",      "type": "money"},
                                       {"name": "bytea_col",      "type": "bytea"},
-                                      {"name": "enum_col",       "type": "mood_enum"},
                                       {"name": "point_col",      "type": "point"},
                                       {"name": "line_col",      "type": "line"},
                                       {"name": "lseg_col",      "type": "lseg"},
@@ -39,15 +38,12 @@ class Unsupported(unittest.TestCase):
                                       {"name": "polygon_col",      "type": "polygon"},
                                       {"name": "circle_col",      "type": "circle"},
                                       {"name": "xml_col",      "type": "xml"},
-                                      {"name": "array_int_col",      "type": "integer[]"},
                                       {"name": "composite_col",      "type": "person_composite"},
                                       {"name": "int_range_col",      "type": "int4range"},
             ],
                           "name": Unsupported.table_name}
             with get_test_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("""     DROP TYPE IF EXISTS mood_enum CASCADE """)
-                cur.execute("""     CREATE TYPE mood_enum AS ENUM ('sad', 'ok', 'happy'); """)
                 cur.execute("""     DROP TYPE IF EXISTS person_composite CASCADE """)
                 cur.execute("""     CREATE TYPE person_composite AS (age int, name text) """)
 
@@ -66,10 +62,8 @@ class Unsupported(unittest.TestCase):
                          {():                                   {'is-view': False, 'table-key-properties': [], 'row-count': 0, 'schema-name': 'public', 'database-name': 'postgres'},
                           ('properties', 'bytea_col'):          {'sql-datatype': 'bytea', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'bit_string_col'):     {'sql-datatype': 'bit(5)', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                          ('properties', 'array_int_col'):      {'sql-datatype': 'integer[]', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'line_col'):           {'sql-datatype': 'line', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'xml_col'):            {'sql-datatype': 'xml', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                          ('properties', 'enum_col'):           {'sql-datatype': 'mood_enum', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'int_range_col'):      {'sql-datatype': 'int4range', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'circle_col'):         {'sql-datatype': 'circle', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'polygon_col'):        {'sql-datatype': 'polygon', 'selected-by-default': False, 'inclusion': 'unsupported'},
