@@ -412,14 +412,20 @@ def clear_state_on_replication_change(state, tap_stream_id, replication_key, rep
 
 
 def do_sync(conn_config, catalog, default_replication_method, state):
+    currently_syncing = singer.get_currently_syncing(state)
     streams = list(filter(is_selected_via_metadata, catalog.streams))
     streams.sort(key=lambda s: s.tap_stream_id)
 
-    currently_syncing = singer.get_currently_syncing(state)
-
     if currently_syncing:
-        streams = dropwhile(lambda s: s.tap_stream_id != currently_syncing, streams)
+        LOGGER.info("currently_syncing: %s", currently_syncing)
+        currently_syncing_stream = list(filter(lambda s: s.tap_stream_id == currently_syncing, streams))
+        other_streams = list(filter(lambda s: s.tap_stream_id != currently_syncing, streams))
+        streams = currently_syncing_stream + other_streams
+    else:
+        LOGGER.info("NO currently_syncing")
 
+
+    LOGGER.info("will sync: %s", list(map(lambda s: s.tap_stream_id, streams)))
     for stream in streams:
         md_map = metadata.to_map(stream.metadata)
         conn_config['dbname'] = md_map.get(()).get('database-name')
