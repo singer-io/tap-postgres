@@ -35,7 +35,9 @@ Column = collections.namedtuple('Column', [
     "character_maximum_length",
     "numeric_precision",
     "numeric_scale",
-    "array_dimensions"
+    "array_dimensions",
+    "is_enum"
+
 ])
 
 
@@ -71,16 +73,13 @@ def schema_for_column_datatype(c):
     data_type = c.sql_data_type.lower().replace('[]','')
 
     if data_type in INTEGER_TYPES:
-        # if c.numeric_precision is None:
-        # if c.column_name == 'our_squares':
-            # import ipdb
-            # ipdb.set_trace()
-
         schema['type'] = nullable_column('integer', c.is_primary_key)
         schema['minimum'] = -1 * (2**(c.numeric_precision - 1))
         schema['maximum'] = 2**(c.numeric_precision - 1) - 1
         return schema
-
+    elif c.is_enum:
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        return schema
     elif data_type == 'bit' and c.character_maximum_length == 1:
         schema['type'] = nullable_column('boolean', c.is_primary_key)
         return schema
@@ -208,7 +207,8 @@ SELECT
                                                 THEN COALESCE(subpgt.typbasetype, pgt.typbasetype) ELSE COALESCE(subpgt.oid, pgt.oid)
                                         END,
                                        information_schema._pg_truetypmod(a.*, pgt.*))::information_schema.cardinal_number AS numeric_scale,
-  a.attndims                           AS array_dimensions
+  a.attndims                           AS array_dimensions,
+  COALESCE(subpgt.typtype, pgt.typtype) = 'e' AS is_enum
 FROM pg_attribute a
 LEFT JOIN pg_type AS pgt ON a.atttypid = pgt.oid
 JOIN pg_class
