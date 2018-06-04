@@ -70,7 +70,7 @@ def nullable_column(col_type, pk):
 def schema_for_column_datatype(c):
     schema = {}
     #remove any array notation from type information as we use a separate field for that
-    data_type = c.sql_data_type.lower().replace('[]','')
+    data_type = c.sql_data_type.lower().replace('[]', '')
 
     if data_type in INTEGER_TYPES:
         schema['type'] = nullable_column('integer', c.is_primary_key)
@@ -80,6 +80,7 @@ def schema_for_column_datatype(c):
     elif c.is_enum:
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
+
     elif data_type == 'bit' and c.character_maximum_length == 1:
         schema['type'] = nullable_column('boolean', c.is_primary_key)
         return schema
@@ -171,8 +172,8 @@ def schema_for_column(c):
         column_schema["type"] = ["null", "array"]
         column_schema["items"] = {}
         return Schema.from_dict(column_schema)
-    else:
-        return Schema.from_dict(schema_for_column_datatype(c))
+
+    return Schema.from_dict(schema_for_column_datatype(c))
 
 #typlen  -1  == variable length arrays
 #typelem != 0 points to subtypes. 23 in the case of arrays
@@ -237,11 +238,6 @@ AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
 
             col_name = col_info[0]
 
-            # if table_name == 'postgres_full_table_replication_test' and col_name == 'our_decimal':
-            #     import pdb
-
-            #     pdb.set_trace()
-
             table_info[schema_name][table_name]['columns'][col_name] = Column(*col_info)
 
         return table_info
@@ -279,9 +275,6 @@ def discover_columns(connection, table_info):
             metadata.write(mdata, (), 'is-view', table_info[schema_name][table_name].get('is_view'))
 
             column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
-            # if table_name == "postgres_full_table_replication_test":
-            #     import ipdb
-            #     ipdb.set_trace()
 
             schema = Schema(type='object', properties=column_schemas)
             for c_name in column_schemas.keys():

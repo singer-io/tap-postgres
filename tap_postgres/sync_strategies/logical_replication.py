@@ -38,7 +38,7 @@ def get_stream_version(tap_stream_id, state):
 
     return stream_version
 
-def tuples_to_map(accum,t):
+def tuples_to_map(accum, t):
     accum[t[0]] = t[1]
     return accum
 
@@ -57,8 +57,6 @@ def create_array_elem(elem, sql_datatype, conn_info):
 
     with post_db.open_connection(conn_info) as conn:
         with conn.cursor() as cur:
-            # import pdb
-            # pdb.set_trace()
             sql = """SELECT '{}'::{}""".format(elem, sql_datatype)
             cur.execute(sql)
             res = cur.fetchone()[0]
@@ -74,14 +72,14 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
     elif sql_datatype == 'timestamp with time zone':
         if isinstance(elem, datetime.datetime):
             return elem.isoformat()
-        else:
-            return parse(elem).isoformat()
+
+        return parse(elem).isoformat()
     elif sql_datatype == 'date':
         if  isinstance(elem, datetime.date):
             #logical replication gives us dates as strings UNLESS they from an array
             return elem.isoformat() + 'T00:00:00+00:00'
-        else:
-            return parse(elem).isoformat() + "+00:00"
+
+        return parse(elem).isoformat() + "+00:00"
     elif sql_datatype == 'time with time zone':
         return parse(elem).isoformat().split('T')[1]
     elif sql_datatype == 'bit':
@@ -102,19 +100,16 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
 def selected_array_to_singer_value(elem, sql_datatype, conn_info):
     if isinstance(elem, list):
         return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype, conn_info), elem))
-    else:
-        return selected_value_to_singer_value_impl(elem, sql_datatype, conn_info)
+
+    return selected_value_to_singer_value_impl(elem, sql_datatype, conn_info)
 
 def selected_value_to_singer_value(elem, sql_datatype, conn_info):
     #are we dealing with an array?
     if sql_datatype.find('[]') > 0:
-        cleaned_elem =  create_array_elem(elem, sql_datatype, conn_info)
-        # import pdb
-        # pdb.set_trace()
-
+        cleaned_elem = create_array_elem(elem, sql_datatype, conn_info)
         return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype, conn_info), (cleaned_elem or [])))
-    else:
-        return selected_value_to_singer_value_impl(elem, sql_datatype, conn_info)
+
+    return selected_value_to_singer_value_impl(elem, sql_datatype, conn_info)
 
 def row_to_singer_message(stream, row, version, columns, time_extracted, md_map, conn_info):
     row_to_persist = ()

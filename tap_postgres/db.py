@@ -82,15 +82,15 @@ def selected_value_to_singer_value_impl(elem, sql_datatype):
 def selected_array_to_singer_value(elem, sql_datatype):
     if isinstance(elem, list):
         return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype), elem))
-    else:
-        return selected_value_to_singer_value_impl(elem, sql_datatype)
+
+    return selected_value_to_singer_value_impl(elem, sql_datatype)
 
 def selected_value_to_singer_value(elem, sql_datatype):
     #are we dealing with an array?
     if sql_datatype.find('[]') > 0:
         return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype), (elem or [])))
-    else:
-        return selected_value_to_singer_value_impl(elem, sql_datatype)
+
+    return selected_value_to_singer_value_impl(elem, sql_datatype)
 
 #pylint: disable=too-many-arguments
 def selected_row_to_singer_message(stream, row, version, columns, time_extracted, md_map):
