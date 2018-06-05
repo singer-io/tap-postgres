@@ -40,7 +40,8 @@ def filter_dbs_sql_clause(sql, filter_dbs):
     return sql + in_clause
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
-def selected_value_to_singer_value(elem, sql_datatype):
+def selected_value_to_singer_value_impl(elem, sql_datatype):
+    sql_datatype = sql_datatype.replace('[]', '')
     if elem is None:
         cleaned_elem = elem
     elif isinstance(elem, datetime.datetime):
@@ -65,13 +66,31 @@ def selected_value_to_singer_value(elem, sql_datatype):
     elif isinstance(elem, float):
         cleaned_elem = elem
     elif isinstance(elem, dict):
-        cleaned_elem = json.dumps(elem)
-    elif isinstance(elem, list):
+        if sql_datatype == 'hstore':
+            cleaned_elem = elem
+        elif sql_datatype in {'json', 'jsonb'}:
+            cleaned_elem = json.dumps(elem)
+        else:
+            raise Exception("do not know how to marshall a dict if its not an hstore or json: {}".format(sql_datatype))
+    elif isinstance(elem, list) and sql_datatype in {'json', 'jsonb'}:
         cleaned_elem = json.dumps(elem)
     else:
-        raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
+        raise Exception("do not know how to marshall value of class( {} ) and sql_datatype ( {} )".format(elem.__class__, sql_datatype))
 
     return cleaned_elem
+
+def selected_array_to_singer_value(elem, sql_datatype):
+    if isinstance(elem, list):
+        return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype), elem))
+
+    return selected_value_to_singer_value_impl(elem, sql_datatype)
+
+def selected_value_to_singer_value(elem, sql_datatype):
+    #are we dealing with an array?
+    if sql_datatype.find('[]') > 0:
+        return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype), (elem or [])))
+
+    return selected_value_to_singer_value_impl(elem, sql_datatype)
 
 #pylint: disable=too-many-arguments
 def selected_row_to_singer_message(stream, row, version, columns, time_extracted, md_map):
@@ -79,7 +98,6 @@ def selected_row_to_singer_message(stream, row, version, columns, time_extracted
     for idx, elem in enumerate(row):
         sql_datatype = md_map.get(('properties', columns[idx]))['sql-datatype']
         cleaned_elem = selected_value_to_singer_value(elem, sql_datatype)
-
         row_to_persist += (cleaned_elem,)
 
     rec = dict(zip(columns, row_to_persist))

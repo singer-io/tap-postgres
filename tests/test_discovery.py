@@ -5,7 +5,10 @@ import tap_postgres
 import os
 import pdb
 from singer import get_logger, metadata
-from tests.utils import get_test_connection, ensure_test_table, get_test_connection_config
+try:
+    from tests.utils import get_test_connection, ensure_test_table, get_test_connection_config
+except ImportError:
+    from utils import get_test_connection, ensure_test_table, get_test_connection_config
 
 LOGGER = get_logger()
 
@@ -347,10 +350,86 @@ class TestHStoreTable(unittest.TestCase):
                                   ('properties', 'our_hstore') : {'inclusion': 'available', 'sql-datatype' : 'hstore',  'selected-by-default' : True}})
 
 
-                self.assertEqual({'properties': {'our_hstore':                  {'type': ['null', 'string']},
-                                                 'our_pk':                    {'type': ['string']}},
+                self.assertEqual({'properties': {'our_hstore':                  {'type': ['null', 'object'], 'properties' : {}},
+                                                 'our_pk':                    {'type': ['object'], 'properties': {}}},
                                   'type': 'object'},
                                  stream_dict.get('schema'))
+
+
+class TestEnumTable(unittest.TestCase):
+    maxDiff = None
+    table_name = 'CHICKEN TIMES'
+
+    def setUp(self):
+       table_spec = {"columns": [{"name" : 'our_mood_enum_pk',          "type" : "mood_enum", "primary_key" : True },
+                                 {"name" : 'our_mood_enum',             "type" : "mood_enum" }],
+                     "name" : TestHStoreTable.table_name}
+       with get_test_connection() as conn:
+           cur = conn.cursor()
+           cur.execute("""     DROP TYPE IF EXISTS mood_enum CASCADE """)
+           cur.execute("""     CREATE TYPE mood_enum AS ENUM ('sad', 'ok', 'happy'); """)
+
+       ensure_test_table(table_spec)
+
+    def test_catalog(self):
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+
+        with get_test_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("""INSERT INTO "CHICKEN TIMES" (our_mood_enum_pk, our_mood_enum) VALUES ('sad', 'happy')""")
+                cur.execute("""SELECT * FROM  "CHICKEN TIMES" """)
+
+                self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                                 {() : {'table-key-properties': ['our_mood_enum_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                                  ('properties', 'our_mood_enum_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'mood_enum',  'selected-by-default' : True},
+                                  ('properties', 'our_mood_enum') : {'inclusion': 'available', 'sql-datatype' : 'mood_enum',  'selected-by-default' : True}})
+
+
+                self.assertEqual({'properties': {'our_mood_enum':                  {'type': ['null', 'string']},
+                                                 'our_mood_enum_pk':               {'type': ['string']}},
+                                  'type': 'object'},
+                                 stream_dict.get('schema'))
+
+
+class TestArraysTable(unittest.TestCase):
+    maxDiff = None
+    table_name = 'CHICKEN TIMES'
+
+    def setUp(self):
+       table_spec = {"columns": [{"name" : 'our_int_array_pk',          "type" : "integer[]", "primary_key" : True },
+                                 {"name" : 'our_string_array',          "type" : "varchar[]" }],
+                     "name" : TestHStoreTable.table_name}
+       ensure_test_table(table_spec)
+
+    def test_catalog(self):
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+
+        with get_test_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("""INSERT INTO "CHICKEN TIMES" (our_int_array_pk, our_string_array) VALUES ('{{1,2,3},{4,5,6}}', '{{"a","b","c"}}' )""")
+                cur.execute("""SELECT * FROM  "CHICKEN TIMES" """)
+
+                self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                                 {() : {'table-key-properties': ['our_int_array_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                                  ('properties', 'our_int_array_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'integer[]',  'selected-by-default' : True},
+                                  ('properties', 'our_string_array') : {'inclusion': 'available', 'sql-datatype' : 'character varying[]',  'selected-by-default' : True}})
+
+
+                self.assertEqual({'properties': {'our_int_array_pk':                  {'type': ['null', 'array'], 'items' : {}},
+                                                 'our_string_array':                  {'type': ['null', 'array'], 'items' : {}}},
+                                  'type': 'object'},
+                                 stream_dict.get('schema'))
+
 
 
 
@@ -395,6 +474,6 @@ class TestMultiDB(unittest.TestCase):
 
 
 if __name__== "__main__":
-    test1 = TestStringTableWithPK()
+    test1 = TestArraysTable()
     test1.setUp()
     test1.test_catalog()

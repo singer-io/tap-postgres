@@ -123,7 +123,6 @@ class LogicalInterruption(unittest.TestCase):
         CAUGHT_MESSAGES.clear()
         tap_postgres.do_sync(get_test_connection_config(), catalog, None, old_state)
 
-        # pdb.set_trace()
         self.assertEqual(6, len(CAUGHT_MESSAGES))
 
         self.assertTrue(isinstance(CAUGHT_MESSAGES[0], singer.SchemaMessage))

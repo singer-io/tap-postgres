@@ -55,6 +55,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
 
     with metrics.record_counter(None) as counter:
         with post_db.open_connection(conn_info) as conn:
+            psycopg2.extras.register_hstore(conn)
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
                 cur.itersize = post_db.cursor_iter_size
                 LOGGER.info("Beginning new incremental replication sync %s", stream_version)
