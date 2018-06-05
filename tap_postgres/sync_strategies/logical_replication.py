@@ -128,13 +128,19 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map,
         version=version,
         time_extracted=time_extracted)
 
-def consume_message(stream, state, msg, time_extracted, md_map, conn_info):
+def consume_message(stream, state, msg, time_extracted, md_map, conn_info, start_lsn, skip_first_change):
     payload = json.loads(msg.payload)
     lsn = msg.data_start
     stream_version = get_stream_version(stream.tap_stream_id, state)
 
-    for c in payload['change']:
+    for idx, c in enumerate(payload['change']):
+        LOGGER.info("consume message(%s): %s", msg.data_start, payload)
+
         if c['schema'] != metadata.to_map(stream.metadata).get(())['schema-name'] or c['table'] != stream.table:
+            continue
+
+        if skip_first_change and idx == 0:
+            LOGGER.info("initial_logical_replication_complete is True. skipping initial change")
             continue
 
         if c['kind'] == 'insert':
@@ -153,14 +159,16 @@ def consume_message(stream, state, msg, time_extracted, md_map, conn_info):
             raise Exception("unrecognized replication operation: {}".format(c['kind']))
 
         singer.write_message(record_message)
-
-
         state = singer.write_bookmark(state,
                                       stream.tap_stream_id,
                                       'lsn',
                                       lsn)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', True)
+
         #LOGGER.info("Flushing log up to LSN  %s", msg.data_start)
-        msg.cursor.send_feedback(flush_lsn=msg.data_start)
+    state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', True)
+    msg.cursor.send_feedback(flush_lsn=msg.data_start)
+
 
     return state
 
@@ -172,22 +180,23 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
 
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
-            LOGGER.info("Starting Logical Replication: %s -> %s", start_lsn, end_lsn)
+            start_lsn_plus_1 = start_lsn + 0
+            LOGGER.info("Starting Logical Replication: %s(%s) -> %s", start_lsn_plus_1, start_lsn, end_lsn)
             try:
-                cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
+                cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn_plus_1)
             except psycopg2.ProgrammingError:
                 raise Exception("unable to start replication with logical replication slot 'stitch'")
 
-            cur.send_feedback(flush_lsn=start_lsn)
+            cur.send_feedback(flush_lsn=start_lsn_plus_1)
             keepalive_interval = 10.0
             rows_saved = 0
-
             while True:
                 msg = cur.read_message()
                 if msg:
-                    state = consume_message(stream, state, msg, time_extracted, md_map, conn_info)
-                    rows_saved = rows_saved + 1
+                    skip_first_change = singer.get_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete') and rows_saved == 0
+                    state = consume_message(stream, state, msg, time_extracted, md_map, conn_info, start_lsn_plus_1, skip_first_change)
 
+                    rows_saved = rows_saved + 1
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
                         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 

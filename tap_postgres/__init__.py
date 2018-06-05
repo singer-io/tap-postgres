@@ -415,6 +415,7 @@ def do_sync_logical_replication(conn_config, stream, state, desired_columns, md_
         send_schema_message(stream, [])
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
         state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', False)
 
     #inconsistent state
     elif get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
@@ -429,6 +430,7 @@ def do_sync_logical_replication(conn_config, stream, state, desired_columns, md_
         send_schema_message(stream, [])
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
         state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', False)
 
     elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and get_bookmark(state, stream.tap_stream_id, 'lsn'):
         #initial stage of logical replication(full-table) has been completed. moving onto pure logical replication
