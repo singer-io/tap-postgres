@@ -134,8 +134,6 @@ def consume_message(stream, state, msg, time_extracted, md_map, conn_info, skip_
     stream_version = get_stream_version(stream.tap_stream_id, state)
 
     for idx, c in enumerate(payload['change']):
-        LOGGER.info("consume message(%s): %s", msg.data_start, payload)
-
         if c['schema'] != metadata.to_map(stream.metadata).get(())['schema-name'] or c['table'] != stream.table:
             continue
 
@@ -193,7 +191,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                 msg = cur.read_message()
                 if msg:
                     skip_first_change = singer.get_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete') and rows_saved == 0
-                    state = consume_message(stream, state, msg, time_extracted, md_map, conn_info, start_lsn, skip_first_change)
+                    state = consume_message(stream, state, msg, time_extracted, md_map, conn_info, skip_first_change)
 
                     rows_saved = rows_saved + 1
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
