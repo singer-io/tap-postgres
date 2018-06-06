@@ -126,8 +126,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                 cur.execute(select_sql)
 
                 rows_saved = 0
-                rec = cur.fetchone()
-                while rec is not None:
+                for rec in cur:
                     xmin = rec['xmin']
                     rec = rec[:-1]
                     record_message = post_db.selected_row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted, md_map)
@@ -138,7 +137,6 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
                     counter.increment()
-                    rec = cur.fetchone()
 
     #once we have completed the full table replication, discard the xmin bookmark.
     #the xmin bookmark only comes into play when a full table replication is interrupted
