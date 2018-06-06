@@ -97,7 +97,6 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
     hstore_available = post_db.hstore_available(conn_info)
     with metrics.record_counter(None) as counter:
         with post_db.open_connection(conn_info) as conn:
-            psycopg2.extras.register_hstore(conn)
             if hstore_available:
                 LOGGER.info("hstore is available")
                 psycopg2.extras.register_hstore(conn)
