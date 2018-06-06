@@ -517,6 +517,7 @@ def main_impl():
                    'filter_dbs' : args.config.get('filter_dbs')}
 
     post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
+    LOGGER.info('itersize: %s', post_db.cursor_iter_size)
     if args.discover:
         do_discovery(conn_config)
     elif args.catalog:

@@ -14,7 +14,6 @@ LOGGER = singer.get_logger()
 
 UPDATE_BOOKMARK_PERIOD = 1000
 
-
 def sync_view(conn_info, stream, state, desired_columns, md_map):
     time_extracted = utils.now()
 
@@ -50,8 +49,7 @@ def sync_view(conn_info, stream, state, desired_columns, md_map):
                 cur.execute(select_sql)
 
                 rows_saved = 0
-                rec = cur.fetchone()
-                while rec is not None:
+                for rec in cur:
                     record_message = post_db.selected_row_to_singer_message(stream, rec, nascent_stream_version, desired_columns, time_extracted, md_map)
                     singer.write_message(record_message)
                     rows_saved = rows_saved + 1
@@ -59,7 +57,6 @@ def sync_view(conn_info, stream, state, desired_columns, md_map):
                         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
                     counter.increment()
-                    rec = cur.fetchone()
 
     #always send the activate version whether first run or subsequent
     singer.write_message(activate_version_message)
@@ -97,9 +94,16 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
     if first_run:
         singer.write_message(activate_version_message)
 
+    hstore_available = post_db.hstore_available(conn_info)
     with metrics.record_counter(None) as counter:
         with post_db.open_connection(conn_info) as conn:
             psycopg2.extras.register_hstore(conn)
+            if hstore_available:
+                LOGGER.info("hstore is available")
+                psycopg2.extras.register_hstore(conn)
+            else:
+                LOGGER.info("hstore is UNavailable")
+
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
                 cur.itersize = post_db.cursor_iter_size
 
