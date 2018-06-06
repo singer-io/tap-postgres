@@ -107,3 +107,9 @@ def selected_row_to_singer_message(stream, row, version, columns, time_extracted
         record=rec,
         version=version,
         time_extracted=time_extracted)
+
+def hstore_available(conn_info):
+    with open_connection(conn_info) as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
+            cur.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
+            return cur.fetchone()[0] is not None
