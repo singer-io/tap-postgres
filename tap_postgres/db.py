@@ -44,6 +44,8 @@ def selected_value_to_singer_value_impl(elem, sql_datatype):
     sql_datatype = sql_datatype.replace('[]', '')
     if elem is None:
         cleaned_elem = elem
+    elif sql_datatype == 'money':
+        cleaned_elem = elem
     elif isinstance(elem, datetime.datetime):
         if sql_datatype == 'timestamp with time zone':
             cleaned_elem = elem.isoformat()

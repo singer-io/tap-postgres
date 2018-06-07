@@ -77,6 +77,9 @@ def schema_for_column_datatype(c):
         schema['minimum'] = -1 * (2**(c.numeric_precision - 1))
         schema['maximum'] = 2**(c.numeric_precision - 1) - 1
         return schema
+    elif data_type == 'money':
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        return schema
     elif c.is_enum:
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
