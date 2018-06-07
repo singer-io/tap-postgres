@@ -29,7 +29,6 @@ class Unsupported(unittest.TestCase):
             cur = conn.cursor()
             table_spec = {"columns": [{"name": "interval_col",   "type": "INTERVAL"},
                                       {"name": "bit_string_col", "type": "bit(5)"},
-                                      {"name": "money_col",      "type": "money"},
                                       {"name": "bytea_col",      "type": "bytea"},
                                       {"name": "point_col",      "type": "point"},
                                       {"name": "line_col",      "type": "line"},
@@ -70,7 +69,6 @@ class Unsupported(unittest.TestCase):
                           ('properties', 'box_col'):            {'sql-datatype': 'box', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'lseg_col'):           {'sql-datatype': 'lseg', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'composite_col'):      {'sql-datatype': 'person_composite', 'selected-by-default': False, 'inclusion': 'unsupported'},
-                          ('properties', 'money_col'):          {'sql-datatype': 'money', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'interval_col'):       {'sql-datatype': 'interval', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'point_col'):          {'sql-datatype': 'point', 'selected-by-default': False, 'inclusion': 'unsupported'}}
         )
