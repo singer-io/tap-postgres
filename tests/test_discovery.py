@@ -396,6 +396,40 @@ class TestEnumTable(unittest.TestCase):
                                  stream_dict.get('schema'))
 
 
+class TestMoney(unittest.TestCase):
+    maxDiff = None
+    table_name = 'CHICKEN TIMES'
+
+    def setUp(self):
+       table_spec = {"columns": [{"name" : 'our_money_pk',          "type" : "money", "primary_key" : True },
+                                 {"name" : 'our_money',             "type" : "money" }],
+                     "name" : TestHStoreTable.table_name}
+       ensure_test_table(table_spec)
+
+    def test_catalog(self):
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+
+        with get_test_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("""INSERT INTO "CHICKEN TIMES" (our_money_pk, our_money) VALUES ('$1.24', '$777.63')""")
+                cur.execute("""SELECT * FROM  "CHICKEN TIMES" """)
+
+                self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                                 {() : {'table-key-properties': ['our_money_pk'], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                                  ('properties', 'our_money_pk') : {'inclusion': 'automatic', 'sql-datatype' : 'money',  'selected-by-default' : True},
+                                  ('properties', 'our_money') : {'inclusion': 'available', 'sql-datatype' : 'money',  'selected-by-default' : True}})
+
+
+                self.assertEqual({'properties': {'our_money':                  {'type': ['null', 'string']},
+                                                 'our_money_pk':               {'type': ['string']}},
+                                  'type': 'object'},
+                                 stream_dict.get('schema'))
+
 class TestArraysTable(unittest.TestCase):
     maxDiff = None
     table_name = 'CHICKEN TIMES'
