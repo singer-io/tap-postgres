@@ -13,6 +13,8 @@ import copy
 from select import select
 from functools import reduce
 import json
+import pdb
+import tap_postgres.sync_strategies.common as sync_common
 
 LOGGER = singer.get_logger()
 
@@ -29,6 +31,8 @@ def fetch_current_lsn(conn_config):
 def add_automatic_properties(stream):
     stream.schema.properties['_sdc_deleted_at'] = Schema(
         type=['null', 'string'], format='date-time')
+
+    return stream
 
 def get_stream_version(tap_stream_id, state):
     stream_version = singer.get_bookmark(state, tap_stream_id, 'version')
@@ -128,57 +132,65 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map,
         version=version,
         time_extracted=time_extracted)
 
-def consume_message(stream, state, msg, time_extracted, md_map, conn_info, skip_first_change):
+def consume_message(streams, state, msg, time_extracted, conn_info):
     payload = json.loads(msg.payload)
     lsn = msg.data_start
-    stream_version = get_stream_version(stream.tap_stream_id, state)
+
+    streams_lookup = {}
+    for s in streams:
+        streams_lookup[s.tap_stream_id] = s
 
     for idx, c in enumerate(payload['change']):
-        if c['schema'] != metadata.to_map(stream.metadata).get(())['schema-name'] or c['table'] != stream.table:
+        tap_stream_id = post_db.compute_tap_stream_id(conn_info['dbname'], c['schema'], c['table'])
+        if streams_lookup.get(tap_stream_id) is None:
             continue
 
-        if skip_first_change and idx == 0:
-            LOGGER.info("initial_logical_replication_complete is True. skipping initial change")
-            continue
+        target_stream = streams_lookup[tap_stream_id]
+        stream_version = get_stream_version(target_stream.tap_stream_id, state)
+        stream_md_map = metadata.to_map(target_stream.metadata)
+        # if skip_first_change and idx == 0:
+        #     LOGGER.info("initial_logical_replication_complete is True. skipping initial change")
+        #     continue
 
         if c['kind'] == 'insert':
             col_vals = c['columnvalues'] + [None]
             col_names = c['columnnames'] + ['_sdc_deleted_at']
-            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map, conn_info)
+            record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
         elif c['kind'] == 'update':
             col_vals = c['columnvalues'] + [None]
             col_names = c['columnnames'] + ['_sdc_deleted_at']
-            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map, conn_info)
+            record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
         elif c['kind'] == 'delete':
             col_names = c['oldkeys']['keynames'] + ['_sdc_deleted_at']
             col_vals = c['oldkeys']['keyvalues']  + [singer.utils.strftime(time_extracted)]
-            record_message = row_to_singer_message(stream, col_vals, stream_version, col_names, time_extracted, md_map, conn_info)
+            record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
         else:
             raise Exception("unrecognized replication operation: {}".format(c['kind']))
 
+        sync_common.send_schema_message(target_stream, ['lsn'])
+
         singer.write_message(record_message)
         state = singer.write_bookmark(state,
-                                      stream.tap_stream_id,
+                                      target_stream.tap_stream_id,
                                       'lsn',
                                       lsn)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', True)
-
+        # state = singer.write_bookmark(state, target_stream.tap_stream_id, 'initial_logical_replication_complete', True)
         #LOGGER.info("Flushing log up to LSN  %s", msg.data_start)
-    state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', True)
+
+    # state = singer.write_bookmark(state, target_stream.tap_stream_id, 'initial_logical_replication_complete', True)
     msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
 
     return state
 
-# pylint: disable=unused-argument
-def sync_table(conn_info, stream, state, desired_columns, md_map):
-    start_lsn = get_bookmark(state, stream.tap_stream_id, 'lsn')
+def sync_tables(conn_info, logical_streams, state):
+    start_lsn = min([get_bookmark(state, s.tap_stream_id, 'lsn') for s in logical_streams])
     end_lsn = fetch_current_lsn(conn_info)
     time_extracted = utils.now()
 
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
-            LOGGER.info("Starting Logical Replication: %s(%s) -> %s", start_lsn, start_lsn, end_lsn)
+            LOGGER.info("Starting Logical Replication for %s: %s -> %s", list(map(lambda s: s.tap_stream_id, logical_streams)), start_lsn, end_lsn)
             try:
                 cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
             except psycopg2.ProgrammingError:
@@ -190,8 +202,9 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
             while True:
                 msg = cur.read_message()
                 if msg:
-                    skip_first_change = singer.get_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete') and rows_saved == 0
-                    state = consume_message(stream, state, msg, time_extracted, md_map, conn_info, skip_first_change)
+                    # skip_first_change = singer.get_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete') and rows_saved == 0
+
+                    state = consume_message(logical_streams, state, msg, time_extracted, conn_info)
 
                     rows_saved = rows_saved + 1
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:

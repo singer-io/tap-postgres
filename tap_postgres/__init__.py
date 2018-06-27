@@ -25,6 +25,7 @@ import tap_postgres.sync_strategies.logical_replication as logical_replication
 import tap_postgres.sync_strategies.full_table as full_table
 import tap_postgres.sync_strategies.incremental as incremental
 import tap_postgres.db as post_db
+import tap_postgres.sync_strategies.common as sync_common
 LOGGER = singer.get_logger()
 
 #LogMiner do not support LONG, LONG RAW, CLOB, BLOB, NCLOB, ADT, or COLLECTION datatypes.
@@ -296,7 +297,7 @@ def discover_columns(connection, table_info):
                 table=table_name,
                 stream=table_name,
                 metadata=metadata.to_list(mdata),
-                tap_stream_id=database_name + '-' + schema_name + '-' + table_name,
+                tap_stream_id=post_db.compute_tap_stream_id(database_name, schema_name, table_name),
                 schema=schema)
 
             entries.append(entry)
@@ -361,27 +362,13 @@ def should_sync_column(md_map, field_name):
 
     return False
 
-def send_schema_message(stream, bookmark_properties):
-    s_md = metadata.to_map(stream.metadata)
-    if s_md.get((), {}).get('is-view'):
-        key_properties = s_md.get((), {}).get('view-key-properties')
-    else:
-        key_properties = s_md.get((), {}).get('table-key-properties')
-
-
-    schema_message = singer.SchemaMessage(stream=stream.stream,
-                                          schema=stream.schema.to_dict(),
-                                          key_properties=key_properties,
-                                          bookmark_properties=bookmark_properties)
-    singer.write_message(schema_message)
-
 def is_selected_via_metadata(stream):
     table_md = metadata.to_map(stream.metadata).get((), {})
     return table_md.get('selected')
 
 def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
     LOGGER.info("Stream %s is using full_table replication", stream.tap_stream_id)
-    send_schema_message(stream, [])
+    sync_common.send_schema_message(stream, [])
     if md_map.get((), {}).get('is-view'):
         state = full_table.sync_view(conn_config, stream, state, desired_columns, md_map)
     else:
@@ -404,43 +391,8 @@ def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
     else:
         pks = md_map.get(()).get('table-key-properties')
 
-    send_schema_message(stream, pks)
+    sync_common.send_schema_message(stream, pks)
     state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map)
-
-    return state
-
-def do_sync_logical_replication(conn_config, stream, state, desired_columns, md_map):
-    LOGGER.info("Stream %s is using logical replication", stream.tap_stream_id)
-
-    if get_bookmark(state, stream.tap_stream_id, 'xmin') and get_bookmark(state, stream.tap_stream_id, 'lsn'):
-        #finishing previously interrupted full-table (first stage of logical replication)
-        LOGGER.info("Initial stage of full table sync was interrupted. resuming...")
-        send_schema_message(stream, [])
-        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', False)
-
-    #inconsistent state
-    elif get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
-        raise Exception("Xmin found(%s) in state implying full-table replication but no lsn is present")
-
-    elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
-        #initial full-table phase of logical replication
-        end_lsn = logical_replication.fetch_current_lsn(conn_config)
-        LOGGER.info("Performing initial full table sync")
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
-
-        send_schema_message(stream, [])
-        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', False)
-
-    elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and get_bookmark(state, stream.tap_stream_id, 'lsn'):
-        #initial stage of logical replication(full-table) has been completed. moving onto pure logical replication
-        LOGGER.info("Pure Logical Replication upto lsn %s", logical_replication.fetch_current_lsn(conn_config))
-        logical_replication.add_automatic_properties(stream)
-        send_schema_message(stream, ['lsn'])
-        state = logical_replication.sync_table(conn_config, stream, state, desired_columns, md_map)
 
     return state
 
@@ -459,56 +411,130 @@ def clear_state_on_replication_change(state, tap_stream_id, replication_key, rep
     return state
 
 
+def sync_method_for_streams(streams, state, default_replication_method):
+    lookup = {}
+    traditional_steams = []
+    logical_streams = []
+
+    for stream in streams:
+        stream_metadata = metadata.to_map(stream.metadata)
+        replication_method = stream_metadata.get((), {}).get('replication-method', default_replication_method)
+        replication_key = stream_metadata.get((), {}).get('replication-key')
+
+        state = clear_state_on_replication_change(state, stream.tap_stream_id, replication_key, replication_method)
+
+        if replication_method not in set(['LOG_BASED', 'FULL_TABLE', 'INCREMENTAL']):
+            raise Exception("Unrecognized replication_method {}".format(replication_method))
+
+        if replication_method == 'LOG_BASED' and stream_metadata.get((), {}).get('is-view'):
+            raise Exception('Logical Replication is NOT supported for views. Please change the replication method for {}'.format(stream.tap_stream_id))
+
+        if replication_method == 'FULL_STREAMS':
+            lookup[stream.tap_stream_id] = 'full'
+            traditional_steams.append(stream)
+        elif replication_method == 'INCREMENTAL':
+            lookup[stream.tap_stream_id] = 'incremental'
+            traditional_steams.append(stream)
+
+        elif get_bookmark(state, stream.tap_stream_id, 'xmin') and get_bookmark(state, stream.tap_stream_id, 'lsn'):
+            #finishing previously interrupted full-table (first stage of logical replication)
+            lookup[stream.tap_stream_id] = 'logical_initial_interrupted'
+            traditional_steams.append(stream)
+
+        #inconsistent state
+        elif get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
+            raise Exception("Xmin found(%s) in state implying full-table replication but no lsn is present")
+
+        elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
+            #initial full-table phase of logical replication
+            lookup[stream.tap_stream_id] = 'logical_initial'
+            traditional_steams.append(stream)
+
+        else: #no xmin but we have an lsn
+            #initial stage of logical replication(full-table) has been completed. moving onto pure logical replication
+            lookup[stream.tap_stream_id] = 'pure_logical'
+            logical_streams.append(stream)
+
+    return lookup, traditional_steams, logical_streams
+
+def sync_traditional_stream(conn_config, stream, state, sync_method):
+    LOGGER.info("Beginning sync of stream: %s", stream.tap_stream_id)
+    md_map = metadata.to_map(stream.metadata)
+    conn_config['dbname'] = md_map.get(()).get('database-name')
+    desired_columns = [c for c in stream.schema.properties.keys() if should_sync_column(md_map, c)]
+    desired_columns.sort()
+
+    if len(desired_columns) == 0:
+        LOGGER.warning('There are no columns selected for stream %s, skipping it', stream.tap_stream_id)
+        return
+
+    if sync_method == 'full':
+        state = singer.set_currently_syncing(state, stream.tap_stream_id)
+        state = do_sync_full_table(conn_config, stream, state, desired_columns, md_map)
+    elif sync_method == 'incremental':
+        state = singer.set_currently_syncing(state, stream.tap_stream_id)
+        state = do_sync_incremental(conn_config, stream, state, desired_columns, md_map)
+    elif sync_method == 'logical_initial':
+        state = singer.set_currently_syncing(state, stream.tap_stream_id)
+        end_lsn = logical_replication.fetch_current_lsn(conn_config)
+        LOGGER.info("Performing initial full table sync")
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
+
+        sync_common.send_schema_message(stream, [])
+        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', False)
+    elif sync_method == 'logical_initial_interrupted':
+        state = singer.set_currently_syncing(state, stream.tap_stream_id)
+        LOGGER.info("Initial stage of full table sync was interrupted. resuming...")
+        sync_common.send_schema_message(stream, [])
+        state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
+        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', False)
+    else:
+        raise Exception("unknown sync method {} for stream {}", sync_method_lookup[stream.tap_stream_id], stream.tap_stream_id)
+
+    state = singer.set_currently_syncing(state, None)
+    singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
+    return state
+
+def sync_logical_streams(conn_config, logical_streams, state):
+    if logical_streams:
+        LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", logical_replication.fetch_current_lsn(conn_config), list(map(lambda s: s.tap_stream_id, logical_streams)))
+        logical_streams = list(map(lambda s: logical_replication.add_automatic_properties(s), logical_streams))
+
+        state = logical_replication.sync_tables(conn_config, logical_streams, state)
+
+    return state
+
 def do_sync(conn_config, catalog, default_replication_method, state):
     currently_syncing = singer.get_currently_syncing(state)
     streams = list(filter(is_selected_via_metadata, catalog.streams))
     streams.sort(key=lambda s: s.tap_stream_id)
+    LOGGER.info("Selected streams: %s ", list(map(lambda s: s.tap_stream_id, streams)))
+
+    sync_method_lookup, traditional_streams, logical_streams   = sync_method_for_streams(streams, state, default_replication_method)
+    #{"chickens" : "full_stream", "cows" : "logical_initial_interrupted_streams", "turkeys": "logical_replication"}
+    #{"logical_streams" : ["turkeys"], "traditional_streams" : ["chickens", "cows"]}
 
     if currently_syncing:
-        LOGGER.info("currently_syncing: %s", currently_syncing)
-        currently_syncing_stream = list(filter(lambda s: s.tap_stream_id == currently_syncing, streams))
-        other_streams = list(filter(lambda s: s.tap_stream_id != currently_syncing, streams))
-        streams = currently_syncing_stream + other_streams
+        LOGGER.info("found currently_syncing: %s", currently_syncing)
+        currently_syncing_stream = list(filter(lambda s: s.tap_stream_id == currently_syncing, traditional_streams))
+        if currently_syncing_stream is None:
+            LOGGER.warn("unable to locate currently_syncing(%s) amongst selected traditional streams(%s). will ignore", currently_syncing, list(map(lambda s: s.tap_stream_id, traditional_streams)))
+        other_streams = list(filter(lambda s: s.tap_stream_id != currently_syncing, traditional_streams))
+        traditional_streams = currently_syncing_stream + other_streams
     else:
-        LOGGER.info("NO currently_syncing")
+        LOGGER.info("No currently_syncing found")
 
+    for stream in traditional_streams:
+        state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream.tap_stream_id])
 
-    LOGGER.info("will sync: %s", list(map(lambda s: s.tap_stream_id, streams)))
-    for stream in streams:
-        md_map = metadata.to_map(stream.metadata)
-        conn_config['dbname'] = md_map.get(()).get('database-name')
-        state = singer.set_currently_syncing(state, stream.tap_stream_id)
-
-
-        desired_columns = [c for c in stream.schema.properties.keys() if should_sync_column(md_map, c)]
-        desired_columns.sort()
-
-        if len(desired_columns) == 0:
-            LOGGER.warning('There are no columns selected for stream %s, skipping it', stream.tap_stream_id)
-            continue
-
-        replication_method = md_map.get((), {}).get('replication-method', default_replication_method)
-        if replication_method not in set(['LOG_BASED', 'FULL_TABLE', 'INCREMENTAL']):
-            raise Exception("Unrecognized replication_method {}".format(replication_method))
-
-        replication_key = md_map.get((), {}).get('replication-key')
-
-        state = clear_state_on_replication_change(state, stream.tap_stream_id, replication_key, replication_method)
-
-        if replication_method == 'LOG_BASED' and md_map.get((), {}).get('is-view'):
-            LOGGER.warning('Logical Replication is NOT supported for views. skipping stream %s', stream.tap_stream_id)
-            continue
-
-        if replication_method == 'LOG_BASED':
-            state = do_sync_logical_replication(conn_config, stream, state, desired_columns, md_map)
-        elif replication_method == 'FULL_TABLE':
-            state = do_sync_full_table(conn_config, stream, state, desired_columns, md_map)
-        elif replication_method == 'INCREMENTAL':
-            state = do_sync_incremental(conn_config, stream, state, desired_columns, md_map)
-
-        state = singer.set_currently_syncing(state, None)
-        singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
-
+    logical_streams.sort(key=lambda s: metadata.to_map(s.metadata).get(()).get('database-name'))
+    for dbname, streams in itertools.groupby(logical_streams, lambda s: metadata.to_map(s.metadata).get(()).get('database-name')):
+        conn_config['dbname'] = dbname
+        state = sync_logical_streams(conn_config, list(streams), state)
+    return state
 
 def main_impl():
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
