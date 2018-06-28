@@ -483,14 +483,12 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
         sync_common.send_schema_message(stream, [])
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
         state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', False)
     elif sync_method == 'logical_initial_interrupted':
         state = singer.set_currently_syncing(state, stream.tap_stream_id)
         LOGGER.info("Initial stage of full table sync was interrupted. resuming...")
         sync_common.send_schema_message(stream, [])
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
         state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete', False)
     else:
         raise Exception("unknown sync method {} for stream {}", sync_method_lookup[stream.tap_stream_id], stream.tap_stream_id)
 

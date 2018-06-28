@@ -148,9 +148,6 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
         target_stream = streams_lookup[tap_stream_id]
         stream_version = get_stream_version(target_stream.tap_stream_id, state)
         stream_md_map = metadata.to_map(target_stream.metadata)
-        # if skip_first_change and idx == 0:
-        #     LOGGER.info("initial_logical_replication_complete is True. skipping initial change")
-        #     continue
 
         if c['kind'] == 'insert':
             col_vals = c['columnvalues'] + [None]
@@ -174,10 +171,7 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
                                       target_stream.tap_stream_id,
                                       'lsn',
                                       lsn)
-        # state = singer.write_bookmark(state, target_stream.tap_stream_id, 'initial_logical_replication_complete', True)
-        #LOGGER.info("Flushing log up to LSN  %s", msg.data_start)
 
-    # state = singer.write_bookmark(state, target_stream.tap_stream_id, 'initial_logical_replication_complete', True)
     msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
 
@@ -202,8 +196,6 @@ def sync_tables(conn_info, logical_streams, state):
             while True:
                 msg = cur.read_message()
                 if msg:
-                    # skip_first_change = singer.get_bookmark(state, stream.tap_stream_id, 'initial_logical_replication_complete') and rows_saved == 0
-
                     state = consume_message(logical_streams, state, msg, time_extracted, conn_info)
 
                     rows_saved = rows_saved + 1
@@ -219,6 +211,10 @@ def sync_tables(conn_info, logical_streams, state):
                             break
                     except InterruptedError:
                         pass  # recalculate timeout and continue
+
+    for s in logical_streams:
+        LOGGER.info("updating bookmark for stream %s to end_lsn %s", s.tap_stream_id, end_lsn)
+        state = singer.write_bookmark(state, s.tap_stream_id, 'lsn', end_lsn)
 
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
     return state
