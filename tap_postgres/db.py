@@ -115,3 +115,7 @@ def hstore_available(conn_info):
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
             cur.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
             return cur.fetchone()[0] is not None
+
+
+def compute_tap_stream_id(database_name, schema_name, table_name):
+    return database_name + '-' + schema_name + '-' + table_name
