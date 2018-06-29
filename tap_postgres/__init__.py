@@ -466,7 +466,7 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
 
     if len(desired_columns) == 0:
         LOGGER.warning('There are no columns selected for stream %s, skipping it', stream.tap_stream_id)
-        return
+        return state
 
     if sync_method == 'full':
         state = singer.set_currently_syncing(state, stream.tap_stream_id)
@@ -490,7 +490,7 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
         state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
     else:
-        raise Exception("unknown sync method {} for stream {}", sync_method_lookup[stream.tap_stream_id], stream.tap_stream_id)
+        raise Exception("unknown sync method {} for stream {}".format(sync_method, stream.tap_stream_id))
 
     state = singer.set_currently_syncing(state, None)
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
@@ -499,7 +499,7 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
 def sync_logical_streams(conn_config, logical_streams, state):
     if logical_streams:
         LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", logical_replication.fetch_current_lsn(conn_config), list(map(lambda s: s.tap_stream_id, logical_streams)))
-        logical_streams = list(map(lambda s: logical_replication.add_automatic_properties(s), logical_streams))
+        logical_streams = list(map(logical_replication.add_automatic_properties, logical_streams))
 
         state = logical_replication.sync_tables(conn_config, logical_streams, state)
 
@@ -511,7 +511,7 @@ def do_sync(conn_config, catalog, default_replication_method, state):
     streams.sort(key=lambda s: s.tap_stream_id)
     LOGGER.info("Selected streams: %s ", list(map(lambda s: s.tap_stream_id, streams)))
 
-    sync_method_lookup, traditional_streams, logical_streams   = sync_method_for_streams(streams, state, default_replication_method)
+    sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state, default_replication_method)
     #{"chickens" : "full_stream", "cows" : "logical_initial_interrupted_streams", "turkeys": "logical_replication"}
     #{"logical_streams" : ["turkeys"], "traditional_streams" : ["chickens", "cows"]}
 
@@ -519,7 +519,7 @@ def do_sync(conn_config, catalog, default_replication_method, state):
         LOGGER.info("found currently_syncing: %s", currently_syncing)
         currently_syncing_stream = list(filter(lambda s: s.tap_stream_id == currently_syncing, traditional_streams))
         if currently_syncing_stream is None:
-            LOGGER.warn("unable to locate currently_syncing(%s) amongst selected traditional streams(%s). will ignore", currently_syncing, list(map(lambda s: s.tap_stream_id, traditional_streams)))
+            LOGGER.warning("unable to locate currently_syncing(%s) amongst selected traditional streams(%s). will ignore", currently_syncing, list(map(lambda s: s.tap_stream_id, traditional_streams)))
         other_streams = list(filter(lambda s: s.tap_stream_id != currently_syncing, traditional_streams))
         traditional_streams = currently_syncing_stream + other_streams
     else:

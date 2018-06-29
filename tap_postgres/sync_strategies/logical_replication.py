@@ -7,14 +7,14 @@ from singer import utils, get_bookmark
 import singer.metadata as metadata
 from singer.schema import Schema
 import tap_postgres.db as post_db
+import tap_postgres.sync_strategies.common as sync_common
 from dateutil.parser import parse
 import psycopg2
 import copy
 from select import select
 from functools import reduce
 import json
-import pdb
-import tap_postgres.sync_strategies.common as sync_common
+
 
 LOGGER = singer.get_logger()
 
@@ -140,7 +140,7 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
     for s in streams:
         streams_lookup[s.tap_stream_id] = s
 
-    for idx, c in enumerate(payload['change']):
+    for c in payload['change']:
         tap_stream_id = post_db.compute_tap_stream_id(conn_info['dbname'], c['schema'], c['table'])
         if streams_lookup.get(tap_stream_id) is None:
             continue
