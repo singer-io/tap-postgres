@@ -429,7 +429,7 @@ def sync_method_for_streams(streams, state, default_replication_method):
         if replication_method == 'LOG_BASED' and stream_metadata.get((), {}).get('is-view'):
             raise Exception('Logical Replication is NOT supported for views. Please change the replication method for {}'.format(stream.tap_stream_id))
 
-        if replication_method == 'FULL_STREAMS':
+        if replication_method == 'FULL_TABLE':
             lookup[stream.tap_stream_id] = 'full'
             traditional_steams.append(stream)
         elif replication_method == 'INCREMENTAL':
@@ -458,7 +458,7 @@ def sync_method_for_streams(streams, state, default_replication_method):
     return lookup, traditional_steams, logical_streams
 
 def sync_traditional_stream(conn_config, stream, state, sync_method):
-    LOGGER.info("Beginning sync of stream: %s", stream.tap_stream_id)
+    LOGGER.info("Beginning sync of stream(%s) with sync method(%s)", stream.tap_stream_id, sync_method)
     md_map = metadata.to_map(stream.metadata)
     conn_config['dbname'] = md_map.get(()).get('database-name')
     desired_columns = [c for c in stream.schema.properties.keys() if should_sync_column(md_map, c)]
