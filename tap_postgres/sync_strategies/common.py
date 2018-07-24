@@ -1,5 +1,6 @@
-from singer import  metadata
 import singer
+from singer import  metadata
+
 
 def send_schema_message(stream, bookmark_properties):
     s_md = metadata.to_map(stream.metadata)

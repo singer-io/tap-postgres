@@ -410,7 +410,6 @@ def clear_state_on_replication_change(state, tap_stream_id, replication_key, rep
     state = singer.write_bookmark(state, tap_stream_id, 'last_replication_method', replication_method)
     return state
 
-
 def sync_method_for_streams(streams, state, default_replication_method):
     lookup = {}
     traditional_steams = []
@@ -425,6 +424,14 @@ def sync_method_for_streams(streams, state, default_replication_method):
 
         if replication_method not in set(['LOG_BASED', 'FULL_TABLE', 'INCREMENTAL']):
             raise Exception("Unrecognized replication_method {}".format(replication_method))
+
+        md_map = metadata.to_map(stream.metadata)
+        desired_columns = [c for c in stream.schema.properties.keys() if should_sync_column(md_map, c)]
+        desired_columns.sort()
+
+        if len(desired_columns) == 0:
+            LOGGER.warning('There are no columns selected for stream %s, skipping it', stream.tap_stream_id)
+            continue
 
         if replication_method == 'LOG_BASED' and stream_metadata.get((), {}).get('is-view'):
             raise Exception('Logical Replication is NOT supported for views. Please change the replication method for {}'.format(stream.tap_stream_id))
@@ -488,7 +495,6 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
         LOGGER.info("Initial stage of full table sync was interrupted. resuming...")
         sync_common.send_schema_message(stream, [])
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
     else:
         raise Exception("unknown sync method {} for stream {}".format(sync_method, stream.tap_stream_id))
 
@@ -543,8 +549,11 @@ def main_impl():
                    'dbname'   : args.config['dbname'],
                    'filter_dbs' : args.config.get('filter_dbs')}
 
+    if args.config.get('ssl') == 'true':
+        conn_config['sslmode'] = 'require'
+
     post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
-    LOGGER.info('itersize: %s', post_db.cursor_iter_size)
+
     if args.discover:
         do_discovery(conn_config)
     elif args.catalog:
