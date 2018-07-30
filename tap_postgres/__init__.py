@@ -228,7 +228,7 @@ LEFT OUTER JOIN pg_type AS subpgt
  AND pgt.typelem != 0
 WHERE attnum > 0
 AND NOT a.attisdropped
-AND pg_class.relkind IN ('r', 'v')
+AND pg_class.relkind IN ('r', 'v', 'm')
 AND n.nspname NOT in ('pg_toast', 'pg_catalog', 'information_schema')
 AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
         for row in cur.fetchall():
