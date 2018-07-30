@@ -177,13 +177,24 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
 
     return state
 
+def ensure_stitch_slot(conn_info):
+    with post_db.open_connection(conn_info, False) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM pg_replication_slots WHERE slot_name = 'stitch' AND plugin = 'wal2json'")
+            if len(cur.fetchall()) == 0:
+                LOGGER.warn("SELECT * FROM pg_replication_slots WHERE slot_name = 'stitch' AND plugin = 'wal2json' returnED 0 rows")
+                raise Exception("Unable to find replication slot. name: stitch with plugin: wal2json")
+
+
 def sync_tables(conn_info, logical_streams, state):
     start_lsn = min([get_bookmark(state, s.tap_stream_id, 'lsn') for s in logical_streams])
     end_lsn = fetch_current_lsn(conn_info)
     time_extracted = utils.now()
+    ensure_stitch_slot(conn_info)
 
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
+
             LOGGER.info("Starting Logical Replication for %s: %s -> %s", list(map(lambda s: s.tap_stream_id, logical_streams)), start_lsn, end_lsn)
             try:
                 cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
