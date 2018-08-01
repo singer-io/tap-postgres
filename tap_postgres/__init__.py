@@ -192,14 +192,13 @@ def produce_table_info(conn):
           # SELECT CASE WHEN $2.typtype = 'd' THEN $2.typbasetype ELSE $1.atttypid END
         cur.execute("""
 SELECT
-  pg_class.reltuples::BIGINT             AS approximate_row_count,
-  pg_class.relkind = 'v'                 AS is_view,
-  n.nspname                              AS schema_name,
-  pg_class.relname                       AS table_name,
-  attname                                AS column_name,
-  i.indisprimary                         AS primary_key,
-
-  format_type(a.atttypid, NULL::integer) AS data_type,
+  pg_class.reltuples::BIGINT                            AS approximate_row_count,
+  (pg_class.relkind = 'v' or pg_class.relkind = 'm')    AS is_view,
+  n.nspname                                             AS schema_name,
+  pg_class.relname                                      AS table_name,
+  attname                                               AS column_name,
+  i.indisprimary                                        AS primary_key,
+  format_type(a.atttypid, NULL::integer)                AS data_type,
   information_schema._pg_char_max_length(CASE WHEN COALESCE(subpgt.typtype, pgt.typtype) = 'd'
                                               THEN COALESCE(subpgt.typbasetype, pgt.typbasetype) ELSE COALESCE(subpgt.oid, pgt.oid)
                                           END,
@@ -321,6 +320,7 @@ def do_discovery(conn_config):
             sql = """SELECT datname
             FROM pg_database
             WHERE datistemplate = false
+                AND datname != 'cloudsqladmin'
                 AND CASE WHEN version() LIKE '%Redshift%' THEN true
                         ELSE has_database_privilege(datname,'CONNECT')
                     END = true """
