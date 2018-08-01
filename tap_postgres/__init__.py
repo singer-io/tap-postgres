@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-statements
+# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-statements,broad-except
 
 import datetime
 import pdb
@@ -310,6 +310,19 @@ def discover_db(connection):
     db_streams = discover_columns(connection, table_info)
     return db_streams
 
+def attempt_connection_to_db(conn_config, dbname):
+    nascent_config = copy.deepcopy(conn_config)
+    nascent_config['dbname'] = dbname
+    LOGGER.info('(%s) Testing connectivity...', dbname)
+    try:
+        conn = post_db.open_connection(nascent_config)
+        LOGGER.info('(%s) connectivity verified', dbname)
+        conn.close()
+        return True
+    except Exception as err:
+        LOGGER.warning('(%s) unable to connect: %s', dbname, err)
+        return False
+
 def do_discovery(conn_config):
     all_streams = []
 
@@ -318,20 +331,16 @@ def do_discovery(conn_config):
             cur.itersize = post_db.cursor_iter_size
             sql = """SELECT datname
             FROM pg_database
-            WHERE datistemplate = false
-                AND datname != 'cloudsqladmin'
-                AND CASE WHEN version() LIKE '%Redshift%' THEN true
-                        ELSE has_database_privilege(datname,'CONNECT')
-                    END = true """
+            WHERE datistemplate = false"""
 
             if conn_config.get('filter_dbs'):
                 sql = post_db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
 
-
             LOGGER.info("Running DB discovery: %s", sql)
-
             cur.execute(sql)
-            filter_dbs = (row[0] for row in cur.fetchall())
+            found_dbs = (row[0] for row in cur.fetchall())
+
+    filter_dbs = filter(lambda dbname: attempt_connection_to_db(conn_config, dbname), found_dbs)
 
     for db_row in filter_dbs:
         dbname = db_row
