@@ -71,35 +71,35 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
     sql_datatype = og_sql_datatype.replace('[]', '')
     if elem is None:
         return elem
-    elif sql_datatype == 'timestamp without time zone':
+    if sql_datatype == 'timestamp without time zone':
         return parse(elem).isoformat() + '+00:00'
-    elif sql_datatype == 'timestamp with time zone':
+    if sql_datatype == 'timestamp with time zone':
         if isinstance(elem, datetime.datetime):
             return elem.isoformat()
 
         return parse(elem).isoformat()
-    elif sql_datatype == 'date':
+    if sql_datatype == 'date':
         if  isinstance(elem, datetime.date):
             #logical replication gives us dates as strings UNLESS they from an array
             return elem.isoformat() + 'T00:00:00+00:00'
 
         return parse(elem).isoformat() + "+00:00"
-    elif sql_datatype == 'time with time zone':
+    if sql_datatype == 'time with time zone':
         return parse(elem).isoformat().split('T')[1]
-    elif sql_datatype == 'bit':
+    if sql_datatype == 'bit':
         return elem == '1'
-    elif sql_datatype == 'boolean':
+    if sql_datatype == 'boolean':
         return elem
-    elif sql_datatype == 'hstore':
+    if sql_datatype == 'hstore':
         return create_hstore_elem(conn_info, elem)
-    elif isinstance(elem, int):
+    if isinstance(elem, int):
         return elem
-    elif isinstance(elem, float):
+    if isinstance(elem, float):
         return elem
-    elif isinstance(elem, str):
+    if isinstance(elem, str):
         return elem
-    else:
-        raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
+
+    raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
 
 def selected_array_to_singer_value(elem, sql_datatype, conn_info):
     if isinstance(elem, list):
@@ -182,7 +182,7 @@ def ensure_stitch_slot(conn_info):
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM pg_replication_slots WHERE slot_name = 'stitch' AND plugin = 'wal2json'")
             if len(cur.fetchall()) == 0:
-                LOGGER.warn("SELECT * FROM pg_replication_slots WHERE slot_name = 'stitch' AND plugin = 'wal2json' returnED 0 rows")
+                LOGGER.warning("SELECT * FROM pg_replication_slots WHERE slot_name = 'stitch' AND plugin = 'wal2json' returnED 0 rows")
                 raise Exception("Unable to find replication slot. name: stitch with plugin: wal2json")
 
 

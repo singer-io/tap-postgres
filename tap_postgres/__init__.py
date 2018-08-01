@@ -15,7 +15,6 @@ import ssl
 import psycopg2
 import psycopg2.extras
 import singer
-import singer.metrics as metrics
 import singer.schema
 from singer import utils, metadata, get_bookmark
 from singer.schema import Schema
@@ -78,39 +77,39 @@ def schema_for_column_datatype(c):
         schema['minimum'] = -1 * (2**(c.numeric_precision - 1))
         schema['maximum'] = 2**(c.numeric_precision - 1) - 1
         return schema
-    elif data_type == 'money':
+    if data_type == 'money':
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
-    elif c.is_enum:
+    if c.is_enum:
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
-    elif data_type == 'bit' and c.character_maximum_length == 1:
+    if data_type == 'bit' and c.character_maximum_length == 1:
         schema['type'] = nullable_column('boolean', c.is_primary_key)
         return schema
 
-    elif data_type == 'boolean':
+    if data_type == 'boolean':
         schema['type'] = nullable_column('boolean', c.is_primary_key)
         return schema
 
-    elif data_type == 'uuid':
+    if data_type == 'uuid':
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
-    elif data_type == 'hstore':
+    if data_type == 'hstore':
         schema['type'] = nullable_column('object', c.is_primary_key)
         schema['properties'] = {}
         return schema
 
-    elif data_type == 'citext':
+    if data_type == 'citext':
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
-    elif data_type in JSON_TYPES:
+    if data_type in JSON_TYPES:
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
-    elif data_type == 'numeric':
+    if data_type == 'numeric':
         schema['type'] = nullable_column('number', c.is_primary_key)
         if c.numeric_scale is None or c.numeric_scale > MAX_SCALE:
             LOGGER.warning('capping decimal scale to 38.  THIS MAY CAUSE TRUNCATION')
@@ -131,36 +130,36 @@ def schema_for_column_datatype(c):
         schema['minimum'] = -10 ** (precision - scale)
         return schema
 
-    elif data_type in {'time without time zone', 'time with time zone'}:
+    if data_type in {'time without time zone', 'time with time zone'}:
         #times are treated as ordinary strings as they can not possible match RFC3339
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
-    elif data_type in ('date', 'timestamp without time zone', 'timestamp with time zone'):
+    if data_type in ('date', 'timestamp without time zone', 'timestamp with time zone'):
         schema['type'] = nullable_column('string', c.is_primary_key)
 
         schema['format'] = 'date-time'
         return schema
 
-    elif data_type in FLOAT_TYPES:
+    if data_type in FLOAT_TYPES:
         schema['type'] = nullable_column('number', c.is_primary_key)
         return schema
 
-    elif data_type == 'text':
+    if data_type == 'text':
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
-    elif data_type == 'character varying':
-        schema['type'] = nullable_column('string', c.is_primary_key)
-        schema['maxLength'] = c.character_maximum_length
-        return schema
-
-    elif data_type == 'character':
+    if data_type == 'character varying':
         schema['type'] = nullable_column('string', c.is_primary_key)
         schema['maxLength'] = c.character_maximum_length
         return schema
 
-    elif data_type in {'cidr', 'inet', 'macaddr'}:
+    if data_type == 'character':
+        schema['type'] = nullable_column('string', c.is_primary_key)
+        schema['maxLength'] = c.character_maximum_length
+        return schema
+
+    if data_type in {'cidr', 'inet', 'macaddr'}:
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
