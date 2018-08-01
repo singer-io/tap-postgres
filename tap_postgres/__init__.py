@@ -331,11 +331,7 @@ def do_discovery(conn_config):
             cur.itersize = post_db.cursor_iter_size
             sql = """SELECT datname
             FROM pg_database
-            WHERE datistemplate = false
-                AND datname != 'cloudsqladmin'
-                AND CASE WHEN version() LIKE '%Redshift%' THEN true
-                        ELSE has_database_privilege(datname,'CONNECT')
-                    END = true """
+            WHERE datistemplate = false"""
 
             if conn_config.get('filter_dbs'):
                 sql = post_db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
