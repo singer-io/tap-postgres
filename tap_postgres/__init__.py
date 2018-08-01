@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-statements
+# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-statements,broad-except
 
 import datetime
 import pdb
@@ -340,7 +340,7 @@ def do_discovery(conn_config):
             cur.execute(sql)
             found_dbs = (row[0] for row in cur.fetchall())
 
-    filter_dbs = filter(lambda dbname: attempt_connection_to_db(conn_config, dbname) , found_dbs)
+    filter_dbs = filter(lambda dbname: attempt_connection_to_db(conn_config, dbname), found_dbs)
 
     for db_row in filter_dbs:
         dbname = db_row
