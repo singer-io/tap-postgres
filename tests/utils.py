@@ -77,7 +77,7 @@ def ensure_test_table(table_spec, target_db='postgres'):
             old_table = cur.fetchall()
 
             if len(old_table) != 0:
-                cur.execute('DROP TABLE {}'.format(quote_ident(table_spec['name'], cur)))
+                cur.execute('DROP TABLE {} cascade'.format(quote_ident(table_spec['name'], cur)))
 
             sql = build_table(table_spec, cur)
             LOGGER.info("create table sql: %s", sql)

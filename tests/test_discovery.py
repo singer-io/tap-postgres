@@ -5,6 +5,7 @@ import tap_postgres
 import os
 import pdb
 from singer import get_logger, metadata
+from psycopg2.extensions import quote_ident
 try:
     from tests.utils import get_test_connection, ensure_test_table, get_test_connection_config
 except ImportError:
@@ -507,7 +508,52 @@ class TestMultiDB(unittest.TestCase):
                               ('properties', 'our_time_tz')        : {'inclusion': 'available', 'sql-datatype' : 'time with time zone', 'selected-by-default' : True}})
 
 
+
+
+class TestArraysLikeTable(unittest.TestCase):
+    maxDiff = None
+    table_name = 'CHICKEN TIMES'
+    like_table_name = 'LIKE CHICKEN TIMES'
+
+    def setUp(self):
+        with get_test_connection('postgres') as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute('DROP MATERIALIZED VIEW IF EXISTS "LIKE CHICKEN TIMES"')
+        table_spec = {"columns": [{"name" : 'our_int_array_pk',          "type" : "integer[]", "primary_key" : True },
+                                  {"name" : 'our_text_array',            "type" : "text[]" }],
+                      "name" : TestArraysLikeTable.table_name}
+        ensure_test_table(table_spec)
+
+        with get_test_connection('postgres') as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                 create_sql = "CREATE MATERIALIZED VIEW {} AS SELECT * FROM {}\n".format(quote_ident(TestArraysLikeTable.like_table_name, cur),
+                                                                                         quote_ident(TestArraysLikeTable.table_name, cur))
+
+
+                 cur.execute(create_sql)
+
+
+    def test_catalog(self):
+        conn_config = get_test_connection_config()
+        catalog = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-LIKE CHICKEN TIMES']
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0].to_dict()
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+
+        with get_test_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                                 {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': True, 'row-count': 0},
+                                  ('properties', 'our_int_array_pk') : {'inclusion': 'available', 'sql-datatype' : 'integer[]',  'selected-by-default' : True},
+                                  ('properties', 'our_text_array') : {'inclusion': 'available', 'sql-datatype' : 'text[]',  'selected-by-default' : True}})
+                self.assertEqual({'properties': {'our_int_array_pk':                  {'type': ['null', 'array'], 'items' : {}},
+                                                 'our_text_array':                  {'type': ['null', 'array'], 'items' : {}}},
+                                  'type': 'object'},
+                                 stream_dict.get('schema'))
+
+
 if __name__== "__main__":
-    test1 = TestArraysTable()
+    test1 = TestArraysLikeTable()
     test1.setUp()
     test1.test_catalog()
