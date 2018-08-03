@@ -25,9 +25,9 @@ def open_connection(conn_config, logical_replication=False):
                                                                                    conn_config['password'],
                                                                                    conn_config['port'])
     if logical_replication:
-        conn = psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
+        conn = psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection, connect_timeout=30)
     else:
-        conn = psycopg2.connect(conn_string)
+        conn = psycopg2.connect(conn_string, connect_timeout=30)
 
     return conn
 

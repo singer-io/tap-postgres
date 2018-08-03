@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code
+# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code, anomalous-backslash-in-string
 
 import singer
 import datetime
@@ -14,16 +14,34 @@ import copy
 from select import select
 from functools import reduce
 import json
-
+import re
 
 LOGGER = singer.get_logger()
 
 UPDATE_BOOKMARK_PERIOD = 1000
 
+def get_pg_version(cur):
+    cur.execute("SELECT version()")
+    res = cur.fetchone()[0]
+    version_match = re.match('PostgreSQL (\d+)', res)
+    if not version_match:
+        raise Exception('unable to determine PostgreSQL version from {}'.format(res))
+
+    version = int(version_match.group(1))
+    LOGGER.info("Detected PostgresSQL version: %s", version)
+    return version
+
 def fetch_current_lsn(conn_config):
     with post_db.open_connection(conn_config, False) as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT pg_current_xlog_location()")
+            version = get_pg_version(cur)
+            if version == 9:
+                cur.execute("SELECT pg_current_xlog_location()")
+            elif version > 9:
+                cur.execute("SELECT pg_current_wal_lsn()")
+            else:
+                raise Exception('unable to fetch current lsn for PostgresQL version {}'.format(version))
+
             current_lsn = cur.fetchone()[0]
             file, index = current_lsn.split('/')
             return (int(file, 16)  << 32) + int(index, 16)
