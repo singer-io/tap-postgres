@@ -553,7 +553,7 @@ class TestArraysLikeTable(unittest.TestCase):
                                  stream_dict.get('schema'))
 
 
- if __name__== "__main__":
-     test1 = TestArraysLikeTable()
-     test1.setUp()
-     test1.test_catalog()
+if __name__== "__main__":
+    test1 = TestArraysLikeTable()
+    test1.setUp()
+    test1.test_catalog()
