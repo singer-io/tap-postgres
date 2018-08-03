@@ -35,7 +35,7 @@ Column = collections.namedtuple('Column', [
     "character_maximum_length",
     "numeric_precision",
     "numeric_scale",
-    "array_dimensions",
+    "is_array",
     "is_enum"
 
 ])
@@ -171,7 +171,7 @@ def schema_for_column(c):
     #NB> from the post postgres docs: The current implementation does not enforce the declared number of dimensions either.
     #these means we can say nothing about an array column. its items may be more arrays or primitive types like integers
     #and this can vary on a row by row basis
-    if c.array_dimensions > 0:
+    if c.is_array:
         column_schema["type"] = ["null", "array"]
         column_schema["items"] = {}
         return Schema.from_dict(column_schema)
@@ -210,7 +210,7 @@ SELECT
                                                 THEN COALESCE(subpgt.typbasetype, pgt.typbasetype) ELSE COALESCE(subpgt.oid, pgt.oid)
                                         END,
                                        information_schema._pg_truetypmod(a.*, pgt.*))::information_schema.cardinal_number AS numeric_scale,
-  a.attndims                           AS array_dimensions,
+  pgt.typcategory                       = 'A' AS is_array,
   COALESCE(subpgt.typtype, pgt.typtype) = 'e' AS is_enum
 FROM pg_attribute a
 LEFT JOIN pg_type AS pgt ON a.atttypid = pgt.oid
