@@ -5,9 +5,9 @@ from singer import  metadata
 def send_schema_message(stream, bookmark_properties):
     s_md = metadata.to_map(stream.metadata)
     if s_md.get((), {}).get('is-view'):
-        key_properties = s_md.get((), {}).get('view-key-properties')
+        key_properties = s_md.get((), {}).get('view-key-properties', [])
     else:
-        key_properties = s_md.get((), {}).get('table-key-properties')
+        key_properties = s_md.get((), {}).get('table-key-properties', [])
 
 
     schema_message = singer.SchemaMessage(stream=stream.stream,
