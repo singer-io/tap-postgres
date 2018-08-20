@@ -350,6 +350,10 @@ def do_discovery(conn_config):
             db_streams = discover_db(conn)
             all_streams = all_streams + db_streams
 
+
+    if len(all_streams) == 0:
+        LOGGER.warning("0 tables were discovered across the entire cluster")
+
     cluster_catalog = Catalog(all_streams)
     dump_catalog(cluster_catalog)
     return cluster_catalog
