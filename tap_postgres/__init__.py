@@ -331,7 +331,8 @@ def do_discovery(conn_config):
             cur.itersize = post_db.cursor_iter_size
             sql = """SELECT datname
             FROM pg_database
-            WHERE datistemplate = false"""
+            WHERE datistemplate = false
+              AND datname != 'rdsadmin'"""
 
             if conn_config.get('filter_dbs'):
                 sql = post_db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
