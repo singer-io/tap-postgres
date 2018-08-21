@@ -210,7 +210,7 @@ def locate_replication_slot(conn_info):
                 LOGGER.info("using pg_replication_slot 'stitch'")
                 return 'stitch'
 
-            raise Exception("Unable to find replication slot (stitch || %s with wal2json", db_specific_slot)
+            raise Exception("Unable to find replication slot (stitch || {} with wal2json".format(db_specific_slot))
 
 
 def sync_tables(conn_info, logical_streams, state):
