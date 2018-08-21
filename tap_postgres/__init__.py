@@ -320,7 +320,7 @@ def attempt_connection_to_db(conn_config, dbname):
         conn.close()
         return True
     except Exception as err:
-        LOGGER.warning('(%s) unable to connect: %s', dbname, err)
+        LOGGER.warning('Unable to connect to %s. This maybe harmless if you have not desire to replicate from this database: "%s"', dbname, err)
         return False
 
 def do_discovery(conn_config):
@@ -331,7 +331,8 @@ def do_discovery(conn_config):
             cur.itersize = post_db.cursor_iter_size
             sql = """SELECT datname
             FROM pg_database
-            WHERE datistemplate = false"""
+            WHERE datistemplate = false
+              AND datname != 'rdsadmin'"""
 
             if conn_config.get('filter_dbs'):
                 sql = post_db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])

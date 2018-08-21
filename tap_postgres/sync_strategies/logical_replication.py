@@ -195,29 +195,38 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
 
     return state
 
-def ensure_stitch_slot(conn_info):
+def locate_replication_slot(conn_info):
     with post_db.open_connection(conn_info, False) as conn:
         with conn.cursor() as cur:
+            db_specific_slot = "stitch_{}".format(conn_info['dbname'])
+            cur.execute("SELECT * FROM pg_replication_slots WHERE slot_name = %s AND plugin = %s", (db_specific_slot, 'wal2json'))
+            if len(cur.fetchall()) == 1:
+                LOGGER.info("using pg_replication_slot %s", db_specific_slot)
+                return db_specific_slot
+
+
             cur.execute("SELECT * FROM pg_replication_slots WHERE slot_name = 'stitch' AND plugin = 'wal2json'")
-            if len(cur.fetchall()) == 0:
-                LOGGER.warning("SELECT * FROM pg_replication_slots WHERE slot_name = 'stitch' AND plugin = 'wal2json' returnED 0 rows")
-                raise Exception("Unable to find replication slot. name: stitch with plugin: wal2json")
+            if len(cur.fetchall()) == 1:
+                LOGGER.info("using pg_replication_slot 'stitch'")
+                return 'stitch'
+
+            raise Exception("Unable to find replication slot (stitch || {} with wal2json".format(db_specific_slot))
 
 
 def sync_tables(conn_info, logical_streams, state):
     start_lsn = min([get_bookmark(state, s.tap_stream_id, 'lsn') for s in logical_streams])
     end_lsn = fetch_current_lsn(conn_info)
     time_extracted = utils.now()
-    ensure_stitch_slot(conn_info)
+    slot = locate_replication_slot(conn_info)
 
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
 
-            LOGGER.info("Starting Logical Replication for %s: %s -> %s", list(map(lambda s: s.tap_stream_id, logical_streams)), start_lsn, end_lsn)
+            LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s", list(map(lambda s: s.tap_stream_id, logical_streams)), slot, start_lsn, end_lsn)
             try:
-                cur.start_replication(slot_name='stitch', decode=True, start_lsn=start_lsn)
+                cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
             except psycopg2.ProgrammingError:
-                raise Exception("unable to start replication with logical replication slot 'stitch'")
+                raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
             cur.send_feedback(flush_lsn=start_lsn)
             keepalive_interval = 10.0
