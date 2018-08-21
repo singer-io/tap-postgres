@@ -320,7 +320,7 @@ def attempt_connection_to_db(conn_config, dbname):
         conn.close()
         return True
     except Exception as err:
-        LOGGER.warning('(%s) unable to connect: %s', dbname, err)
+        LOGGER.warning('Unable to connect to %s. This maybe harmless if you have not desire to replicate from this database: "%s"', dbname, err)
         return False
 
 def do_discovery(conn_config):
