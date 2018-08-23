@@ -337,7 +337,7 @@ def do_discovery(conn_config):
             if conn_config.get('filter_dbs'):
                 sql = post_db.filter_dbs_sql_clause(sql, conn_config['filter_dbs'])
 
-            LOGGER.info("Running DB discovery: %s", sql)
+            LOGGER.info("Running DB discovery: %s with itersize %s", sql, cur.itersize)
             cur.execute(sql)
             found_dbs = (row[0] for row in cur.fetchall())
 

@@ -81,7 +81,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                                                               post_db.fully_qualified_table_name(schema_name, stream.table),
                                                               post_db.prepare_columns_sql(replication_key))
 
-                LOGGER.info("SELECT STATEMENT: %s", select_sql)
+                LOGGER.info("select statement: %s with itersize %s", select_sql, cur.itersize)
                 cur.execute(select_sql)
 
                 rows_saved = 0

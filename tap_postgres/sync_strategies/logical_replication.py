@@ -190,6 +190,7 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
                                       'lsn',
                                       lsn)
 
+    LOGGER.info("sending feedback to server. flush_lsn = %s", msg.data_start)
     msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
 

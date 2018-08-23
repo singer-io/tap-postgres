@@ -45,7 +45,7 @@ def sync_view(conn_info, stream, state, desired_columns, md_map):
                 select_sql = 'SELECT {} FROM {}'.format(','.join(escaped_columns),
                                                         post_db.fully_qualified_table_name(schema_name, stream.table))
 
-                LOGGER.info("select %s", select_sql)
+                LOGGER.info("select %s with itersize %s", select_sql, cur.itersize)
                 cur.execute(select_sql)
 
                 rows_saved = 0
@@ -122,7 +122,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                                                                        post_db.fully_qualified_table_name(schema_name, stream.table))
 
 
-                LOGGER.info("select %s", select_sql)
+                LOGGER.info("select %s with itersize %s", select_sql, cur.itersize)
                 cur.execute(select_sql)
 
                 rows_saved = 0
