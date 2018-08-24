@@ -7,6 +7,15 @@ import singer
 
 cursor_iter_size = 20000
 
+include_schemas_in_destination_stream_name=False
+
+
+def calculate_destination_stream_name(stream, md_map):
+    if include_schemas_in_destination_stream_name:
+        return "{}_{}".format(md_map.get((), {}).get('schema-name'), stream.stream)
+
+    return stream.stream
+
 #from the postgres docs:
 #Quoted identifiers can contain any character, except the character with code zero. (To include a double #quote, write two double quotes.)
 def canonicalize_identifier(identifier):
@@ -105,7 +114,7 @@ def selected_row_to_singer_message(stream, row, version, columns, time_extracted
     rec = dict(zip(columns, row_to_persist))
 
     return singer.RecordMessage(
-        stream=stream.stream,
+        stream=calculate_destination_stream_name(stream, md_map),
         record=rec,
         version=version,
         time_extracted=time_extracted)

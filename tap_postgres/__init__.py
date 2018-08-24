@@ -567,6 +567,8 @@ def main_impl():
 
     post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
 
+    post_db.include_schemas_in_destination_stream_name = (args.config.get('include_schemas_in_destination_stream_name') == 'true')
+
     if args.discover:
         do_discovery(conn_config)
     elif args.catalog:
