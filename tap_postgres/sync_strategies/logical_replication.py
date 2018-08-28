@@ -145,7 +145,7 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map,
     rec = dict(zip(columns, row_to_persist))
 
     return singer.RecordMessage(
-        stream=stream.stream,
+        stream=post_db.calculate_destination_stream_name(stream, md_map),
         record=rec,
         version=version,
         time_extracted=time_extracted)
