@@ -189,6 +189,8 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
                                       target_stream.tap_stream_id,
                                       'lsn',
                                       lsn)
+        LOGGER.info("sending feedback to server with NO flush_lsn. just a keep-alive")
+        msg.cursor.send_feedback()
 
     LOGGER.info("sending feedback to server. flush_lsn = %s", msg.data_start)
     msg.cursor.send_feedback(flush_lsn=msg.data_start)
