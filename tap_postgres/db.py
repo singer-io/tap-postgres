@@ -6,8 +6,7 @@ import psycopg2.extras
 import singer
 
 cursor_iter_size = 20000
-
-include_schemas_in_destination_stream_name=False
+include_schemas_in_destination_stream_name = False
 
 
 def calculate_destination_stream_name(stream, md_map):
