@@ -118,6 +118,8 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
         return elem
     if isinstance(elem, str):
         return elem
+    if sql_datatype == 'numeric':
+        return decimal.Decimal(elem)
 
     raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
 
