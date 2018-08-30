@@ -3,6 +3,7 @@
 
 import singer
 import datetime
+import decimal
 from singer import utils, get_bookmark
 import singer.metadata as metadata
 from singer.schema import Schema
@@ -10,6 +11,7 @@ import tap_postgres.db as post_db
 import tap_postgres.sync_strategies.common as sync_common
 from dateutil.parser import parse
 import psycopg2
+from psycopg2.extensions import quote_ident
 import copy
 from select import select
 from functools import reduce
@@ -79,7 +81,7 @@ def create_array_elem(elem, sql_datatype, conn_info):
 
     with post_db.open_connection(conn_info) as conn:
         with conn.cursor() as cur:
-            sql = """SELECT '{}'::{}""".format(elem, sql_datatype)
+            sql = """SELECT $stitch_quote${}$stitch_quote$::{}""".format(elem, sql_datatype)
             cur.execute(sql)
             res = cur.fetchone()[0]
             return res
