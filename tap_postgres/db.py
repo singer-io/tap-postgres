@@ -72,9 +72,19 @@ def selected_value_to_singer_value_impl(elem, sql_datatype):
     elif isinstance(elem, str):
         cleaned_elem = elem
     elif isinstance(elem, decimal.Decimal):
-        cleaned_elem = elem
+        #NB> We cast NaN's to NULL as wal2json does not support them and now we are at least consistent(ly wrong)
+        if elem.is_nan():
+            cleaned_elem = None
+        else:
+            cleaned_elem = elem
     elif isinstance(elem, float):
-        cleaned_elem = elem
+        #NB> We cast NaN's, +Inf, -Inf to NULL as wal2json does not support them and now we are at least consistent(ly wrong)
+        if math.isnan(elem):
+            cleaned_elem = None
+        elif math.isinf(elem):
+            cleaned_elem = None
+        else:
+            cleaned_elem = elem
     elif isinstance(elem, dict):
         if sql_datatype == 'hstore':
             cleaned_elem = elem
