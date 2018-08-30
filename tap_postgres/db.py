@@ -4,6 +4,7 @@ import json
 import psycopg2
 import psycopg2.extras
 import singer
+import math
 
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
