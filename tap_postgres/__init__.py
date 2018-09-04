@@ -626,6 +626,13 @@ def register_type_adapters(conn_config):
                 psycopg2.extensions.new_array_type(
                     (money_array_oid,), 'MONEY[]', psycopg2.STRING))
 
+            #enum[]'s
+            cur.execute("SELECT distinct(t.typarray) FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid")
+            for oid in cur.fetchall():
+                enum_oid = oid[0]
+                psycopg2.extensions.register_type(
+                    psycopg2.extensions.new_array_type(
+                        (enum_oid,), 'ENUM_{}[]'.format(enum_oid), psycopg2.STRING))
 
 
 

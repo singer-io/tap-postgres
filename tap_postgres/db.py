@@ -118,7 +118,6 @@ def selected_value_to_singer_value(elem, sql_datatype):
 def selected_row_to_singer_message(stream, row, version, columns, time_extracted, md_map):
     row_to_persist = ()
     for idx, elem in enumerate(row):
-        # pdb.set_trace()
         sql_datatype = md_map.get(('properties', columns[idx]))['sql-datatype']
         cleaned_elem = selected_value_to_singer_value(elem, sql_datatype)
         row_to_persist += (cleaned_elem,)
