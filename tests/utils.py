@@ -84,31 +84,31 @@ def ensure_test_table(table_spec, target_db='postgres'):
             cur.execute(sql)
 
 def unselect_column(our_stream, col):
-    md = metadata.to_map(our_stream.metadata)
+    md = metadata.to_map(our_stream['metadata'])
     md.get(('properties', col))['selected'] = False
-    our_stream.metadata = metadata.to_list(md)
+    our_stream['metadata'] = metadata.to_list(md)
     return our_stream
 
 def set_replication_method_for_stream(stream, method):
-    new_md = metadata.to_map(stream.metadata)
+    new_md = metadata.to_map(stream['metadata'])
     old_md = new_md.get(())
     old_md.update({'replication-method': method})
 
-    stream.metadata = metadata.to_list(new_md)
+    stream['metadata'] = metadata.to_list(new_md)
     return stream
 
 def select_all_of_stream(stream):
-    new_md = metadata.to_map(stream.metadata)
+    new_md = metadata.to_map(stream['metadata'])
 
     old_md = new_md.get(())
     old_md.update({'selected': True})
-    for col_name, col_schema in stream.schema.properties.items():
+    for col_name, col_schema in stream['schema']['properties'].items():
         #explicitly select column if it is not automatic
         if new_md.get(('properties', col_name)).get('inclusion') != 'automatic' and new_md.get(('properties', col_name)).get('inclusion') != 'unsupported':
             old_md = new_md.get(('properties', col_name))
             old_md.update({'selected' : True})
 
-    stream.metadata = metadata.to_list(new_md)
+    stream['metadata'] = metadata.to_list(new_md)
     return stream
 
 

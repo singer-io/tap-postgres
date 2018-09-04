@@ -27,13 +27,13 @@ def fetch_max_replication_key(conn_config, replication_key, schema_name, table_n
 def sync_table(conn_info, stream, state, desired_columns, md_map):
     time_extracted = utils.now()
 
-    first_run = singer.get_bookmark(state, stream.tap_stream_id, 'version') is None
-    stream_version = singer.get_bookmark(state, stream.tap_stream_id, 'version')
+    first_run = singer.get_bookmark(state, stream['tap_stream_id'], 'version') is None
+    stream_version = singer.get_bookmark(state, stream['tap_stream_id'], 'version')
     if stream_version is None:
         stream_version = int(time.time() * 1000)
 
     state = singer.write_bookmark(state,
-                                  stream.tap_stream_id,
+                                  stream['tap_stream_id'],
                                   'version',
                                   stream_version)
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
@@ -50,7 +50,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
         singer.write_message(activate_version_message)
 
     replication_key = md_map.get((), {}).get('replication-key')
-    replication_key_value = singer.get_bookmark(state, stream.tap_stream_id, 'replication_key_value')
+    replication_key_value = singer.get_bookmark(state, stream['tap_stream_id'], 'replication_key_value')
     replication_key_sql_datatype = md_map.get(('properties', replication_key)).get('sql-datatype')
 
     hstore_available = post_db.hstore_available(conn_info)
@@ -70,7 +70,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                                     FROM {}
                                     WHERE {} >= '{}'::{}
                                     ORDER BY {} ASC""".format(','.join(escaped_columns),
-                                                              post_db.fully_qualified_table_name(schema_name, stream.table),
+                                                              post_db.fully_qualified_table_name(schema_name, stream['table']),
                                                               post_db.prepare_columns_sql(replication_key), replication_key_value, replication_key_sql_datatype,
                                                               post_db.prepare_columns_sql(replication_key))
                 else:
@@ -78,7 +78,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                     select_sql = """SELECT {}
                                     FROM {}
                                     ORDER BY {} ASC""".format(','.join(escaped_columns),
-                                                              post_db.fully_qualified_table_name(schema_name, stream.table),
+                                                              post_db.fully_qualified_table_name(schema_name, stream['table']),
                                                               post_db.prepare_columns_sql(replication_key))
 
                 LOGGER.info("select statement: %s with itersize %s", select_sql, cur.itersize)
@@ -95,7 +95,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                     #event worse would be allowing the NULL value to enter into the state
                     if record_message.record[replication_key] is not None:
                         state = singer.write_bookmark(state,
-                                                      stream.tap_stream_id,
+                                                      stream['tap_stream_id'],
                                                       'replication_key_value',
                                                       record_message.record[replication_key])
 

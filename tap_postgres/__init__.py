@@ -54,18 +54,11 @@ INTEGER_TYPES = {'integer', 'smallint', 'bigint'}
 FLOAT_TYPES = {'real', 'double precision'}
 JSON_TYPES = {'json', 'jsonb'}
 
-#NB> numeric/decimal columns in postgres without a specified scale && precision
-#default to 'up to 131072 digits before the decimal point; up to 16383
-#digits after the decimal point'. For practical reasons, we are capping this at 74/38
-#  https://www.postgresql.org/docs/10/static/datatype-numeric.html#DATATYPE-NUMERIC-TABLE
-MAX_SCALE = 38
-MAX_PRECISION = 100
 
 def nullable_column(col_type, pk):
     if pk:
         return  [col_type]
     return ['null', col_type]
-
 
 def schema_for_column_datatype(c):
     schema = {}
@@ -111,23 +104,16 @@ def schema_for_column_datatype(c):
 
     if data_type == 'numeric':
         schema['type'] = nullable_column('number', c.is_primary_key)
-        if c.numeric_scale is None or c.numeric_scale > MAX_SCALE:
-            LOGGER.warning('capping decimal scale to 38.  THIS MAY CAUSE TRUNCATION')
-            scale = MAX_SCALE
-        else:
-            scale = c.numeric_scale
-
-        if c.numeric_precision is None or c.numeric_precision > MAX_PRECISION:
-            LOGGER.warning('capping decimal precision to 100.  THIS MAY CAUSE TRUNCATION')
-            precision = MAX_PRECISION
-        else:
-            precision = c.numeric_precision
+        scale = post_db.numeric_scale(c)
+        precision = post_db.numeric_precision(c)
+        # if precision is None or scale is None:
+        #     pdb.set_trace()
 
         schema['exclusiveMaximum'] = True
-        schema['maximum'] = 10 ** (precision - scale)
-        schema['multipleOf'] = 10 ** (0 - scale)
+        schema['maximum'] = post_db.numeric_max(precision, scale)
+        schema['multipleOf'] = post_db.numeric_multiple_of(scale)
         schema['exclusiveMinimum'] = True
-        schema['minimum'] = -10 ** (precision - scale)
+        schema['minimum'] = post_db.numeric_min(precision, scale)
         return schema
 
     if data_type in {'time without time zone', 'time with time zone'}:
@@ -151,12 +137,15 @@ def schema_for_column_datatype(c):
 
     if data_type == 'character varying':
         schema['type'] = nullable_column('string', c.is_primary_key)
-        schema['maxLength'] = c.character_maximum_length
+        if c.character_maximum_length:
+            schema['maxLength'] = c.character_maximum_length
+
         return schema
 
     if data_type == 'character':
         schema['type'] = nullable_column('string', c.is_primary_key)
-        schema['maxLength'] = c.character_maximum_length
+        if c.character_maximum_length:
+            schema['maxLength'] = c.character_maximum_length
         return schema
 
     if data_type in {'cidr', 'inet', 'macaddr'}:
@@ -165,18 +154,73 @@ def schema_for_column_datatype(c):
 
     return schema
 
-def schema_for_column(c):
-    column_schema = {}
+def schema_name_for_numeric_array(precision, scale):
+    schema_name = 'sdc_recursive_decimal_{}_{}_array'.format(precision, scale)
+    return schema_name
 
+def schema_for_column(c):
     #NB> from the post postgres docs: The current implementation does not enforce the declared number of dimensions either.
     #these means we can say nothing about an array column. its items may be more arrays or primitive types like integers
     #and this can vary on a row by row basis
-    if c.is_array:
-        column_schema["type"] = ["null", "array"]
-        column_schema["items"] = {}
-        return Schema.from_dict(column_schema)
 
-    return Schema.from_dict(schema_for_column_datatype(c))
+    column_schema = {'type':["null", "array"] }
+    if not c.is_array:
+        return schema_for_column_datatype(c)
+
+    elif c.sql_data_type == 'integer[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_integer_array'}
+    elif c.sql_data_type == 'bit[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_boolean_array'}
+    elif c.sql_data_type == 'boolean[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_boolean_array'}
+    elif c.sql_data_type == 'character varying[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'cidr[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'citext[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'date[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_timestamp_array'}
+    elif c.sql_data_type == 'numeric[]':
+        scale = post_db.numeric_scale(c)
+        precision = post_db.numeric_precision(c)
+        schema_name = schema_name_for_numeric_array(precision, scale)
+        column_schema['items'] = { '$ref': '#/definitions/{}'.format(schema_name)}
+
+    elif c.sql_data_type == 'double precision[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_number_array'}
+    elif c.sql_data_type == 'hstore[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_object_array'}
+    elif c.sql_data_type == 'inet[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'json[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'jsonb[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'mac[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'money[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'real[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_number_array'}
+    elif c.sql_data_type == 'smallint[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_integer_array'}
+    elif c.sql_data_type == 'text[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'timestamp without time zone[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_timestamp_array'}
+    elif c.sql_data_type == 'timestamp with time zone[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_timestamp_array'}
+    elif c.sql_data_type == 'time[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'uuid[]':
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    else:
+        #custom datatypes like enums
+        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+    return column_schema
+
+
 
 #typlen  -1  == variable length arrays
 #typelem != 0 points to subtypes. 23 in the case of arrays
@@ -259,6 +303,31 @@ def write_sql_data_type_md(mdata, col_info):
 
     return mdata
 
+
+def include_array_schemas(columns, schema):
+    schema['definitions']= {'sdc_recursive_integer_array' :   { 'type' : ['integer', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_integer_array'}},
+                             'sdc_recursive_number_array' :    { 'type' : ['number', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_number_array'}},
+                             'sdc_recursive_string_array' :    { 'type' : ['string', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_string_array'}},
+                             'sdc_recursive_boolean_array' :   { 'type' : ['boolean', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_boolean_array'}},
+                             'sdc_recursive_timestamp_array' : { 'type' : ['string', 'array'], 'format' : 'date-time', 'items' : { '$ref': '#/definitions/sdc_recursive_timestamp_array'}},
+                             'sdc_recursive_object_array' :    { 'type' : ['object', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_object_array'}}}
+
+
+    decimal_array_columns = [key for key,value in columns.items() if value.sql_data_type == 'numeric[]']
+    for c in decimal_array_columns:
+        scale = post_db.numeric_scale(columns[c])
+        precision = post_db.numeric_precision(columns[c])
+        schema_name = schema_name_for_numeric_array(precision, scale)
+        schema['definitions'][schema_name] = { 'type' : ['number', 'array'],
+                                                'multipleOf': post_db.numeric_multiple_of(scale),
+                                                'exclusiveMaximum' : True,
+                                                'maximum' : post_db.numeric_max(precision, scale),
+                                                'exclusiveMinimum': True,
+                                                'minimum' : post_db.numeric_min(precision, scale),
+                                                'items' : { '$ref': '#/definitions/{}'.format(schema_name)}}
+
+    return schema
+
 def discover_columns(connection, table_info):
     entries = []
     for schema_name in table_info.keys():
@@ -278,10 +347,15 @@ def discover_columns(connection, table_info):
 
             column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
 
-            schema = Schema(type='object', properties=column_schemas)
+            schema = { 'type' : 'object',
+                       'properties': column_schemas,
+                       'definitions' : {}}
+            schema = include_array_schemas(columns, schema)
+
             for c_name in column_schemas.keys():
                 mdata = write_sql_data_type_md(mdata, columns[c_name])
-                if column_schemas[c_name].type is None:
+
+                if column_schemas[c_name].get('type') is None:
                     mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'unsupported')
                     mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', False)
                 elif table_info[schema_name][table_name]['columns'][c_name].is_primary_key:
@@ -291,19 +365,15 @@ def discover_columns(connection, table_info):
                     mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'available')
                     mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', True)
 
-            entry = CatalogEntry(
-                table=table_name,
-                stream=table_name,
-                metadata=metadata.to_list(mdata),
-                tap_stream_id=post_db.compute_tap_stream_id(database_name, schema_name, table_name),
-                schema=schema)
+            entry = {'table_name'    : table_name,
+                     'stream'        : table_name,
+                     'metadata'      : metadata.to_list(mdata),
+                     'tap_stream_id' : post_db.compute_tap_stream_id(database_name, schema_name, table_name),
+                     'schema'        : schema}
 
             entries.append(entry)
 
     return entries
-
-def dump_catalog(catalog):
-    catalog.dump()
 
 def discover_db(connection):
     table_info = produce_table_info(connection)
@@ -355,9 +425,8 @@ def do_discovery(conn_config):
     if len(all_streams) == 0:
         LOGGER.warning("0 tables were discovered across the entire cluster")
 
-    cluster_catalog = Catalog(all_streams)
-    dump_catalog(cluster_catalog)
-    return cluster_catalog
+    json.dump({'streams' : all_streams}, sys.stdout, indent=2)
+    return all_streams
 
 def should_sync_column(md_map, field_name):
     #always sync replication_keys
@@ -376,11 +445,11 @@ def should_sync_column(md_map, field_name):
     return False
 
 def is_selected_via_metadata(stream):
-    table_md = metadata.to_map(stream.metadata).get((), {})
+    table_md = metadata.to_map(stream['metadata']).get((), {})
     return table_md.get('selected')
 
 def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
-    LOGGER.info("Stream %s is using full_table replication", stream.tap_stream_id)
+    LOGGER.info("Stream %s is using full_table replication", stream['tap_stream_id'])
     sync_common.send_schema_message(stream, [])
     if md_map.get((), {}).get('is-view'):
         state = full_table.sync_view(conn_config, stream, state, desired_columns, md_map)
@@ -391,14 +460,14 @@ def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
 #Possible state keys: replication_key, replication_key_value, version
 def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
     replication_key = md_map.get((), {}).get('replication-key')
-    LOGGER.info("Stream %s is using incremental replication with replication key %s", stream.tap_stream_id, replication_key)
+    LOGGER.info("Stream %s is using incremental replication with replication key %s", stream['tap_stream_id'], replication_key)
 
-    stream_state = state.get('bookmarks', {}).get(stream.tap_stream_id)
+    stream_state = state.get('bookmarks', {}).get(stream['tap_stream_id'])
     illegal_bk_keys = set(stream_state.keys()).difference(set(['replication_key', 'replication_key_value', 'version', 'last_replication_method']))
     if len(illegal_bk_keys) != 0:
         raise Exception("invalid keys found in state: {}".format(illegal_bk_keys))
 
-    state = singer.write_bookmark(state, stream.tap_stream_id, 'replication_key', replication_key)
+    state = singer.write_bookmark(state, stream['tap_stream_id'], 'replication_key', replication_key)
     if md_map.get((), {}).get('is-view'):
         pks = md_map.get(()).get('table-key-properties')
     else:
@@ -429,87 +498,87 @@ def sync_method_for_streams(streams, state, default_replication_method):
     logical_streams = []
 
     for stream in streams:
-        stream_metadata = metadata.to_map(stream.metadata)
+        stream_metadata = metadata.to_map(stream['metadata'])
         replication_method = stream_metadata.get((), {}).get('replication-method', default_replication_method)
         replication_key = stream_metadata.get((), {}).get('replication-key')
 
-        state = clear_state_on_replication_change(state, stream.tap_stream_id, replication_key, replication_method)
+        state = clear_state_on_replication_change(state, stream['tap_stream_id'], replication_key, replication_method)
 
         if replication_method not in set(['LOG_BASED', 'FULL_TABLE', 'INCREMENTAL']):
             raise Exception("Unrecognized replication_method {}".format(replication_method))
 
-        md_map = metadata.to_map(stream.metadata)
-        desired_columns = [c for c in stream.schema.properties.keys() if should_sync_column(md_map, c)]
+        md_map = metadata.to_map(stream['metadata'])
+        desired_columns = [c for c in stream['schema']['properties'].keys() if should_sync_column(md_map, c)]
         desired_columns.sort()
 
         if len(desired_columns) == 0:
-            LOGGER.warning('There are no columns selected for stream %s, skipping it', stream.tap_stream_id)
+            LOGGER.warning('There are no columns selected for stream %s, skipping it', stream['tap_stream_id'])
             continue
 
         if replication_method == 'LOG_BASED' and stream_metadata.get((), {}).get('is-view'):
-            raise Exception('Logical Replication is NOT supported for views. Please change the replication method for {}'.format(stream.tap_stream_id))
+            raise Exception('Logical Replication is NOT supported for views. Please change the replication method for {}'.format(stream['tap_stream_id']))
 
         if replication_method == 'FULL_TABLE':
-            lookup[stream.tap_stream_id] = 'full'
+            lookup[stream['tap_stream_id']] = 'full'
             traditional_steams.append(stream)
         elif replication_method == 'INCREMENTAL':
-            lookup[stream.tap_stream_id] = 'incremental'
+            lookup[stream['tap_stream_id']] = 'incremental'
             traditional_steams.append(stream)
 
-        elif get_bookmark(state, stream.tap_stream_id, 'xmin') and get_bookmark(state, stream.tap_stream_id, 'lsn'):
+        elif get_bookmark(state, stream['tap_stream_id'], 'xmin') and get_bookmark(state, stream['tap_stream_id'], 'lsn'):
             #finishing previously interrupted full-table (first stage of logical replication)
-            lookup[stream.tap_stream_id] = 'logical_initial_interrupted'
+            lookup[stream['tap_stream_id']] = 'logical_initial_interrupted'
             traditional_steams.append(stream)
 
         #inconsistent state
-        elif get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
+        elif get_bookmark(state, stream['tap_stream_id'], 'xmin') and not get_bookmark(state, stream['tap_stream_id'], 'lsn'):
             raise Exception("Xmin found(%s) in state implying full-table replication but no lsn is present")
 
-        elif not get_bookmark(state, stream.tap_stream_id, 'xmin') and not get_bookmark(state, stream.tap_stream_id, 'lsn'):
+        elif not get_bookmark(state, stream['tap_stream_id'], 'xmin') and not get_bookmark(state, stream['tap_stream_id'], 'lsn'):
             #initial full-table phase of logical replication
-            lookup[stream.tap_stream_id] = 'logical_initial'
+            lookup[stream['tap_stream_id']] = 'logical_initial'
             traditional_steams.append(stream)
 
         else: #no xmin but we have an lsn
             #initial stage of logical replication(full-table) has been completed. moving onto pure logical replication
-            lookup[stream.tap_stream_id] = 'pure_logical'
+            lookup[stream['tap_stream_id']] = 'pure_logical'
             logical_streams.append(stream)
 
     return lookup, traditional_steams, logical_streams
 
 def sync_traditional_stream(conn_config, stream, state, sync_method):
-    LOGGER.info("Beginning sync of stream(%s) with sync method(%s)", stream.tap_stream_id, sync_method)
-    md_map = metadata.to_map(stream.metadata)
+    LOGGER.info("Beginning sync of stream(%s) with sync method(%s)", stream['tap_stream_id'], sync_method)
+    md_map = metadata.to_map(stream['metadata'])
     conn_config['dbname'] = md_map.get(()).get('database-name')
-    desired_columns = [c for c in stream.schema.properties.keys() if should_sync_column(md_map, c)]
+    desired_columns = [c for c in stream['schema']['properties'].keys() if should_sync_column(md_map, c)]
     desired_columns.sort()
 
     if len(desired_columns) == 0:
-        LOGGER.warning('There are no columns selected for stream %s, skipping it', stream.tap_stream_id)
+        LOGGER.warning('There are no columns selected for stream %s, skipping it', stream['tap_stream_id'])
         return state
 
     if sync_method == 'full':
-        state = singer.set_currently_syncing(state, stream.tap_stream_id)
+        state = singer.set_currently_syncing(state, stream['tap_stream_id'])
         state = do_sync_full_table(conn_config, stream, state, desired_columns, md_map)
     elif sync_method == 'incremental':
-        state = singer.set_currently_syncing(state, stream.tap_stream_id)
+        state = singer.set_currently_syncing(state, stream['tap_stream_id'])
         state = do_sync_incremental(conn_config, stream, state, desired_columns, md_map)
     elif sync_method == 'logical_initial':
-        state = singer.set_currently_syncing(state, stream.tap_stream_id)
+        state = singer.set_currently_syncing(state, stream['tap_stream_id'])
         end_lsn = logical_replication.fetch_current_lsn(conn_config)
         LOGGER.info("Performing initial full table sync")
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'lsn', end_lsn)
+        state = singer.write_bookmark(state, stream['tap_stream_id'], 'lsn', end_lsn)
 
         sync_common.send_schema_message(stream, [])
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
-        state = singer.write_bookmark(state, stream.tap_stream_id, 'xmin', None)
+        state = singer.write_bookmark(state, stream['tap_stream_id'], 'xmin', None)
     elif sync_method == 'logical_initial_interrupted':
-        state = singer.set_currently_syncing(state, stream.tap_stream_id)
+        state = singer.set_currently_syncing(state, stream['tap_stream_id'])
         LOGGER.info("Initial stage of full table sync was interrupted. resuming...")
         sync_common.send_schema_message(stream, [])
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
     else:
-        raise Exception("unknown sync method {} for stream {}".format(sync_method, stream.tap_stream_id))
+        raise Exception("unknown sync method {} for stream {}".format(sync_method, stream['tap_stream_id']))
 
     state = singer.set_currently_syncing(state, None)
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
@@ -517,7 +586,7 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
 
 def sync_logical_streams(conn_config, logical_streams, state):
     if logical_streams:
-        LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", logical_replication.fetch_current_lsn(conn_config), list(map(lambda s: s.tap_stream_id, logical_streams)))
+        LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", logical_replication.fetch_current_lsn(conn_config), list(map(lambda s: s['tap_stream_id'], logical_streams)))
         logical_streams = list(map(logical_replication.add_automatic_properties, logical_streams))
 
         state = logical_replication.sync_tables(conn_config, logical_streams, state)
@@ -526,9 +595,9 @@ def sync_logical_streams(conn_config, logical_streams, state):
 
 def do_sync(conn_config, catalog, default_replication_method, state):
     currently_syncing = singer.get_currently_syncing(state)
-    streams = list(filter(is_selected_via_metadata, catalog.streams))
-    streams.sort(key=lambda s: s.tap_stream_id)
-    LOGGER.info("Selected streams: %s ", list(map(lambda s: s.tap_stream_id, streams)))
+    streams = list(filter(is_selected_via_metadata, catalog['streams']))
+    streams.sort(key=lambda s: s['tap_stream_id'])
+    LOGGER.info("Selected streams: %s ", list(map(lambda s: s['tap_stream_id'], streams)))
 
     sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state, default_replication_method)
     #{"chickens" : "full_stream", "cows" : "logical_initial_interrupted_streams", "turkeys": "logical_replication"}
@@ -545,10 +614,10 @@ def do_sync(conn_config, catalog, default_replication_method, state):
         LOGGER.info("No currently_syncing found")
 
     for stream in traditional_streams:
-        state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream.tap_stream_id])
+        state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream['tap_stream_id']])
 
-    logical_streams.sort(key=lambda s: metadata.to_map(s.metadata).get(()).get('database-name'))
-    for dbname, streams in itertools.groupby(logical_streams, lambda s: metadata.to_map(s.metadata).get(()).get('database-name')):
+    logical_streams.sort(key=lambda s: metadata.to_map(s['metadata']).get(()).get('database-name'))
+    for dbname, streams in itertools.groupby(logical_streams, lambda s: metadata.to_map(s['metadata']).get(()).get('database-name')):
         conn_config['dbname'] = dbname
         state = sync_logical_streams(conn_config, list(streams), state)
     return state
@@ -571,9 +640,9 @@ def main_impl():
 
     if args.discover:
         do_discovery(conn_config)
-    elif args.catalog:
+    elif args.properties:
         state = args.state
-        do_sync(conn_config, args.catalog, args.config.get('default_replication_method'), state)
+        do_sync(conn_config, args.properties, args.config.get('default_replication_method'), state)
     else:
         LOGGER.info("No properties were selected")
 

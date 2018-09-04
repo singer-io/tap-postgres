@@ -17,6 +17,7 @@ from select import select
 from functools import reduce
 import json
 import re
+import pdb
 
 LOGGER = singer.get_logger()
 
@@ -49,9 +50,7 @@ def fetch_current_lsn(conn_config):
             return (int(file, 16)  << 32) + int(index, 16)
 
 def add_automatic_properties(stream):
-    stream.schema.properties['_sdc_deleted_at'] = Schema(
-        type=['null', 'string'], format='date-time')
-
+    stream['schema']['properties']['_sdc_deleted_at'] = {'type' : ['null', 'string'], 'format' :'date-time' }
     return stream
 
 def get_stream_version(tap_stream_id, state):
@@ -81,7 +80,54 @@ def create_array_elem(elem, sql_datatype, conn_info):
 
     with post_db.open_connection(conn_info) as conn:
         with conn.cursor() as cur:
-            sql = """SELECT $stitch_quote${}$stitch_quote$::{}""".format(elem, sql_datatype)
+            if sql_datatype == 'bit[]':
+                cast_datatype = 'boolean[]'
+            elif sql_datatype == 'boolean[]':
+                cast_datatype = 'boolean[]'
+            elif sql_datatype == 'character varying[]':
+                cast_datatype = 'character varying[]'
+            elif sql_datatype == 'cidr[]':
+                cast_datatype = 'cidr[]'
+            elif sql_datatype == 'citext[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'date[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'double precision[]':
+                cast_datatype = 'double precision[]'
+            elif sql_datatype == 'hstore[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'integer[]':
+                cast_datatype = 'integer[]'
+            elif sql_datatype == 'inet[]':
+                cast_datatype = 'inet[]'
+            elif sql_datatype == 'json[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'jsonb[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'macaddr[]':
+                cast_datatype = 'macaddr[]'
+            elif sql_datatype == 'money[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'numeric[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'real[]':
+                cast_datatype = 'real[]'
+            elif sql_datatype == 'smallint[]':
+                cast_datatype = 'smallint[]'
+            elif sql_datatype == 'text[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'time without time zone[]' or sql_datatype == 'time with time zone[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'timestamp with time zone[]' or sql_datatype == 'timestamp without time zone[]':
+                cast_datatype = 'text[]'
+            elif sql_datatype == 'uuid[]':
+                cast_datatype = 'text[]'
+
+            else:
+                #custom datatypes like enums
+                cast_datatype = 'text[]'
+
+            sql = """SELECT $stitch_quote${}$stitch_quote$::{}""".format(elem, cast_datatype)
             cur.execute(sql)
             res = cur.fetchone()[0]
             return res
@@ -89,6 +135,7 @@ def create_array_elem(elem, sql_datatype, conn_info):
 #pylint: disable=too-many-branches,too-many-nested-blocks
 def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
     sql_datatype = og_sql_datatype.replace('[]', '')
+
     if elem is None:
         return elem
     if sql_datatype == 'timestamp without time zone':
@@ -102,24 +149,23 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
         if  isinstance(elem, datetime.date):
             #logical replication gives us dates as strings UNLESS they from an array
             return elem.isoformat() + 'T00:00:00+00:00'
-
         return parse(elem).isoformat() + "+00:00"
     if sql_datatype == 'time with time zone':
         return parse(elem).isoformat().split('T')[1]
     if sql_datatype == 'bit':
-        return elem == '1'
+        return elem
     if sql_datatype == 'boolean':
         return elem
     if sql_datatype == 'hstore':
         return create_hstore_elem(conn_info, elem)
+    if 'numeric' in sql_datatype:
+        return decimal.Decimal(elem)
     if isinstance(elem, int):
         return elem
     if isinstance(elem, float):
         return elem
     if isinstance(elem, str):
         return elem
-    if sql_datatype == 'numeric':
-        return decimal.Decimal(elem)
 
     raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
 
@@ -160,7 +206,7 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
 
     streams_lookup = {}
     for s in streams:
-        streams_lookup[s.tap_stream_id] = s
+        streams_lookup[s['tap_stream_id']] = s
 
     for c in payload['change']:
         tap_stream_id = post_db.compute_tap_stream_id(conn_info['dbname'], c['schema'], c['table'])
@@ -168,8 +214,8 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
             continue
 
         target_stream = streams_lookup[tap_stream_id]
-        stream_version = get_stream_version(target_stream.tap_stream_id, state)
-        stream_md_map = metadata.to_map(target_stream.metadata)
+        stream_version = get_stream_version(target_stream['tap_stream_id'], state)
+        stream_md_map = metadata.to_map(target_stream['metadata'])
 
         if c['kind'] == 'insert':
             col_vals = c['columnvalues'] + [None]
@@ -190,7 +236,7 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
 
         singer.write_message(record_message)
         state = singer.write_bookmark(state,
-                                      target_stream.tap_stream_id,
+                                      target_stream['tap_stream_id'],
                                       'lsn',
                                       lsn)
         LOGGER.info("sending feedback to server with NO flush_lsn. just a keep-alive")
@@ -221,7 +267,7 @@ def locate_replication_slot(conn_info):
 
 
 def sync_tables(conn_info, logical_streams, state):
-    start_lsn = min([get_bookmark(state, s.tap_stream_id, 'lsn') for s in logical_streams])
+    start_lsn = min([get_bookmark(state, s['tap_stream_id'], 'lsn') for s in logical_streams])
     end_lsn = fetch_current_lsn(conn_info)
     time_extracted = utils.now()
     slot = locate_replication_slot(conn_info)
@@ -229,7 +275,7 @@ def sync_tables(conn_info, logical_streams, state):
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
 
-            LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s", list(map(lambda s: s.tap_stream_id, logical_streams)), slot, start_lsn, end_lsn)
+            LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn)
             try:
                 cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
             except psycopg2.ProgrammingError:
@@ -258,8 +304,8 @@ def sync_tables(conn_info, logical_streams, state):
                         pass  # recalculate timeout and continue
 
     for s in logical_streams:
-        LOGGER.info("updating bookmark for stream %s to end_lsn %s", s.tap_stream_id, end_lsn)
-        state = singer.write_bookmark(state, s.tap_stream_id, 'lsn', end_lsn)
+        LOGGER.info("updating bookmark for stream %s to end_lsn %s", s['tap_stream_id'], end_lsn)
+        state = singer.write_bookmark(state, s['tap_stream_id'], 'lsn', end_lsn)
 
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
     return state
