@@ -106,8 +106,6 @@ def schema_for_column_datatype(c):
         schema['type'] = nullable_column('number', c.is_primary_key)
         scale = post_db.numeric_scale(c)
         precision = post_db.numeric_precision(c)
-        # if precision is None or scale is None:
-        #     pdb.set_trace()
 
         schema['exclusiveMaximum'] = True
         schema['maximum'] = post_db.numeric_max(precision, scale)
@@ -557,6 +555,8 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
         LOGGER.warning('There are no columns selected for stream %s, skipping it', stream['tap_stream_id'])
         return state
 
+    register_type_adapters(conn_config)
+
     if sync_method == 'full':
         state = singer.set_currently_syncing(state, stream['tap_stream_id'])
         state = do_sync_full_table(conn_config, stream, state, desired_columns, md_map)
@@ -593,6 +593,42 @@ def sync_logical_streams(conn_config, logical_streams, state):
 
     return state
 
+
+def register_type_adapters(conn_config):
+    with post_db.open_connection(conn_config) as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            #citext[]
+            cur.execute("SELECT typarray FROM pg_type where typname = 'citext'")
+            citext_array_oid = cur.fetchone()[0]
+            psycopg2.extensions.register_type(
+                psycopg2.extensions.new_array_type(
+                    (citext_array_oid,), 'CITEXT[]', psycopg2.STRING))
+
+            #bit[]
+            cur.execute("SELECT typarray FROM pg_type where typname = 'bit'")
+            bit_array_oid = cur.fetchone()[0]
+            psycopg2.extensions.register_type(
+                psycopg2.extensions.new_array_type(
+                    (bit_array_oid,), 'BIT[]', psycopg2.STRING))
+
+
+            #UUID[]
+            cur.execute("SELECT typarray FROM pg_type where typname = 'uuid'")
+            uuid_array_oid = cur.fetchone()[0]
+            psycopg2.extensions.register_type(
+                psycopg2.extensions.new_array_type(
+                    (uuid_array_oid,), 'UUID[]', psycopg2.STRING))
+
+            #money[]
+            cur.execute("SELECT typarray FROM pg_type where typname = 'money'")
+            money_array_oid = cur.fetchone()[0]
+            psycopg2.extensions.register_type(
+                psycopg2.extensions.new_array_type(
+                    (money_array_oid,), 'MONEY[]', psycopg2.STRING))
+
+
+
+
 def do_sync(conn_config, catalog, default_replication_method, state):
     currently_syncing = singer.get_currently_syncing(state)
     streams = list(filter(is_selected_via_metadata, catalog['streams']))
@@ -612,6 +648,8 @@ def do_sync(conn_config, catalog, default_replication_method, state):
         traditional_streams = currently_syncing_stream + other_streams
     else:
         LOGGER.info("No currently_syncing found")
+
+
 
     for stream in traditional_streams:
         state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream['tap_stream_id']])
