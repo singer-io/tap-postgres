@@ -161,61 +161,61 @@ def schema_for_column(c):
     #these means we can say nothing about an array column. its items may be more arrays or primitive types like integers
     #and this can vary on a row by row basis
 
-    column_schema = {'type':["null", "array"] }
+    column_schema = {'type':["null", "array"]}
     if not c.is_array:
         return schema_for_column_datatype(c)
 
-    elif c.sql_data_type == 'integer[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_integer_array'}
+    if c.sql_data_type == 'integer[]':
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_integer_array'}
     elif c.sql_data_type == 'bit[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_boolean_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_boolean_array'}
     elif c.sql_data_type == 'boolean[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_boolean_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_boolean_array'}
     elif c.sql_data_type == 'character varying[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'cidr[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'citext[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'date[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_timestamp_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_timestamp_array'}
     elif c.sql_data_type == 'numeric[]':
         scale = post_db.numeric_scale(c)
         precision = post_db.numeric_precision(c)
         schema_name = schema_name_for_numeric_array(precision, scale)
-        column_schema['items'] = { '$ref': '#/definitions/{}'.format(schema_name)}
+        column_schema['items'] = {'$ref': '#/definitions/{}'.format(schema_name)}
 
     elif c.sql_data_type == 'double precision[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_number_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_number_array'}
     elif c.sql_data_type == 'hstore[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_object_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_object_array'}
     elif c.sql_data_type == 'inet[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'json[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'jsonb[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'mac[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'money[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'real[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_number_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_number_array'}
     elif c.sql_data_type == 'smallint[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_integer_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_integer_array'}
     elif c.sql_data_type == 'text[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'timestamp without time zone[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_timestamp_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_timestamp_array'}
     elif c.sql_data_type == 'timestamp with time zone[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_timestamp_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_timestamp_array'}
     elif c.sql_data_type == 'time[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'uuid[]':
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     else:
         #custom datatypes like enums
-        column_schema['items'] = { '$ref': '#/definitions/sdc_recursive_string_array'}
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     return column_schema
 
 
@@ -302,29 +302,29 @@ def write_sql_data_type_md(mdata, col_info):
     return mdata
 
 
-BASE_RECURSIVE_SCHEMAS = {'sdc_recursive_integer_array' :   { 'type' : ['integer', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_integer_array'}},
-                          'sdc_recursive_number_array' :    { 'type' : ['number', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_number_array'}},
-                          'sdc_recursive_string_array' :    { 'type' : ['string', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_string_array'}},
-                          'sdc_recursive_boolean_array' :   { 'type' : ['boolean', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_boolean_array'}},
-                          'sdc_recursive_timestamp_array' : { 'type' : ['string', 'array'], 'format' : 'date-time', 'items' : { '$ref': '#/definitions/sdc_recursive_timestamp_array'}},
-                          'sdc_recursive_object_array' :    { 'type' : ['object', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_object_array'}}}
+BASE_RECURSIVE_SCHEMAS = {'sdc_recursive_integer_array'   : {'type' : ['integer', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_integer_array'}},
+                          'sdc_recursive_number_array'    : {'type' : ['number', 'array'], 'items'  : {'$ref': '#/definitions/sdc_recursive_number_array'}},
+                          'sdc_recursive_string_array'    : {'type' : ['string', 'array'], 'items'  : {'$ref': '#/definitions/sdc_recursive_string_array'}},
+                          'sdc_recursive_boolean_array'   : {'type' : ['boolean', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_boolean_array'}},
+                          'sdc_recursive_timestamp_array' : {'type' : ['string', 'array'], 'format' : 'date-time', 'items' : {'$ref': '#/definitions/sdc_recursive_timestamp_array'}},
+                          'sdc_recursive_object_array'    : {'type' : ['object', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_object_array'}}}
 
 def include_array_schemas(columns, schema):
-    schema['definitions'] =  BASE_RECURSIVE_SCHEMAS
+    schema['definitions'] = BASE_RECURSIVE_SCHEMAS
 
 
-    decimal_array_columns = [key for key,value in columns.items() if value.sql_data_type == 'numeric[]']
+    decimal_array_columns = [key for key, value in columns.items() if value.sql_data_type == 'numeric[]']
     for c in decimal_array_columns:
         scale = post_db.numeric_scale(columns[c])
         precision = post_db.numeric_precision(columns[c])
         schema_name = schema_name_for_numeric_array(precision, scale)
-        schema['definitions'][schema_name] = { 'type' : ['number', 'array'],
-                                                'multipleOf': post_db.numeric_multiple_of(scale),
-                                                'exclusiveMaximum' : True,
-                                                'maximum' : post_db.numeric_max(precision, scale),
-                                                'exclusiveMinimum': True,
-                                                'minimum' : post_db.numeric_min(precision, scale),
-                                                'items' : { '$ref': '#/definitions/{}'.format(schema_name)}}
+        schema['definitions'][schema_name] = {'type' : ['number', 'array'],
+                                              'multipleOf': post_db.numeric_multiple_of(scale),
+                                              'exclusiveMaximum' : True,
+                                              'maximum' : post_db.numeric_max(precision, scale),
+                                              'exclusiveMinimum': True,
+                                              'minimum' : post_db.numeric_min(precision, scale),
+                                              'items' : {'$ref': '#/definitions/{}'.format(schema_name)}}
 
     return schema
 
@@ -347,9 +347,9 @@ def discover_columns(connection, table_info):
 
             column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
 
-            schema = { 'type' : 'object',
-                       'properties': column_schemas,
-                       'definitions' : {}}
+            schema = {'type' : 'object',
+                      'properties': column_schemas,
+                      'definitions' : {}}
             schema = include_array_schemas(columns, schema)
 
             for c_name in column_schemas.keys():

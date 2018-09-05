@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
-# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code, anomalous-backslash-in-string
+# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code, anomalous-backslash-in-string, too-many-statements, consider-using-in, singleton-comparison
 
 import singer
 import datetime
 import decimal
 from singer import utils, get_bookmark
 import singer.metadata as metadata
-from singer.schema import Schema
 import tap_postgres.db as post_db
 import tap_postgres.sync_strategies.common as sync_common
 from dateutil.parser import parse
 import psycopg2
-from psycopg2.extensions import quote_ident
 import copy
 from select import select
 from functools import reduce
 import json
 import re
-import pdb
 
 LOGGER = singer.get_logger()
 
@@ -50,7 +47,7 @@ def fetch_current_lsn(conn_config):
             return (int(file, 16)  << 32) + int(index, 16)
 
 def add_automatic_properties(stream):
-    stream['schema']['properties']['_sdc_deleted_at'] = {'type' : ['null', 'string'], 'format' :'date-time' }
+    stream['schema']['properties']['_sdc_deleted_at'] = {'type' : ['null', 'string'], 'format' :'date-time'}
     return stream
 
 def get_stream_version(tap_stream_id, state):
@@ -116,9 +113,9 @@ def create_array_elem(elem, sql_datatype, conn_info):
                 cast_datatype = 'smallint[]'
             elif sql_datatype == 'text[]':
                 cast_datatype = 'text[]'
-            elif sql_datatype == 'time without time zone[]' or sql_datatype == 'time with time zone[]':
+            elif sql_datatype in ('time without time zone[]', 'time with time zone[]'):
                 cast_datatype = 'text[]'
-            elif sql_datatype == 'timestamp with time zone[]' or sql_datatype == 'timestamp without time zone[]':
+            elif sql_datatype in ('timestamp with time zone[]', 'timestamp without time zone[]'):
                 cast_datatype = 'text[]'
             elif sql_datatype == 'uuid[]':
                 cast_datatype = 'text[]'
