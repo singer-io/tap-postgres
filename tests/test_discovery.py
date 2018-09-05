@@ -2,6 +2,7 @@ import unittest
 import psycopg2
 import psycopg2.extras
 import tap_postgres
+import tap_postgres.db as post_db
 import os
 import pdb
 from singer import get_logger, metadata
@@ -31,13 +32,12 @@ class TestStringTableWithPK(unittest.TestCase):
        ensure_test_table(table_spec)
 
     def test_catalog(self):
-
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == "postgres-public-CHICKEN TIMES"]
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == "postgres-public-CHICKEN TIMES"]
 
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
         self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
         self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
 
@@ -60,7 +60,8 @@ class TestStringTableWithPK(unittest.TestCase):
                                          'varchar-name':           {'type': ['null', 'string'], 'maxLength': 28},
                                          'char_name':              {'type': ['null', 'string'], 'maxLength': 10},
                                          'text-name':              {'type': ['null', 'string']}},
-                          'type': 'object'},  stream_dict.get('schema'))
+                          'type': 'object',
+                          'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},  stream_dict.get('schema'))
 
 
 class TestIntegerTable(unittest.TestCase):
@@ -77,11 +78,11 @@ class TestIntegerTable(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
 
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
 
         self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
         self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
@@ -96,7 +97,8 @@ class TestIntegerTable(unittest.TestCase):
                           ('properties', 'size smallint')        : {'inclusion': 'available', 'sql-datatype' : 'smallint', 'selected-by-default' : True},
                           ('properties', 'size bigint')          : {'inclusion': 'available', 'sql-datatype' : 'bigint',   'selected-by-default' : True}})
 
-        self.assertEqual({'type': 'object',
+        self.assertEqual({'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS,
+                          'type': 'object',
                           'properties': {'id': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647},
                                          'size smallint': {'type': ['null', 'integer'], 'minimum': -32768, 'maximum': 32767},
                                          'size integer': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647},
@@ -118,10 +120,10 @@ class TestDecimalPK(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
 
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
@@ -133,9 +135,9 @@ class TestDecimalPK(unittest.TestCase):
 
         self.assertEqual({'properties': {'our_decimal': {'exclusiveMaximum': True,
                                                          'exclusiveMinimum': True,
-                                                         'multipleOf': 10 ** (0 - tap_postgres.MAX_SCALE),
-                                                         'maximum': 10 ** (tap_postgres.MAX_PRECISION - tap_postgres.MAX_SCALE),
-                                                         'minimum': -10 ** (tap_postgres.MAX_PRECISION - tap_postgres.MAX_SCALE),
+                                                         'multipleOf': 10 ** (0 - post_db.MAX_SCALE),
+                                                         'maximum': 10 ** (post_db.MAX_PRECISION - post_db.MAX_SCALE),
+                                                         'minimum': -10 ** (post_db.MAX_PRECISION - post_db.MAX_SCALE),
                                                          'type': ['number']},
                                          'our_decimal_10_2': {'exclusiveMaximum': True,
                                                               'exclusiveMinimum': True,
@@ -149,7 +151,8 @@ class TestDecimalPK(unittest.TestCase):
                                                               'minimum': -10000000000000000000000000000000000,
                                                               'multipleOf': 0.0001,
                                                               'type': ['null', 'number']}},
-                          'type': 'object'},
+                          'type': 'object',
+                          'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                          stream_dict.get('schema'))
 
 
@@ -169,11 +172,11 @@ class TestDatesTablePK(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
+        streams = tap_postgres.do_discovery(conn_config)
 
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
 
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
@@ -190,7 +193,8 @@ class TestDatesTablePK(unittest.TestCase):
                                          'our_ts_tz':              {'type': ['null', 'string'], 'format' : 'date-time'},
                                          'our_time':               {'type': ['null', 'string']},
                                          'our_time_tz':            {'type': ['null', 'string']}},
-                          'type': 'object'},
+                          'type': 'object',
+                          'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                          stream_dict.get('schema'))
 
 class TestFloatTablePK(unittest.TestCase):
@@ -206,10 +210,10 @@ class TestFloatTablePK(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
 
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
         self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
@@ -222,7 +226,8 @@ class TestFloatTablePK(unittest.TestCase):
         self.assertEqual({'properties': {'our_float':               {'type': ['number']},
                                          'our_real':                {'type': ['null', 'number']},
                                          'our_double':       {'type': ['null', 'number']}},
-                          'type': 'object'},
+                          'type': 'object',
+                          'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                          stream_dict.get('schema'))
 
 class TestBoolsAndBits(unittest.TestCase):
@@ -237,10 +242,10 @@ class TestBoolsAndBits(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
 
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
         self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
@@ -251,6 +256,7 @@ class TestBoolsAndBits(unittest.TestCase):
 
         self.assertEqual({'properties': {'our_bool':               {'type': ['null', 'boolean']},
                                          'our_bit':                {'type': ['null', 'boolean']}},
+                          'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS,
                           'type': 'object'},
                          stream_dict.get('schema'))
 
@@ -266,10 +272,10 @@ class TestJsonTables(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id  == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id']  == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
 
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
@@ -281,6 +287,7 @@ class TestJsonTables(unittest.TestCase):
 
         self.assertEqual({'properties': {'our_secrets':                  {'type': ['null', 'string']},
                                          'our_secrets_b':                {'type': ['null', 'string']}},
+                          'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS,
                           'type': 'object'},
                          stream_dict.get('schema'))
 
@@ -297,10 +304,10 @@ class TestUUIDTables(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == "postgres-public-CHICKEN TIMES"]
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == "postgres-public-CHICKEN TIMES"]
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
 
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
@@ -312,7 +319,8 @@ class TestUUIDTables(unittest.TestCase):
 
         self.assertEqual({'properties': {'our_uuid':                  {'type': ['null', 'string']},
                                          'our_pk':                    {'type': ['string']}},
-                          'type': 'object'},
+                          'type': 'object',
+                          'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                          stream_dict.get('schema'))
 
 class TestHStoreTable(unittest.TestCase):
@@ -334,10 +342,10 @@ class TestHStoreTable(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
         with get_test_connection() as conn:
@@ -353,7 +361,8 @@ class TestHStoreTable(unittest.TestCase):
 
                 self.assertEqual({'properties': {'our_hstore':                  {'type': ['null', 'object'], 'properties' : {}},
                                                  'our_pk':                    {'type': ['object'], 'properties': {}}},
-                                  'type': 'object'},
+                                  'type': 'object',
+                                  'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                                  stream_dict.get('schema'))
 
 
@@ -374,10 +383,10 @@ class TestEnumTable(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
         with get_test_connection() as conn:
@@ -393,7 +402,8 @@ class TestEnumTable(unittest.TestCase):
 
                 self.assertEqual({'properties': {'our_mood_enum':                  {'type': ['null', 'string']},
                                                  'our_mood_enum_pk':               {'type': ['string']}},
-                                  'type': 'object'},
+                                  'type': 'object',
+                                  'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                                  stream_dict.get('schema'))
 
 
@@ -409,10 +419,10 @@ class TestMoney(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
         with get_test_connection() as conn:
@@ -428,7 +438,8 @@ class TestMoney(unittest.TestCase):
 
                 self.assertEqual({'properties': {'our_money':                  {'type': ['null', 'string']},
                                                  'our_money_pk':               {'type': ['string']}},
-                                  'type': 'object'},
+                                  'type': 'object',
+                                  'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                                  stream_dict.get('schema'))
 
 class TestArraysTable(unittest.TestCase):
@@ -443,10 +454,10 @@ class TestArraysTable(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
         with get_test_connection() as conn:
@@ -460,9 +471,10 @@ class TestArraysTable(unittest.TestCase):
                                   ('properties', 'our_string_array') : {'inclusion': 'available', 'sql-datatype' : 'character varying[]',  'selected-by-default' : True}})
 
 
-                self.assertEqual({'properties': {'our_int_array_pk':                  {'type': ['null', 'array'], 'items' : {}},
-                                                 'our_string_array':                  {'type': ['null', 'array'], 'items' : {}}},
-                                  'type': 'object'},
+                self.assertEqual({'properties': {'our_int_array_pk':                  {'type': ['null', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_integer_array'}},
+                                                 'our_string_array':                  {'type': ['null', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_string_array'}}},
+                                  'type': 'object',
+                                  'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                                  stream_dict.get('schema'))
 
 
@@ -484,18 +496,19 @@ class TestMultiDB(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id in ('postgres-public-different_chicken', 'dev-public-different_chicken')]
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] in ('postgres-public-different_chicken', 'dev-public-different_chicken')]
         self.assertEqual(len(chicken_streams), 2)
 
         for s in chicken_streams:
-            stream_dict = s.to_dict()
+            stream_dict = s
             self.assertEqual({'properties': {'our_date':               {'type': ['string'], 'format' : 'date-time'},
                                              'our_ts':                 {'type': ['null', 'string'], 'format' : 'date-time'},
                                              'our_ts_tz':              {'type': ['null', 'string'], 'format' : 'date-time'},
                                              'our_time':               {'type': ['null', 'string']},
                                              'our_time_tz':            {'type': ['null', 'string']}},
-                              'type': 'object'},
+                              'type': 'object',
+                              'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                              stream_dict.get('schema'))
             db_name = metadata.to_map(stream_dict.get('metadata')).get(()).get('database-name')
 
@@ -535,10 +548,10 @@ class TestArraysLikeTable(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == 'postgres-public-LIKE CHICKEN TIMES']
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-LIKE CHICKEN TIMES']
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
         with get_test_connection() as conn:
@@ -547,9 +560,10 @@ class TestArraysLikeTable(unittest.TestCase):
                                  {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': True, 'row-count': 0},
                                   ('properties', 'our_int_array_pk') : {'inclusion': 'available', 'sql-datatype' : 'integer[]',  'selected-by-default' : True},
                                   ('properties', 'our_text_array') : {'inclusion': 'available', 'sql-datatype' : 'text[]',  'selected-by-default' : True}})
-                self.assertEqual({'properties': {'our_int_array_pk':                  {'type': ['null', 'array'], 'items' : {}},
-                                                 'our_text_array':                  {'type': ['null', 'array'], 'items' : {}}},
-                                  'type': 'object'},
+                self.assertEqual({'properties': {'our_int_array_pk':                  {'type': ['null', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_integer_array'}},
+                                                 'our_text_array':                    {'type': ['null', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_string_array'}}},
+                                  'type': 'object',
+                                  'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                                  stream_dict.get('schema'))
 
 

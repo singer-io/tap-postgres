@@ -302,13 +302,15 @@ def write_sql_data_type_md(mdata, col_info):
     return mdata
 
 
+BASE_RECURSIVE_SCHEMAS = {'sdc_recursive_integer_array' :   { 'type' : ['integer', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_integer_array'}},
+                          'sdc_recursive_number_array' :    { 'type' : ['number', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_number_array'}},
+                          'sdc_recursive_string_array' :    { 'type' : ['string', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_string_array'}},
+                          'sdc_recursive_boolean_array' :   { 'type' : ['boolean', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_boolean_array'}},
+                          'sdc_recursive_timestamp_array' : { 'type' : ['string', 'array'], 'format' : 'date-time', 'items' : { '$ref': '#/definitions/sdc_recursive_timestamp_array'}},
+                          'sdc_recursive_object_array' :    { 'type' : ['object', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_object_array'}}}
+
 def include_array_schemas(columns, schema):
-    schema['definitions']= {'sdc_recursive_integer_array' :   { 'type' : ['integer', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_integer_array'}},
-                             'sdc_recursive_number_array' :    { 'type' : ['number', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_number_array'}},
-                             'sdc_recursive_string_array' :    { 'type' : ['string', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_string_array'}},
-                             'sdc_recursive_boolean_array' :   { 'type' : ['boolean', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_boolean_array'}},
-                             'sdc_recursive_timestamp_array' : { 'type' : ['string', 'array'], 'format' : 'date-time', 'items' : { '$ref': '#/definitions/sdc_recursive_timestamp_array'}},
-                             'sdc_recursive_object_array' :    { 'type' : ['object', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_object_array'}}}
+    schema['definitions'] =  BASE_RECURSIVE_SCHEMAS
 
 
     decimal_array_columns = [key for key,value in columns.items() if value.sql_data_type == 'numeric[]']
