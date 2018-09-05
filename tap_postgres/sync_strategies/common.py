@@ -4,6 +4,11 @@ import tap_postgres.db as post_db
 import sys
 import simplejson as json
 
+
+def write_schema_message(schema_message):
+    sys.stdout.write(json.dumps(schema_message, use_decimal=True) + '\n')
+    sys.stdout.flush()
+
 def send_schema_message(stream, bookmark_properties):
     s_md = metadata.to_map(stream['metadata'])
     if s_md.get((), {}).get('is-view'):
@@ -17,5 +22,4 @@ def send_schema_message(stream, bookmark_properties):
                        'key_properties' : key_properties,
                        'bookmark_properties': bookmark_properties}
 
-    sys.stdout.write(json.dumps(schema_message, use_decimal=True) + '\n')
-    sys.stdout.flush()
+    write_schema_message(schema_message)

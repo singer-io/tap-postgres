@@ -393,6 +393,9 @@ def attempt_connection_to_db(conn_config, dbname):
         LOGGER.warning('Unable to connect to %s. This maybe harmless if you have not desire to replicate from this database: "%s"', dbname, err)
         return False
 
+def dump_catalog(all_streams):
+    json.dump({'streams' : all_streams}, sys.stdout, indent=2)
+
 def do_discovery(conn_config):
     all_streams = []
 
@@ -425,8 +428,9 @@ def do_discovery(conn_config):
     if len(all_streams) == 0:
         LOGGER.warning("0 tables were discovered across the entire cluster")
 
-    json.dump({'streams' : all_streams}, sys.stdout, indent=2)
+    dump_catalog(all_streams)
     return all_streams
+
 
 def should_sync_column(md_map, field_name):
     #always sync replication_keys
@@ -650,10 +654,10 @@ def do_sync(conn_config, catalog, default_replication_method, state):
 
     if currently_syncing:
         LOGGER.info("found currently_syncing: %s", currently_syncing)
-        currently_syncing_stream = list(filter(lambda s: s.tap_stream_id == currently_syncing, traditional_streams))
+        currently_syncing_stream = list(filter(lambda s: s['tap_stream_id'] == currently_syncing, traditional_streams))
         if currently_syncing_stream is None:
-            LOGGER.warning("unable to locate currently_syncing(%s) amongst selected traditional streams(%s). will ignore", currently_syncing, list(map(lambda s: s.tap_stream_id, traditional_streams)))
-        other_streams = list(filter(lambda s: s.tap_stream_id != currently_syncing, traditional_streams))
+            LOGGER.warning("unable to locate currently_syncing(%s) amongst selected traditional streams(%s). will ignore", currently_syncing, list(map(lambda s: s['tap_stream_id'], traditional_streams)))
+        other_streams = list(filter(lambda s: s['tap_stream_id'] != currently_syncing, traditional_streams))
         traditional_streams = currently_syncing_stream + other_streams
     else:
         LOGGER.info("No currently_syncing found")

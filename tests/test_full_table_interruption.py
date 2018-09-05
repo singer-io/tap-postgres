@@ -2,6 +2,7 @@ import unittest
 import os
 import tap_postgres
 import tap_postgres.sync_strategies.full_table as full_table
+import tap_postgres.sync_strategies.common as pg_common
 import pdb
 import singer
 from singer import get_logger, metadata, write_bookmark
@@ -32,6 +33,8 @@ def singer_write_message_no_cow(message):
     else:
         CAUGHT_MESSAGES.append(message)
 
+def singer_write_schema_ok(message):
+    CAUGHT_MESSAGES.append(message)
 
 def singer_write_message_ok(message):
     CAUGHT_MESSAGES.append(message)
@@ -65,10 +68,11 @@ class LogicalInterruption(unittest.TestCase):
 
     def test_catalog(self):
         singer.write_message = singer_write_message_no_cow
+        pg_common.write_schema_message = singer_write_message_ok
 
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        cow_stream = [s for s in catalog.streams if s.table == 'COW'][0]
+        streams = tap_postgres.do_discovery(conn_config)
+        cow_stream = [s for s in streams if s['table_name'] == 'COW'][0]
         self.assertIsNotNone(cow_stream)
         cow_stream = select_all_of_stream(cow_stream)
         cow_stream = set_replication_method_for_stream(cow_stream, 'LOG_BASED')
@@ -86,15 +90,16 @@ class LogicalInterruption(unittest.TestCase):
         #the initial phase of cows logical replication will be a full table.
         #it will sync the first record and then blow up on the 2nd record
         try:
-            tap_postgres.do_sync(get_test_connection_config(), catalog, None, state)
+
+            tap_postgres.do_sync(get_test_connection_config(), {'streams' : streams}, None, state)
         except Exception as ex:
-            # LOGGER.exception(ex)
             blew_up_on_cow = True
 
         self.assertTrue(blew_up_on_cow)
+
         self.assertEqual(5, len(CAUGHT_MESSAGES))
 
-        self.assertTrue(isinstance(CAUGHT_MESSAGES[0], singer.SchemaMessage))
+        self.assertEqual(CAUGHT_MESSAGES[0]['type'], 'SCHEMA')
         self.assertTrue(isinstance(CAUGHT_MESSAGES[1], singer.StateMessage))
         self.assertIsNone(CAUGHT_MESSAGES[1].value['bookmarks']['postgres-public-COW'].get('xmin'))
         self.assertIsNotNone(CAUGHT_MESSAGES[1].value['bookmarks']['postgres-public-COW'].get('lsn'))
@@ -121,11 +126,12 @@ class LogicalInterruption(unittest.TestCase):
         global COW_RECORD_COUNT
         COW_RECORD_COUNT = 0
         CAUGHT_MESSAGES.clear()
-        tap_postgres.do_sync(get_test_connection_config(), catalog, None, old_state)
+        tap_postgres.do_sync(get_test_connection_config(), {'streams' : streams}, None, old_state)
 
         self.assertEqual(6, len(CAUGHT_MESSAGES))
 
-        self.assertTrue(isinstance(CAUGHT_MESSAGES[0], singer.SchemaMessage))
+        self.assertEqual(CAUGHT_MESSAGES[0]['type'], 'SCHEMA')
+
         self.assertTrue(isinstance(CAUGHT_MESSAGES[1], singer.StateMessage))
         self.assertEqual(CAUGHT_MESSAGES[1].value['bookmarks']['postgres-public-COW'].get('xmin'), last_xmin)
         self.assertEqual(CAUGHT_MESSAGES[1].value['bookmarks']['postgres-public-COW'].get('lsn'), end_lsn)
@@ -171,15 +177,16 @@ class FullTableInterruption(unittest.TestCase):
 
     def test_catalog(self):
         singer.write_message = singer_write_message_no_cow
+        pg_common.write_schema_message = singer_write_message_ok
 
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        cow_stream = [s for s in catalog.streams if s.table == 'COW'][0]
+        streams = tap_postgres.do_discovery(conn_config)
+        cow_stream = [s for s in streams if s['table_name'] == 'COW'][0]
         self.assertIsNotNone(cow_stream)
         cow_stream = select_all_of_stream(cow_stream)
         cow_stream = set_replication_method_for_stream(cow_stream, 'FULL_TABLE')
 
-        chicken_stream = [s for s in catalog.streams if s.table == 'CHICKEN'][0]
+        chicken_stream = [s for s in streams if s['table_name'] == 'CHICKEN'][0]
         self.assertIsNotNone(chicken_stream)
         chicken_stream = select_all_of_stream(chicken_stream)
         chicken_stream = set_replication_method_for_stream(chicken_stream, 'FULL_TABLE')
@@ -198,7 +205,7 @@ class FullTableInterruption(unittest.TestCase):
         state = {}
         #this will sync the CHICKEN but then blow up on the COW
         try:
-            tap_postgres.do_sync(get_test_connection_config(), catalog, None, state)
+            tap_postgres.do_sync(get_test_connection_config(), {'streams' : streams}, None, state)
         except Exception as ex:
             # LOGGER.exception(ex)
             blew_up_on_cow = True
@@ -206,7 +213,7 @@ class FullTableInterruption(unittest.TestCase):
         self.assertTrue(blew_up_on_cow)
 
         self.assertEqual(12, len(CAUGHT_MESSAGES))
-        self.assertTrue(isinstance(CAUGHT_MESSAGES[0], singer.SchemaMessage))
+        self.assertEqual(CAUGHT_MESSAGES[0]['type'], 'SCHEMA')
         self.assertTrue(isinstance(CAUGHT_MESSAGES[1], singer.StateMessage))
         self.assertIsNone(CAUGHT_MESSAGES[1].value['bookmarks']['postgres-public-CHICKEN'].get('xmin'))
 
@@ -230,8 +237,9 @@ class FullTableInterruption(unittest.TestCase):
 
 
         #cow messages
-        self.assertTrue(isinstance(CAUGHT_MESSAGES[7], singer.SchemaMessage))
-        self.assertEqual("COW", CAUGHT_MESSAGES[7].stream)
+        self.assertEqual(CAUGHT_MESSAGES[7]['type'], 'SCHEMA')
+
+        self.assertEqual("COW", CAUGHT_MESSAGES[7]['stream'])
         self.assertTrue(isinstance(CAUGHT_MESSAGES[8], singer.StateMessage))
         self.assertIsNone(CAUGHT_MESSAGES[8].value['bookmarks']['postgres-public-COW'].get('xmin'))
         self.assertEqual("postgres-public-COW", CAUGHT_MESSAGES[8].value['currently_syncing'])
@@ -251,11 +259,11 @@ class FullTableInterruption(unittest.TestCase):
         CAUGHT_MESSAGES.clear()
         global COW_RECORD_COUNT
         COW_RECORD_COUNT = 0
-        tap_postgres.do_sync(get_test_connection_config(), catalog, None, old_state)
+        tap_postgres.do_sync(get_test_connection_config(), {'streams' : streams}, None, old_state)
 
 
         # self.assertEqual(5, len(CAUGHT_MESSAGES))
-        self.assertTrue(isinstance(CAUGHT_MESSAGES[0], singer.SchemaMessage))
+        self.assertEqual(CAUGHT_MESSAGES[0]['type'], 'SCHEMA')
         self.assertTrue(isinstance(CAUGHT_MESSAGES[1], singer.StateMessage))
 
         # because we were interrupted, we do not switch versions
@@ -284,6 +292,6 @@ class FullTableInterruption(unittest.TestCase):
 
 
 if __name__== "__main__":
-    test1 = LogicalInterruption()
+    test1 = FullTableInterruption()
     test1.setUp()
     test1.test_catalog()
