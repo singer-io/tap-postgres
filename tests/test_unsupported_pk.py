@@ -50,11 +50,11 @@ class Unsupported(unittest.TestCase):
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
-        catalog = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in catalog.streams if s.tap_stream_id == "postgres-public-CHICKEN TIMES"]
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == "postgres-public-CHICKEN TIMES"]
 
         self.assertEqual(len(chicken_streams), 1)
-        stream_dict = chicken_streams[0].to_dict()
+        stream_dict = chicken_streams[0]
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
         self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
