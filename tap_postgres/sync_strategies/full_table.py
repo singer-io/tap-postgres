@@ -43,7 +43,7 @@ def sync_view(conn_info, stream, state, desired_columns, md_map):
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
                 cur.itersize = post_db.cursor_iter_size
                 select_sql = 'SELECT {} FROM {}'.format(','.join(escaped_columns),
-                                                        post_db.fully_qualified_table_name(schema_name, stream['table']))
+                                                        post_db.fully_qualified_table_name(schema_name, stream['table_name']))
 
                 LOGGER.info("select %s with itersize %s", select_sql, cur.itersize)
                 cur.execute(select_sql)
@@ -112,7 +112,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                     select_sql = """SELECT {}, xmin::text::bigint
                                       FROM {} where age(xmin::xid) < age('{}'::xid)
                                      ORDER BY xmin::text ASC""".format(','.join(escaped_columns),
-                                                                       post_db.fully_qualified_table_name(schema_name, stream['table']),
+                                                                       post_db.fully_qualified_table_name(schema_name, stream['table_name']),
                                                                        xmin)
                 else:
                     LOGGER.info("Beginning new Full Table replication %s", nascent_stream_version)

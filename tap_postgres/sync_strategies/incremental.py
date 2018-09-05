@@ -70,7 +70,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                                     FROM {}
                                     WHERE {} >= '{}'::{}
                                     ORDER BY {} ASC""".format(','.join(escaped_columns),
-                                                              post_db.fully_qualified_table_name(schema_name, stream['table']),
+                                                              post_db.fully_qualified_table_name(schema_name, stream['table_name']),
                                                               post_db.prepare_columns_sql(replication_key), replication_key_value, replication_key_sql_datatype,
                                                               post_db.prepare_columns_sql(replication_key))
                 else:
@@ -78,7 +78,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                     select_sql = """SELECT {}
                                     FROM {}
                                     ORDER BY {} ASC""".format(','.join(escaped_columns),
-                                                              post_db.fully_qualified_table_name(schema_name, stream['table']),
+                                                              post_db.fully_qualified_table_name(schema_name, stream['table_name']),
                                                               post_db.prepare_columns_sql(replication_key))
 
                 LOGGER.info("select statement: %s with itersize %s", select_sql, cur.itersize)

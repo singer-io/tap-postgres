@@ -153,7 +153,9 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
     if sql_datatype == 'time with time zone':
         return parse(elem).isoformat().split('T')[1]
     if sql_datatype == 'bit':
-        return elem == '1'
+        #for arrays, elem will == True
+        #for ordinary bits, elem will == '1'
+        return elem == '1' or elem == True
     if sql_datatype == 'boolean':
         return elem
     if sql_datatype == 'hstore':
