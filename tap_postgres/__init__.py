@@ -606,10 +606,11 @@ def register_type_adapters(conn_config):
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             #citext[]
             cur.execute("SELECT typarray FROM pg_type where typname = 'citext'")
-            citext_array_oid = cur.fetchone()[0]
-            psycopg2.extensions.register_type(
-                psycopg2.extensions.new_array_type(
-                    (citext_array_oid,), 'CITEXT[]', psycopg2.STRING))
+            citext_array_oid = cur.fetchone()
+            if citext_array_oid:
+                psycopg2.extensions.register_type(
+                    psycopg2.extensions.new_array_type(
+                        (citext_array_oid[0],), 'CITEXT[]', psycopg2.STRING))
 
             #bit[]
             cur.execute("SELECT typarray FROM pg_type where typname = 'bit'")
