@@ -310,7 +310,7 @@ BASE_RECURSIVE_SCHEMAS = {'sdc_recursive_integer_array'   : {'type' : ['integer'
                           'sdc_recursive_object_array'    : {'type' : ['object', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_object_array'}}}
 
 def include_array_schemas(columns, schema):
-    schema['definitions'] = BASE_RECURSIVE_SCHEMAS
+    schema['definitions'] = copy.deepcopy(BASE_RECURSIVE_SCHEMAS)
 
 
     decimal_array_columns = [key for key, value in columns.items() if value.sql_data_type == 'numeric[]']
@@ -350,6 +350,7 @@ def discover_columns(connection, table_info):
             schema = {'type' : 'object',
                       'properties': column_schemas,
                       'definitions' : {}}
+
             schema = include_array_schemas(columns, schema)
 
             for c_name in column_schemas.keys():
