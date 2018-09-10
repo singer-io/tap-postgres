@@ -302,12 +302,12 @@ def write_sql_data_type_md(mdata, col_info):
     return mdata
 
 
-BASE_RECURSIVE_SCHEMAS = {'sdc_recursive_integer_array'   : {'type' : ['integer', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_integer_array'}},
-                          'sdc_recursive_number_array'    : {'type' : ['number', 'array'], 'items'  : {'$ref': '#/definitions/sdc_recursive_number_array'}},
-                          'sdc_recursive_string_array'    : {'type' : ['string', 'array'], 'items'  : {'$ref': '#/definitions/sdc_recursive_string_array'}},
-                          'sdc_recursive_boolean_array'   : {'type' : ['boolean', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_boolean_array'}},
-                          'sdc_recursive_timestamp_array' : {'type' : ['string', 'array'], 'format' : 'date-time', 'items' : {'$ref': '#/definitions/sdc_recursive_timestamp_array'}},
-                          'sdc_recursive_object_array'    : {'type' : ['object', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_object_array'}}}
+BASE_RECURSIVE_SCHEMAS = {'sdc_recursive_integer_array'   : {'type' : ['null', 'integer', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_integer_array'}},
+                          'sdc_recursive_number_array'    : {'type' : ['null', 'number', 'array'], 'items'  : {'$ref': '#/definitions/sdc_recursive_number_array'}},
+                          'sdc_recursive_string_array'    : {'type' : ['null', 'string', 'array'], 'items'  : {'$ref': '#/definitions/sdc_recursive_string_array'}},
+                          'sdc_recursive_boolean_array'   : {'type' : ['null', 'boolean', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_boolean_array'}},
+                          'sdc_recursive_timestamp_array' : {'type' : ['null', 'string', 'array'], 'format' : 'date-time', 'items' : {'$ref': '#/definitions/sdc_recursive_timestamp_array'}},
+                          'sdc_recursive_object_array'    : {'type' : ['null', 'object', 'array'], 'items' : {'$ref': '#/definitions/sdc_recursive_object_array'}}}
 
 def include_array_schemas(columns, schema):
     schema['definitions'] = copy.deepcopy(BASE_RECURSIVE_SCHEMAS)
@@ -318,7 +318,7 @@ def include_array_schemas(columns, schema):
         scale = post_db.numeric_scale(columns[c])
         precision = post_db.numeric_precision(columns[c])
         schema_name = schema_name_for_numeric_array(precision, scale)
-        schema['definitions'][schema_name] = {'type' : ['number', 'array'],
+        schema['definitions'][schema_name] = {'type' : ['null', 'number', 'array'],
                                               'multipleOf': post_db.numeric_multiple_of(scale),
                                               'exclusiveMaximum' : True,
                                               'maximum' : post_db.numeric_max(precision, scale),
