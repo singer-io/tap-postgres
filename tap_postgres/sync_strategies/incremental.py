@@ -27,7 +27,6 @@ def fetch_max_replication_key(conn_config, replication_key, schema_name, table_n
 def sync_table(conn_info, stream, state, desired_columns, md_map):
     time_extracted = utils.now()
 
-    first_run = singer.get_bookmark(state, stream['tap_stream_id'], 'version') is None
     stream_version = singer.get_bookmark(state, stream['tap_stream_id'], 'version')
     if stream_version is None:
         stream_version = int(time.time() * 1000)
@@ -46,8 +45,8 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
         stream=post_db.calculate_destination_stream_name(stream, md_map),
         version=stream_version)
 
-    if first_run:
-        singer.write_message(activate_version_message)
+
+    singer.write_message(activate_version_message)
 
     replication_key = md_map.get((), {}).get('replication-key')
     replication_key_value = singer.get_bookmark(state, stream['tap_stream_id'], 'replication_key_value')
