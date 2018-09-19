@@ -435,8 +435,8 @@ def do_discovery(conn_config):
 
 def should_sync_column(md_map, field_name):
 
-    inclusion           = md_map.get(('properties', field_name), {}).get('inclusion')
-    selected            = md_map.get(('properties', field_name), {}).get('selected')
+    inclusion = md_map.get(('properties', field_name), {}).get('inclusion')
+    selected = md_map.get(('properties', field_name), {}).get('selected')
     selected_by_default = md_map.get(('properties', field_name), {}).get('selected-by-default')
 
     #always sync replication_keys
@@ -451,8 +451,8 @@ def should_sync_column(md_map, field_name):
 
     if inclusion == 'automatic':
         return True
-    
-    if selected_by_default and (selected != False):
+
+    if selected_by_default and (selected is not False):
         return True
 
     return False
