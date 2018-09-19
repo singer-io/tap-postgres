@@ -434,17 +434,25 @@ def do_discovery(conn_config):
 
 
 def should_sync_column(md_map, field_name):
+
+    inclusion = md_map.get(('properties', field_name), {}).get('inclusion')
+    selected = md_map.get(('properties', field_name), {}).get('selected')
+    selected_by_default = md_map.get(('properties', field_name), {}).get('selected-by-default')
+
     #always sync replication_keys
     if md_map.get((), {}).get('replication-key') == field_name:
         return True
 
-    if md_map.get(('properties', field_name), {}).get('inclusion') == 'unsupported':
+    if inclusion == 'unsupported':
         return False
 
-    if md_map.get(('properties', field_name), {}).get('selected'):
+    if selected:
         return True
 
-    if md_map.get(('properties', field_name), {}).get('inclusion') == 'automatic':
+    if inclusion == 'automatic':
+        return True
+
+    if selected_by_default and (selected is not False):
         return True
 
     return False
