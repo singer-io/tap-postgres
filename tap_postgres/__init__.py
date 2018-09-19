@@ -263,6 +263,7 @@ JOIN pg_catalog.pg_namespace n
 LEFT OUTER JOIN pg_index as i
   ON a.attrelid = i.indrelid
  AND a.attnum = ANY(i.indkey)
+ AND i.indisprimary = true
 LEFT OUTER JOIN pg_type AS subpgt
   ON pgt.typelem = subpgt.oid
  AND pgt.typelem != 0
