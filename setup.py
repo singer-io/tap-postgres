@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(name='tap-postgres',
       version='0.0.38',
-      description='Singer.io tap for extracting data from Oracle',
+      description='Singer.io tap for extracting data from Postgres',
       author='Stitch',
       url='https://singer.io',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
