@@ -135,7 +135,7 @@ def hstore_available(conn_info):
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
             cur.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
             res = cur.fetchone()
-            if res:
+            if res and res[0]:
                 return True
             return False
 
