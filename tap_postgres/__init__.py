@@ -643,6 +643,10 @@ def register_type_adapters(conn_config):
                 psycopg2.extensions.new_array_type(
                     (money_array_oid,), 'MONEY[]', psycopg2.STRING))
 
+            #json and jsbon
+            psycopg2.extras.register_default_json(loads=lambda x: str(x))
+            psycopg2.extras.register_default_jsonb(loads=lambda x: str(x))
+
             #enum[]'s
             cur.execute("SELECT distinct(t.typarray) FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid")
             for oid in cur.fetchall():
