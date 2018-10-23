@@ -1,6 +1,5 @@
 import datetime
 import decimal
-import json
 import math
 import psycopg2
 import psycopg2.extras
@@ -90,12 +89,8 @@ def selected_value_to_singer_value_impl(elem, sql_datatype):
     elif isinstance(elem, dict):
         if sql_datatype == 'hstore':
             cleaned_elem = elem
-        elif sql_datatype in {'json', 'jsonb'}:
-            cleaned_elem = json.dumps(elem)
         else:
             raise Exception("do not know how to marshall a dict if its not an hstore or json: {}".format(sql_datatype))
-    elif isinstance(elem, list) and sql_datatype in {'json', 'jsonb'}:
-        cleaned_elem = json.dumps(elem)
     else:
         raise Exception("do not know how to marshall value of class( {} ) and sql_datatype ( {} )".format(elem.__class__, sql_datatype))
 
