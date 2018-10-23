@@ -1,6 +1,5 @@
 import datetime
 import decimal
-import json
 import math
 import psycopg2
 import psycopg2.extras
