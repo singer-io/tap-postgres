@@ -199,7 +199,7 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map,
         version=version,
         time_extracted=time_extracted)
 
-def consume_message(streams, state, msg, time_extracted, conn_info):
+def consume_message(streams, state, msg, time_extracted, conn_info, flush_lsn):
     payload = json.loads(msg.payload)
     lsn = msg.data_start
 
@@ -207,6 +207,7 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
     for s in streams:
         streams_lookup[s['tap_stream_id']] = s
 
+    LOGGER.info("record %s had %s changes", msg.data_start, len(payload['change']))
     for c in payload['change']:
         tap_stream_id = post_db.compute_tap_stream_id(conn_info['dbname'], c['schema'], c['table'])
         if streams_lookup.get(tap_stream_id) is None:
@@ -232,20 +233,23 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
             raise Exception("unrecognized replication operation: {}".format(c['kind']))
 
         sync_common.send_schema_message(target_stream, ['lsn'])
-
         singer.write_message(record_message)
-        state = singer.write_bookmark(state,
-                                      target_stream['tap_stream_id'],
-                                      'lsn',
-                                      lsn)
         LOGGER.debug("sending feedback to server with NO flush_lsn. just a keep-alive")
         msg.cursor.send_feedback()
 
-    LOGGER.debug("sending feedback to server. flush_lsn = %s", msg.data_start)
-    msg.cursor.send_feedback(flush_lsn=msg.data_start)
+    if flush_lsn and len(payload['change']) > 0:
+        state['just_finished_logical_initial'] = False
+        LOGGER.info("sending feedback to server. FLUSH_LSN = %s", flush_lsn)
+        msg.cursor.send_feedback(flush_lsn=flush_lsn)
+        for s in streams:
+            state = singer.write_bookmark(state,
+                                          s['tap_stream_id'],
+                                          'lsn',
+                                          lsn)
 
 
     return state
+
 
 def locate_replication_slot(conn_info):
     with post_db.open_connection(conn_info, False) as conn:
@@ -274,19 +278,35 @@ def sync_tables(conn_info, logical_streams, state):
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
 
-            LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn)
+            LOGGER.info("Starting Logical Replication for %s(%s): from %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn)
             try:
                 cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
             except psycopg2.ProgrammingError:
                 raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
-            cur.send_feedback(flush_lsn=start_lsn)
+            # cur.send_feedback(flush_lsn=start_lsn)
             keepalive_interval = 10.0
             rows_saved = 0
+            first_record = True
+            flush_lsn = None
             while True:
                 msg = cur.read_message()
                 if msg:
-                    state = consume_message(logical_streams, state, msg, time_extracted, conn_info)
+                    LOGGER.info('record: %s', msg.data_start)
+                    if first_record:
+                        LOGGER.info('first record @ %s', msg.data_start)
+                        first_record = False
+                        if state.get('just_finished_logical_initial'):
+                            LOGGER.info('NOT checking first record because just_finished_logical_initial is True')
+                        else:
+                            LOGGER.info('CHECKING first record because just_finished_logical_initial is False')
+                            if msg.data_start != start_lsn:
+                                raise Exception('bad first record: {} is not {}'.format(msg.data_start, start_lsn))
+
+                    state = consume_message(logical_streams, state, msg, time_extracted, conn_info, flush_lsn)
+
+
+                    flush_lsn = msg.data_start
 
                     rows_saved = rows_saved + 1
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
@@ -302,9 +322,10 @@ def sync_tables(conn_info, logical_streams, state):
                     except InterruptedError:
                         pass  # recalculate timeout and continue
 
-    for s in logical_streams:
-        LOGGER.info("updating bookmark for stream %s to end_lsn %s", s['tap_stream_id'], end_lsn)
-        state = singer.write_bookmark(state, s['tap_stream_id'], 'lsn', end_lsn)
+    # for s in logical_streams:
+    #     if flush_lsn and len(payload['change']) > 0:
+    #         LOGGER.info("updating bookmark for stream %s to end_lsn %s", s['tap_stream_id'], flush_lsn)
+    #         state = singer.write_bookmark(state, s['tap_stream_id'], 'lsn', flush_lsn)
 
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
     return state

@@ -588,6 +588,8 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
         sync_common.send_schema_message(stream, [])
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
         state = singer.write_bookmark(state, stream['tap_stream_id'], 'xmin', None)
+        state['just_finished_logical_initial'] = True
+
     elif sync_method == 'logical_initial_interrupted':
         state = singer.set_currently_syncing(state, stream['tap_stream_id'])
         LOGGER.info("Initial stage of full table sync was interrupted. resuming...")
@@ -660,6 +662,8 @@ def register_type_adapters(conn_config):
 def do_sync(conn_config, catalog, default_replication_method, state):
     currently_syncing = singer.get_currently_syncing(state)
     streams = list(filter(is_selected_via_metadata, catalog['streams']))
+    # import pdb
+    # pdb.set_trace()
     streams.sort(key=lambda s: s['tap_stream_id'])
     LOGGER.info("Selected streams: %s ", list(map(lambda s: s['tap_stream_id'], streams)))
 
@@ -676,8 +680,6 @@ def do_sync(conn_config, catalog, default_replication_method, state):
         traditional_streams = currently_syncing_stream + other_streams
     else:
         LOGGER.info("No currently_syncing found")
-
-
 
     for stream in traditional_streams:
         state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream['tap_stream_id']])
