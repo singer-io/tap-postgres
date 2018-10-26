@@ -435,28 +435,10 @@ def do_discovery(conn_config):
 
 
 def should_sync_column(md_map, field_name):
-
-    inclusion = md_map.get(('properties', field_name), {}).get('inclusion')
-    selected = md_map.get(('properties', field_name), {}).get('selected')
-    selected_by_default = md_map.get(('properties', field_name), {}).get('selected-by-default')
-
-    #always sync replication_keys
-    if md_map.get((), {}).get('replication-key') == field_name:
-        return True
-
-    if inclusion == 'unsupported':
-        return False
-
-    if selected:
-        return True
-
-    if inclusion == 'automatic':
-        return True
-
-    if selected_by_default and (selected is not False):
-        return True
-
-    return False
+    field_metadata = md_map.get(('properties', field_name), {})
+    return singer.should_sync_field(field_metadata.get('inclusion'),
+                                    field_metadata.get('selected'),
+                                    True)
 
 def is_selected_via_metadata(stream):
     table_md = metadata.to_map(stream['metadata']).get((), {})
