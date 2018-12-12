@@ -231,7 +231,6 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
         else:
             raise Exception("unrecognized replication operation: {}".format(c['kind']))
 
-        sync_common.send_schema_message(target_stream, ['lsn'])
 
         singer.write_message(record_message)
         state = singer.write_bookmark(state,
@@ -270,6 +269,9 @@ def sync_tables(conn_info, logical_streams, state):
     end_lsn = fetch_current_lsn(conn_info)
     time_extracted = utils.now()
     slot = locate_replication_slot(conn_info)
+
+    for s in logical_streams:
+        sync_common.send_schema_message(s, ['lsn'])
 
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
