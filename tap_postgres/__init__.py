@@ -70,6 +70,7 @@ def schema_for_column_datatype(c):
         schema['minimum'] = -1 * (2**(c.numeric_precision - 1))
         schema['maximum'] = 2**(c.numeric_precision - 1) - 1
         return schema
+
     if data_type == 'money':
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
@@ -167,6 +168,8 @@ def schema_for_column(c):
 
     if c.sql_data_type == 'integer[]':
         column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_integer_array'}
+    elif c.sql_data_type == 'bigint[]':
+        column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_integer_array'}
     elif c.sql_data_type == 'bit[]':
         column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_boolean_array'}
     elif c.sql_data_type == 'boolean[]':
@@ -184,7 +187,6 @@ def schema_for_column(c):
         precision = post_db.numeric_precision(c)
         schema_name = schema_name_for_numeric_array(precision, scale)
         column_schema['items'] = {'$ref': '#/definitions/{}'.format(schema_name)}
-
     elif c.sql_data_type == 'double precision[]':
         column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_number_array'}
     elif c.sql_data_type == 'hstore[]':
@@ -333,6 +335,7 @@ def discover_columns(connection, table_info):
     entries = []
     for schema_name in table_info.keys():
         for table_name in table_info[schema_name].keys():
+
             mdata = {}
             columns = table_info[schema_name][table_name]['columns']
             table_pks = [col_name for col_name, col_info in columns.items() if col_info.is_primary_key]
