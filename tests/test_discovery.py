@@ -568,6 +568,6 @@ class TestArraysLikeTable(unittest.TestCase):
 
 
 if __name__== "__main__":
-    test1 = TestArraysLikeTable()
+    test1 = TestArraysTable()
     test1.setUp()
     test1.test_catalog()
