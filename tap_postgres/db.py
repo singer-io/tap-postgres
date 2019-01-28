@@ -28,15 +28,11 @@ def fully_qualified_table_name(schema, table):
     return '"{}"."{}"'.format(canonicalize_identifier(schema), canonicalize_identifier(table))
 
 def open_connection(conn_config, logical_replication=False):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(conn_config['host'],
-                                                                                   conn_config['dbname'],
-                                                                                   conn_config['user'],
-                                                                                   conn_config['password'],
-                                                                                   conn_config['port'])
     if logical_replication:
-        conn = psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection, connect_timeout=30)
+        conn = psycopg2.connect(host=conn_config['host'], dbname=conn_config['dbname'], user=conn_config['user'], password=conn_config['password'], port=conn_config['port'],
+                                connection_factory=psycopg2.extras.LogicalReplicationConnection, connect_timeout=30)
     else:
-        conn = psycopg2.connect(conn_string, connect_timeout=30)
+        conn = psycopg2.connect(host=conn_config['host'], dbname=conn_config['dbname'], user=conn_config['user'], password=conn_config['password'], port=conn_config['port'], connect_timeout=30)
 
     return conn
 
