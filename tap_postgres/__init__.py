@@ -468,7 +468,7 @@ def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
 
     state = singer.write_bookmark(state, stream['tap_stream_id'], 'replication_key', replication_key)
 
-    sync_common.send_schema_message(stream, replication_key)
+    sync_common.send_schema_message(stream, [replication_key])
     state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map)
 
     return state
