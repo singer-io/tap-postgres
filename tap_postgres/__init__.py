@@ -467,10 +467,6 @@ def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
         raise Exception("invalid keys found in state: {}".format(illegal_bk_keys))
 
     state = singer.write_bookmark(state, stream['tap_stream_id'], 'replication_key', replication_key)
-    if md_map.get((), {}).get('is-view'):
-        pks = md_map.get(()).get('table-key-properties')
-    else:
-        pks = md_map.get(()).get('table-key-properties')
 
     sync_common.send_schema_message(stream, replication_key)
     state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map)
