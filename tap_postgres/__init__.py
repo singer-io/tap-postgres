@@ -472,7 +472,7 @@ def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
     else:
         pks = md_map.get(()).get('table-key-properties')
 
-    sync_common.send_schema_message(stream, pks)
+    sync_common.send_schema_message(stream, replication_key)
     state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map)
 
     return state
