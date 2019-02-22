@@ -1,5 +1,7 @@
 # tap-postgres
 
+**THIS IS A FORK OF tap-postgres by singer.io**
+
 ## set rds.logical_replication in parameter(reboot)= 1
 
 This should also set `max_wal_senders && max_replication_slots > 0`
