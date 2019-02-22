@@ -13,7 +13,7 @@ include_schemas_in_destination_stream_name = False
 
 def calculate_destination_stream_name(stream, md_map):
     if include_schemas_in_destination_stream_name:
-        return "{}_{}".format(md_map.get((), {}).get('schema-name'), stream['stream'])
+        return "{}-{}".format(md_map.get((), {}).get('schema-name'), stream['stream'])
 
     return stream['stream']
 
