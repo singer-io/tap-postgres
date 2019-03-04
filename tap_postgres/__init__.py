@@ -431,7 +431,7 @@ def do_discovery(conn_config):
 
 
     if len(all_streams) == 0:
-        LOGGER.warning("0 tables were discovered across the entire cluster")
+        raise RuntimeError('0 tables were discovered across the entire cluster')
 
     dump_catalog(all_streams)
     return all_streams
