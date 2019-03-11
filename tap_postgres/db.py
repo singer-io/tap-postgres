@@ -34,14 +34,6 @@ def open_connection(conn_config, logical_replication=False):
     else:
         conn = psycopg2.connect(host=conn_config['host'], dbname=conn_config['dbname'], user=conn_config['user'], password=conn_config['password'], port=conn_config['port'], connect_timeout=30)
 
-    # Client side character encoding defaults to the value in postgresql.conf under client_encoding.
-    # The server / db can also have its own configred encoding.
-    with conn.cursor() as cur:
-        cur.execute("show server_encoding")
-        LOGGER.info("Current Server Encoding: %s", cur.fetchone()[0])
-        cur.execute("show client_encoding")
-        LOGGER.info("Current Client Encoding: %s", cur.fetchone()[0])
-
     return conn
 
 def prepare_columns_sql(c):
