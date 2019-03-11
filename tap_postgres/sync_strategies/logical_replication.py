@@ -187,7 +187,12 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map,
     md_map[('properties', '_sdc_deleted_at')] = {'sql-datatype' : 'timestamp with time zone'}
 
     for idx, elem in enumerate(row):
-        sql_datatype = md_map.get(('properties', columns[idx]))['sql-datatype']
+        sql_datatype = md_map.get(('properties', columns[idx])).get('sql-datatype')
+
+        if not sql_datatype:
+            LOGGER.info("No sql-datatype found for stream %s: %s", stream, columns[idx])
+            raise Exception("Unable to find sql-datatype for stream {}".format(stream))
+
         cleaned_elem = selected_value_to_singer_value(elem, sql_datatype, conn_info)
         row_to_persist += (cleaned_elem,)
 
