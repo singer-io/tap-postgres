@@ -636,14 +636,26 @@ def register_type_adapters(conn_config):
                         (enum_oid,), 'ENUM_{}[]'.format(enum_oid), psycopg2.STRING))
 
 
+def any_logical_streams(streams, default_replication_method):
+    for stream in streams:
+        stream_metadata = metadata.to_map(stream['metadata'])
+        replication_method = stream_metadata.get((), {}).get('replication-method', default_replication_method)
+        if replication_method == 'LOG_BASED':
+            return True
+
+    return False
 
 def do_sync(conn_config, catalog, default_replication_method, state):
     currently_syncing = singer.get_currently_syncing(state)
     streams = list(filter(is_selected_via_metadata, catalog['streams']))
     streams.sort(key=lambda s: s['tap_stream_id'])
-    end_lsn = logical_replication.fetch_current_lsn(conn_config)
     LOGGER.info("Selected streams: %s ", list(map(lambda s: s['tap_stream_id'], streams)))
-    LOGGER.info("End LSN: %s ", end_lsn)
+    if any_logical_streams(streams, default_replication_method):
+        LOGGER.info("Use of logical replication requires fetching an lsn...")
+        end_lsn = logical_replication.fetch_current_lsn(conn_config)
+        LOGGER.info("End LSN: %s ", end_lsn)
+    else:
+        end_lsn = None
 
     sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state, default_replication_method)
     #{"chickens" : "full_stream", "cows" : "logical_initial_interrupted_streams", "turkeys": "logical_replication"}
