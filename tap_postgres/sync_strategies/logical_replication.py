@@ -269,9 +269,8 @@ def locate_replication_slot(conn_info):
             raise Exception("Unable to find replication slot (stitch || {} with wal2json".format(db_specific_slot))
 
 
-def sync_tables(conn_info, logical_streams, state):
+def sync_tables(conn_info, logical_streams, state, end_lsn):
     start_lsn = min([get_bookmark(state, s['tap_stream_id'], 'lsn') for s in logical_streams])
-    end_lsn = fetch_current_lsn(conn_info)
     time_extracted = utils.now()
     slot = locate_replication_slot(conn_info)
 

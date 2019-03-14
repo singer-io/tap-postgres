@@ -541,7 +541,7 @@ def sync_method_for_streams(streams, state, default_replication_method):
 
     return lookup, traditional_steams, logical_streams
 
-def sync_traditional_stream(conn_config, stream, state, sync_method):
+def sync_traditional_stream(conn_config, stream, state, sync_method, end_lsn):
     LOGGER.info("Beginning sync of stream(%s) with sync method(%s)", stream['tap_stream_id'], sync_method)
     md_map = metadata.to_map(stream['metadata'])
     conn_config['dbname'] = md_map.get(()).get('database-name')
@@ -562,7 +562,6 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
         state = do_sync_incremental(conn_config, stream, state, desired_columns, md_map)
     elif sync_method == 'logical_initial':
         state = singer.set_currently_syncing(state, stream['tap_stream_id'])
-        end_lsn = logical_replication.fetch_current_lsn(conn_config)
         LOGGER.info("Performing initial full table sync")
         state = singer.write_bookmark(state, stream['tap_stream_id'], 'lsn', end_lsn)
 
@@ -581,12 +580,12 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
     return state
 
-def sync_logical_streams(conn_config, logical_streams, state):
+def sync_logical_streams(conn_config, logical_streams, state, end_lsn):
     if logical_streams:
-        LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", logical_replication.fetch_current_lsn(conn_config), list(map(lambda s: s['tap_stream_id'], logical_streams)))
+        LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", end_lsn, list(map(lambda s: s['tap_stream_id'], logical_streams)))
         logical_streams = list(map(logical_replication.add_automatic_properties, logical_streams))
 
-        state = logical_replication.sync_tables(conn_config, logical_streams, state)
+        state = logical_replication.sync_tables(conn_config, logical_streams, state, end_lsn)
 
     return state
 
@@ -642,7 +641,9 @@ def do_sync(conn_config, catalog, default_replication_method, state):
     currently_syncing = singer.get_currently_syncing(state)
     streams = list(filter(is_selected_via_metadata, catalog['streams']))
     streams.sort(key=lambda s: s['tap_stream_id'])
+    end_lsn = logical_replication.fetch_current_lsn(conn_config)
     LOGGER.info("Selected streams: %s ", list(map(lambda s: s['tap_stream_id'], streams)))
+    LOGGER.info("End LSN: %s ", end_lsn)
 
     sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state, default_replication_method)
     #{"chickens" : "full_stream", "cows" : "logical_initial_interrupted_streams", "turkeys": "logical_replication"}
@@ -658,15 +659,13 @@ def do_sync(conn_config, catalog, default_replication_method, state):
     else:
         LOGGER.info("No currently_syncing found")
 
-
-
     for stream in traditional_streams:
-        state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream['tap_stream_id']])
+        state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream['tap_stream_id']], end_lsn)
 
     logical_streams.sort(key=lambda s: metadata.to_map(s['metadata']).get(()).get('database-name'))
     for dbname, streams in itertools.groupby(logical_streams, lambda s: metadata.to_map(s['metadata']).get(()).get('database-name')):
         conn_config['dbname'] = dbname
-        state = sync_logical_streams(conn_config, list(streams), state)
+        state = sync_logical_streams(conn_config, list(streams), state, end_lsn)
     return state
 
 def main_impl():
