@@ -204,7 +204,7 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map,
         version=version,
         time_extracted=time_extracted)
 
-def consume_message(streams, state, msg, time_extracted, conn_info):
+def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn):
     payload = json.loads(msg.payload)
     lsn = msg.data_start
 
@@ -245,7 +245,11 @@ def consume_message(streams, state, msg, time_extracted, conn_info):
         LOGGER.debug("sending feedback to server with NO flush_lsn. just a keep-alive")
         msg.cursor.send_feedback()
 
+
     LOGGER.debug("sending feedback to server. flush_lsn = %s", msg.data_start)
+    if msg.data_start > end_lsn:
+        raise Exception("incorrectly attempting to flush an lsn({}) > end_lsn({})".format(msg.data_start, end_lsn))
+
     msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
 
@@ -291,8 +295,13 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
             rows_saved = 0
             while True:
                 msg = cur.read_message()
+
                 if msg:
-                    state = consume_message(logical_streams, state, msg, time_extracted, conn_info)
+                    if msg.data_start > end_lsn:
+                        LOGGER.info("gone past end_lsn %s for run. stopping". end_lsn)
+                        break;
+
+                    state = consume_message(logical_streams, state, msg, time_extracted, conn_info, end_lsn)
 
                     rows_saved = rows_saved + 1
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
