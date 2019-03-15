@@ -298,7 +298,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
 
                 if msg:
                     if msg.data_start > end_lsn:
-                        LOGGER.info("gone past end_lsn %s for run. stopping". end_lsn)
+                        LOGGER.info("gone past end_lsn %s for run. stopping", end_lsn)
                         break;
 
                     state = consume_message(logical_streams, state, msg, time_extracted, conn_info, end_lsn)
