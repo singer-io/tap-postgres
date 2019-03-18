@@ -290,7 +290,6 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
             except psycopg2.ProgrammingError:
                 raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
-            cur.send_feedback(flush_lsn=start_lsn)
             keepalive_interval = 10.0
             rows_saved = 0
             while True:
