@@ -22,7 +22,7 @@ jobs:
           command: |
             source dev_env.sh
             source ~/.virtualenvs/tap-tester/bin/activate
-            run-a-test --tap=tap-postgres \
+            run-a-test --tap=venv/bin/tap-postgres \
                        --target=target-stitch \
                        --orchestrator=stitch-orchestrator \
                        --email=harrison+sandboxtest@stitchdata.com \
