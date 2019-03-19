@@ -8,6 +8,8 @@ jobs:
       - run:
           name: 'Setup virtual env'
           command: |
+            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/sandbox dev_env.sh
+            source dev_env.sh
             python3 -m venv venv
             . venv/bin/activate
             pip install .
@@ -18,7 +20,6 @@ jobs:
       - run:
           name: 'Integration Tests'
           command: |
-            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/sandbox dev_env.sh
             source dev_env.sh
             source ~/.virtualenvs/tap-tester/bin/activate
             run-a-test --tap=tap-postgres \
