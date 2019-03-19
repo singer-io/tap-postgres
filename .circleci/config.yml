@@ -2,21 +2,45 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.4.8-jessie-browsers
+      - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:tap-tester
     steps:
       - checkout
       - run:
           name: 'Setup virtual env'
           command: |
+            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/sandbox dev_env.sh
+            source dev_env.sh
             python3 -m venv venv
-            . venv/bin/activate
+            source venv/bin/activate
             pip install .
             pip install pylint
             make test
             pylint tap_postgres -d missing-docstring,invalid-name,line-too-long,too-many-locals,too-few-public-methods,fixme,stop-iteration-return,duplicate-code,useless-import-alias
-  test:
-    docker:
-      - image: circleci/python:3.4.8-jessie-browsers
-    steps:
-      - checkout
-      - run: 'echo "Hello"'
+      - add_ssh_keys
+      - run:
+          name: 'Integration Tests'
+          command: |
+            source dev_env.sh
+            source ~/.virtualenvs/tap-tester/bin/activate
+            run-a-test --tap=venv/bin/tap-postgres \
+                       --target=target-stitch \
+                       --orchestrator=stitch-orchestrator \
+                       --email=harrison+sandboxtest@stitchdata.com \
+                       --password=$SANDBOX_PASSWORD \
+                       --client-id=50 \
+                       tap_tester.suites.postgres
+workflows:
+  version: 2
+  commit:
+    jobs:
+      - build
+  build_daily:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - build
