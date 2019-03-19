@@ -21,7 +21,7 @@ jobs:
           name: 'Integration Tests'
           command: |
             source dev_env.sh
-            source venv/bin/activate
+            source ~/.virtualenvs/tap-tester/bin/activate
             run-a-test --tap=tap-postgres \
                        --target=target-stitch \
                        --orchestrator=stitch-orchestrator \
