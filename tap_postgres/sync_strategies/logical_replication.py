@@ -297,9 +297,10 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                 msg = cur.read_message()
 
                 if msg:
-                    if msg.data_start == start_lsn:
-                        LOGGER.info("ignoring msg.data_start %s === start_lsn %s.  This is safe as it must have been consumed earlier to have become the bookmark", msg.data_start, start_lsn)
-                        continue
+                    #i would prefer dups to missing records at this point.
+                    # if msg.data_start == start_lsn:
+                    #     LOGGER.info("ignoring msg.data_start %s === start_lsn %s.  This is safe as it must have been consumed earlier to have become the bookmark", msg.data_start, start_lsn)
+                    #     continue
 
                     if msg.data_start > end_lsn:
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
