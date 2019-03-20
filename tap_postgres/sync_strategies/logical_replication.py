@@ -277,6 +277,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
     start_lsn = min([get_bookmark(state, s['tap_stream_id'], 'lsn') for s in logical_streams])
     time_extracted = utils.now()
     slot = locate_replication_slot(conn_info)
+    last_lsn_processed = None
 
     for s in logical_streams:
         sync_common.send_schema_message(s, ['lsn'])
@@ -290,19 +291,23 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
             except psycopg2.ProgrammingError:
                 raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
-            cur.send_feedback(flush_lsn=start_lsn)
             keepalive_interval = 10.0
             rows_saved = 0
             while True:
                 msg = cur.read_message()
 
                 if msg:
+                    if msg.data_start == start_lsn:
+                        LOGGER.info("ignoring msg.data_start %s === start_lsn %s.  This is safe as it must have been consumed earlier to have become the bookmark", msg.data_start, start_lsn)
+                        continue
+
                     if msg.data_start > end_lsn:
-                        LOGGER.info("gone past end_lsn %s for run. stopping", end_lsn)
+                        LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
                         break
 
                     state = consume_message(logical_streams, state, msg, time_extracted, conn_info, end_lsn)
-
+                    #msg has been consumed. it has been processed
+                    last_lsn_processed = msg.data_start
                     rows_saved = rows_saved + 1
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
                         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
@@ -313,13 +318,15 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                     try:
                         sel = select([cur], [], [], max(0, timeout))
                         if not any(sel):
+                            LOGGER.info("no data for %s seconds. breaking", timeout)
                             break
                     except InterruptedError:
                         pass  # recalculate timeout and continue
 
-    for s in logical_streams:
-        LOGGER.info("updating bookmark for stream %s to end_lsn %s", s['tap_stream_id'], end_lsn)
-        state = singer.write_bookmark(state, s['tap_stream_id'], 'lsn', end_lsn)
+    if last_lsn_processed:
+        for s in logical_streams:
+            LOGGER.info("updating bookmark for stream %s to last_lsn_processed %s", s['tap_stream_id'], last_lsn_processed)
+            state = singer.write_bookmark(state, s['tap_stream_id'], 'lsn', last_lsn_processed)
 
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
     return state
