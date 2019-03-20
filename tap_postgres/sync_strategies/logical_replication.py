@@ -299,7 +299,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                 if msg:
                     if msg.data_start == start_lsn:
                         LOGGER.info("ignoring msg.data_start %s === start_lsn %s.  This is safe as it must have been consumed earlier to have become the bookmark", msg.data_start, start_lsn)
-                        continue;
+                        continue
 
                     if msg.data_start > end_lsn:
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
