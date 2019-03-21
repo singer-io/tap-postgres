@@ -315,7 +315,6 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                 msg = cur.read_message()
 
                 if msg:
-                    LOGGER.info('NORMAL(%s): %s', msg.data_start, json.loads(msg.payload))
                     if msg.data_start > end_lsn:
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
                         break
