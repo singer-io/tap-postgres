@@ -46,8 +46,14 @@ def fetch_current_lsn(conn_config):
             file, index = current_lsn.split('/')
             return (int(file, 16)  << 32) + int(index, 16)
 
-def add_automatic_properties(stream):
+def add_automatic_properties(stream, conn_config):
     stream['schema']['properties']['_sdc_deleted_at'] = {'type' : ['null', 'string'], 'format' :'date-time'}
+    if conn_config.get('debug_lsn'):
+        LOGGER.info('debug_lsn is ON')
+        stream['schema']['properties']['_sdc_lsn'] = {'type' : ['null', 'string']}
+    else:
+        LOGGER.info('debug_lsn is OFF')
+
     return stream
 
 def get_stream_version(tap_stream_id, state):
@@ -185,6 +191,7 @@ def selected_value_to_singer_value(elem, sql_datatype, conn_info):
 def row_to_singer_message(stream, row, version, columns, time_extracted, md_map, conn_info):
     row_to_persist = ()
     md_map[('properties', '_sdc_deleted_at')] = {'sql-datatype' : 'timestamp with time zone'}
+    md_map[('properties', '_sdc_lsn')] = {'sql-datatype' : "character varying"}
 
     for idx, elem in enumerate(row):
         sql_datatype = md_map.get(('properties', columns[idx])).get('sql-datatype')
@@ -221,17 +228,28 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn):
         stream_version = get_stream_version(target_stream['tap_stream_id'], state)
         stream_md_map = metadata.to_map(target_stream['metadata'])
 
+
         if c['kind'] == 'insert':
             col_vals = c['columnvalues'] + [None]
             col_names = c['columnnames'] + ['_sdc_deleted_at']
+            if conn_info.get('debug_lsn'):
+                col_vals = col_vals + [str(lsn)]
+                col_names = col_names + ['_sdc_lsn']
+
             record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
         elif c['kind'] == 'update':
             col_vals = c['columnvalues'] + [None]
             col_names = c['columnnames'] + ['_sdc_deleted_at']
+            if conn_info.get('debug_lsn'):
+                col_vals = col_vals + [str(lsn)]
+                col_names = col_names + ['_sdc_lsn']
             record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
         elif c['kind'] == 'delete':
             col_names = c['oldkeys']['keynames'] + ['_sdc_deleted_at']
             col_vals = c['oldkeys']['keyvalues']  + [singer.utils.strftime(time_extracted)]
+            if conn_info.get('debug_lsn'):
+                col_vals = col_vals + [str(lsn)]
+                col_names = col_names + ['_sdc_lsn']
             record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
         else:
             raise Exception("unrecognized replication operation: {}".format(c['kind']))
@@ -297,11 +315,6 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                 msg = cur.read_message()
 
                 if msg:
-                    #i would prefer dups to missing records at this point.
-                    # if msg.data_start == start_lsn:
-                    #     LOGGER.info("ignoring msg.data_start %s === start_lsn %s.  This is safe as it must have been consumed earlier to have become the bookmark", msg.data_start, start_lsn)
-                    #     continue
-
                     if msg.data_start > end_lsn:
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
                         break

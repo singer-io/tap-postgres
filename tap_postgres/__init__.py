@@ -583,7 +583,7 @@ def sync_traditional_stream(conn_config, stream, state, sync_method, end_lsn):
 def sync_logical_streams(conn_config, logical_streams, state, end_lsn):
     if logical_streams:
         LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", end_lsn, list(map(lambda s: s['tap_stream_id'], logical_streams)))
-        logical_streams = list(map(logical_replication.add_automatic_properties, logical_streams))
+        logical_streams = list(map(lambda s: logical_replication.add_automatic_properties(s, conn_config), logical_streams))
 
         state = logical_replication.sync_tables(conn_config, logical_streams, state, end_lsn)
 
@@ -658,8 +658,6 @@ def do_sync(conn_config, catalog, default_replication_method, state):
         end_lsn = None
 
     sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state, default_replication_method)
-    #{"chickens" : "full_stream", "cows" : "logical_initial_interrupted_streams", "turkeys": "logical_replication"}
-    #{"logical_streams" : ["turkeys"], "traditional_streams" : ["chickens", "cows"]}
 
     if currently_syncing:
         LOGGER.info("found currently_syncing: %s", currently_syncing)
@@ -687,7 +685,8 @@ def main_impl():
                    'password' : args.config['password'],
                    'port'     : args.config['port'],
                    'dbname'   : args.config['dbname'],
-                   'filter_dbs' : args.config.get('filter_dbs')}
+                   'filter_dbs' : args.config.get('filter_dbs'),
+                   'debug_lsn' : args.config.get('debug_lsn') == 'true'}
 
     if args.config.get('ssl') == 'true':
         conn_config['sslmode'] = 'require'
