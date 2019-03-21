@@ -686,8 +686,7 @@ def main_impl():
                    'port'     : args.config['port'],
                    'dbname'   : args.config['dbname'],
                    'filter_dbs' : args.config.get('filter_dbs'),
-                   'debug_lsn' : args.config.get('debug_lsn') == 'true'
-    }
+                   'debug_lsn' : args.config.get('debug_lsn') == 'true'}
 
     if args.config.get('ssl') == 'true':
         conn_config['sslmode'] = 'require'
