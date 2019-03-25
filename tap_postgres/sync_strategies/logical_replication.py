@@ -296,25 +296,31 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
     time_extracted = utils.now()
     slot = locate_replication_slot(conn_info)
     last_lsn_processed = None
+    poll_total_seconds = conn_info['logical_poll_total_seconds'] or 60 * 30  #we are willing to poll for a total of 30 minutes without finding a record
+    keep_alive_time = 10.0
+    begin_ts = datetime.datetime.now()
 
     for s in logical_streams:
         sync_common.send_schema_message(s, ['lsn'])
 
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
-
-            LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn)
+            LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s. poll_total_seconds: %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn, poll_total_seconds)
             try:
                 cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
             except psycopg2.ProgrammingError:
                 raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
-            keepalive_interval = 10.0
             rows_saved = 0
             while True:
-                msg = cur.read_message()
+                poll_duration = (datetime.datetime.now() - begin_ts).total_seconds()
+                if (poll_duration > poll_total_seconds):
+                    LOGGER.info("breaking after %s seconds of polling with no data", poll_duration)
+                    break
 
+                msg = cur.read_message()
                 if msg:
+                    begin_ts = datetime.datetime.now()
                     if msg.data_start > end_lsn:
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
                         break
@@ -328,12 +334,13 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
 
                 else:
                     now = datetime.datetime.now()
-                    timeout = keepalive_interval - (now - cur.io_timestamp).total_seconds()
+                    timeout = keep_alive_time - (now - cur.io_timestamp).total_seconds()
                     try:
                         sel = select([cur], [], [], max(0, timeout))
                         if not any(sel):
                             LOGGER.info("no data for %s seconds. sending feedback to server with NO flush_lsn. just a keep-alive", timeout)
                             cur.send_feedback()
+
                     except InterruptedError:
                         pass  # recalculate timeout and continue
 
