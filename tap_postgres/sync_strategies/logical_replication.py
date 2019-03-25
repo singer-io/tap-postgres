@@ -332,8 +332,8 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                     try:
                         sel = select([cur], [], [], max(0, timeout))
                         if not any(sel):
-                            LOGGER.info("no data for %s seconds. breaking", timeout)
-                            break
+                            LOGGER.info("no data for %s seconds. sending feedback to server with NO flush_lsn. just a keep-alive", timeout)
+                            msg.cursor.send_feedback()
                     except InterruptedError:
                         pass  # recalculate timeout and continue
 
