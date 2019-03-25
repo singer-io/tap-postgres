@@ -314,7 +314,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
             rows_saved = 0
             while True:
                 poll_duration = (datetime.datetime.now() - begin_ts).total_seconds()
-                if (poll_duration > poll_total_seconds):
+                if poll_duration > poll_total_seconds:
                     LOGGER.info("breaking after %s seconds of polling with no data", poll_duration)
                     break
 

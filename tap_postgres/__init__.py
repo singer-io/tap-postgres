@@ -687,8 +687,7 @@ def main_impl():
                    'dbname'   : args.config['dbname'],
                    'filter_dbs' : args.config.get('filter_dbs'),
                    'debug_lsn' : args.config.get('debug_lsn') == 'true',
-                   'logical_poll_total_seconds': float(args.config.get('logical_poll_total_seconds',0))
-    }
+                   'logical_poll_total_seconds': float(args.config.get('logical_poll_total_seconds', 0))}
 
     if args.config.get('ssl') == 'true':
         conn_config['sslmode'] = 'require'
