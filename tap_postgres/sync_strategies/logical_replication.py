@@ -229,28 +229,55 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn):
         stream_md_map = metadata.to_map(target_stream['metadata'])
 
 
-        if c['kind'] == 'insert':
-            col_vals = c['columnvalues'] + [None]
-            col_names = c['columnnames'] + ['_sdc_deleted_at']
-            if conn_info.get('debug_lsn'):
-                col_vals = col_vals + [str(lsn)]
-                col_names = col_names + ['_sdc_lsn']
+        desired_columns = [c for c in target_stream['schema']['properties'].keys() if sync_common.should_sync_column(stream_md_map, c)]
 
+        if c['kind'] == 'insert':
+            col_names = []
+            col_vals = []
+            for idx, col in enumerate(c['columnnames']):
+                if col in set(desired_columns):
+                    col_names.append(col)
+                    col_vals.append(c['columnvalues'][idx])
+
+            col_names = col_names + ['_sdc_deleted_at']
+            col_vals = col_vals + [None]
+            if conn_info.get('debug_lsn'):
+                col_names = col_names + ['_sdc_lsn']
+                col_vals = col_vals + [str(lsn)]
             record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
+
         elif c['kind'] == 'update':
-            col_vals = c['columnvalues'] + [None]
-            col_names = c['columnnames'] + ['_sdc_deleted_at']
+            col_names = []
+            col_vals = []
+            for idx, col in enumerate(c['columnnames']):
+                if col in set(desired_columns):
+                    col_names.append(col)
+                    col_vals.append(c['columnvalues'][idx])
+
+            col_names = col_names + ['_sdc_deleted_at']
+            col_vals = col_vals + [None]
+
             if conn_info.get('debug_lsn'):
                 col_vals = col_vals + [str(lsn)]
                 col_names = col_names + ['_sdc_lsn']
             record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
+
         elif c['kind'] == 'delete':
-            col_names = c['oldkeys']['keynames'] + ['_sdc_deleted_at']
-            col_vals = c['oldkeys']['keyvalues']  + [singer.utils.strftime(time_extracted)]
+            col_names = []
+            col_vals = []
+            for idx, col in enumerate(c['oldkeys']['keynames']):
+                if col in set(desired_columns):
+                    col_names.append(col)
+                    col_vals.append(c['oldkeys']['keyvalues'][idx])
+
+
+            col_names = col_names + ['_sdc_deleted_at']
+            col_vals = col_vals  + [singer.utils.strftime(time_extracted)]
             if conn_info.get('debug_lsn'):
                 col_vals = col_vals + [str(lsn)]
                 col_names = col_names + ['_sdc_lsn']
             record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
+
         else:
             raise Exception("unrecognized replication operation: {}".format(c['kind']))
 

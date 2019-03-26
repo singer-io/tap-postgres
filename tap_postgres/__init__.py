@@ -436,13 +436,6 @@ def do_discovery(conn_config):
     dump_catalog(all_streams)
     return all_streams
 
-
-def should_sync_column(md_map, field_name):
-    field_metadata = md_map.get(('properties', field_name), {})
-    return singer.should_sync_field(field_metadata.get('inclusion'),
-                                    field_metadata.get('selected'),
-                                    True)
-
 def is_selected_via_metadata(stream):
     table_md = metadata.to_map(stream['metadata']).get((), {})
     return table_md.get('selected')
@@ -503,7 +496,7 @@ def sync_method_for_streams(streams, state, default_replication_method):
             raise Exception("Unrecognized replication_method {}".format(replication_method))
 
         md_map = metadata.to_map(stream['metadata'])
-        desired_columns = [c for c in stream['schema']['properties'].keys() if should_sync_column(md_map, c)]
+        desired_columns = [c for c in stream['schema']['properties'].keys() if sync_common.should_sync_column(md_map, c)]
         desired_columns.sort()
 
         if len(desired_columns) == 0:
@@ -545,7 +538,7 @@ def sync_traditional_stream(conn_config, stream, state, sync_method, end_lsn):
     LOGGER.info("Beginning sync of stream(%s) with sync method(%s)", stream['tap_stream_id'], sync_method)
     md_map = metadata.to_map(stream['metadata'])
     conn_config['dbname'] = md_map.get(()).get('database-name')
-    desired_columns = [c for c in stream['schema']['properties'].keys() if should_sync_column(md_map, c)]
+    desired_columns = [c for c in stream['schema']['properties'].keys() if sync_common.should_sync_column(md_map, c)]
     desired_columns.sort()
 
     if len(desired_columns) == 0:
