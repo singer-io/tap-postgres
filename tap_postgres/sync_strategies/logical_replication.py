@@ -345,14 +345,19 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                     LOGGER.info("breaking after %s seconds of polling with no data", poll_duration)
                     break
 
+                LOGGER.info('about to read_message')
                 msg = cur.read_message()
+                LOGGER.info('message has been read')
                 if msg:
                     begin_ts = datetime.datetime.now()
                     if msg.data_start > end_lsn:
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
                         break
 
+                    LOGGER.info('about to consume_message')
                     state = consume_message(logical_streams, state, msg, time_extracted, conn_info, end_lsn)
+                    LOGGER.info('message has been consumed')
+
                     #msg has been consumed. it has been processed
                     last_lsn_processed = msg.data_start
                     rows_saved = rows_saved + 1
