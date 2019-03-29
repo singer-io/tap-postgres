@@ -345,14 +345,21 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                     LOGGER.info("breaking after %s seconds of polling with no data", poll_duration)
                     break
 
+                LOGGER.info('about to read_message')
                 msg = cur.read_message()
+                import sys
+
+                LOGGER.info('message has been read. size: %s', sys.getsizeof(msg))
                 if msg:
                     begin_ts = datetime.datetime.now()
                     if msg.data_start > end_lsn:
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
                         break
 
+                    LOGGER.info('about to consume_message')
                     state = consume_message(logical_streams, state, msg, time_extracted, conn_info, end_lsn)
+                    LOGGER.info('message has been consumed')
+
                     #msg has been consumed. it has been processed
                     last_lsn_processed = msg.data_start
                     rows_saved = rows_saved + 1
@@ -360,6 +367,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
                 else:
+                    LOGGER.info('about to sleep')
                     now = datetime.datetime.now()
                     timeout = keep_alive_time - (now - cur.io_timestamp).total_seconds()
                     try:
@@ -368,8 +376,8 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                             LOGGER.info("no data for %s seconds. sending feedback to server with NO flush_lsn. just a keep-alive", timeout)
                             cur.send_feedback()
 
-                    except InterruptedError:
-                        pass  # recalculate timeout and continue
+                    except InterruptedError as err:
+                        LOGGER.exception(err)
 
     if last_lsn_processed:
         for s in logical_streams:
