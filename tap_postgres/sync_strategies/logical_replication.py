@@ -378,7 +378,6 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
 
                     except InterruptedError as err:
                         LOGGER.exception(err)
-                        pass  # recalculate timeout and continue
 
     if last_lsn_processed:
         for s in logical_streams:
