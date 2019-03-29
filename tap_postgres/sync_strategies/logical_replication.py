@@ -347,7 +347,9 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
 
                 LOGGER.info('about to read_message')
                 msg = cur.read_message()
-                LOGGER.info('message has been read')
+                import sys
+
+                LOGGER.info('message has been read. size: %s', sys.getsizeof(msg))
                 if msg:
                     begin_ts = datetime.datetime.now()
                     if msg.data_start > end_lsn:
@@ -365,6 +367,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
                 else:
+                    LOGGER.info('about to sleep')
                     now = datetime.datetime.now()
                     timeout = keep_alive_time - (now - cur.io_timestamp).total_seconds()
                     try:
@@ -373,7 +376,8 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                             LOGGER.info("no data for %s seconds. sending feedback to server with NO flush_lsn. just a keep-alive", timeout)
                             cur.send_feedback()
 
-                    except InterruptedError:
+                    except InterruptedError as err:
+                        LOGGER.exception(err)
                         pass  # recalculate timeout and continue
 
     if last_lsn_processed:
