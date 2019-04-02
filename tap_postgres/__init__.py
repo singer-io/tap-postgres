@@ -54,6 +54,13 @@ INTEGER_TYPES = {'integer', 'smallint', 'bigint'}
 FLOAT_TYPES = {'real', 'double precision'}
 JSON_TYPES = {'json', 'jsonb'}
 
+RESERVED_INCREMENTAL_KEYS = {
+    '__TRANSACTION_COMMIT_TIMESTAMP__': {
+        'sql-datatype': 'timestamp',
+        'inclusion': 'available',
+        'selected-by-default': False
+    }
+}
 
 def nullable_column(col_type, pk):
     if pk:
@@ -335,6 +342,12 @@ def discover_columns(connection, table_info):
         for table_name in table_info[schema_name].keys():
             mdata = {}
             columns = table_info[schema_name][table_name]['columns']
+
+            for key in RESERVED_INCREMENTAL_KEYS.keys():
+                properties = RESERVED_INCREMENTAL_KEYS.get(key)
+                for properties_key in properties.keys():
+                    mdata = metadata.write(mdata, ('properties', key), properties_key, properties.get(properties_key))
+
             table_pks = [col_name for col_name, col_info in columns.items() if col_info.is_primary_key]
             with connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(" SELECT current_database()")

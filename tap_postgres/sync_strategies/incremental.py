@@ -7,10 +7,16 @@ from singer import utils
 import singer.metrics as metrics
 import tap_postgres.db as post_db
 
-
 LOGGER = singer.get_logger()
 
 UPDATE_BOOKMARK_PERIOD = 1000
+
+RESERVED_KEYS_METADATA = {
+    '__TRANSACTION_COMMIT_TIMESTAMP__': {
+        'data_type': 'timestamp',
+        'replication_key': 'pg_xact_commit_timestamp(xmin)'
+    }
+}
 
 def fetch_max_replication_key(conn_config, replication_key, schema_name, table_name):
     with post_db.open_connection(conn_config, False) as conn:
@@ -39,12 +45,9 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
 
     schema_name = md_map.get(()).get('schema-name')
 
-    escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
-
     activate_version_message = singer.ActivateVersionMessage(
         stream=post_db.calculate_destination_stream_name(stream, md_map),
         version=stream_version)
-
 
     singer.write_message(activate_version_message)
 
@@ -64,21 +67,15 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
                 cur.itersize = post_db.cursor_iter_size
                 LOGGER.info("Beginning new incremental replication sync %s", stream_version)
+                table_name = stream['table_name']
                 if replication_key_value:
-                    select_sql = """SELECT {}
-                                    FROM {}
-                                    WHERE {} >= '{}'::{}
-                                    ORDER BY {} ASC""".format(','.join(escaped_columns),
-                                                              post_db.fully_qualified_table_name(schema_name, stream['table_name']),
-                                                              post_db.prepare_columns_sql(replication_key), replication_key_value, replication_key_sql_datatype,
-                                                              post_db.prepare_columns_sql(replication_key))
+                    select_sql = form_sql_with_replication_key(desired_columns, replication_key,
+                                                               replication_key_sql_datatype, replication_key_value,
+                                                               schema_name, table_name)
                 else:
-                    #if not replication_key_value
-                    select_sql = """SELECT {}
-                                    FROM {}
-                                    ORDER BY {} ASC""".format(','.join(escaped_columns),
-                                                              post_db.fully_qualified_table_name(schema_name, stream['table_name']),
-                                                              post_db.prepare_columns_sql(replication_key))
+                    # if not replication_key_value
+                    select_sql = form_sql_with_no_replication_key(desired_columns, replication_key, schema_name,
+                                                                  table_name)
 
                 LOGGER.info("select statement: %s with itersize %s", select_sql, cur.itersize)
                 cur.execute(select_sql)
@@ -86,18 +83,18 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                 rows_saved = 0
 
                 for rec in cur:
-                    record_message = post_db.selected_row_to_singer_message(stream, rec, stream_version, desired_columns, time_extracted, md_map)
+                    record_message = post_db.selected_row_to_singer_message(stream, rec, stream_version,
+                                                                            desired_columns, time_extracted, md_map)
                     singer.write_message(record_message)
                     rows_saved = rows_saved + 1
 
-                    #Picking a replication_key with NULL values will result in it ALWAYS been synced which is not great
-                    #event worse would be allowing the NULL value to enter into the state
+                    # Picking a replication_key with NULL values will result in it ALWAYS been synced which is not great
+                    # event worse would be allowing the NULL value to enter into the state
                     if record_message.record[replication_key] is not None:
                         state = singer.write_bookmark(state,
                                                       stream['tap_stream_id'],
                                                       'replication_key_value',
                                                       record_message.record[replication_key])
-
 
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
                         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
@@ -105,3 +102,68 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                     counter.increment()
 
     return state
+
+
+def form_sql_with_no_replication_key(desired_columns, replication_key, schema_name, table_name):
+    escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
+
+    if RESERVED_KEYS_METADATA.get(replication_key) is None:
+        select_sql = """SELECT {}
+                                    FROM {}
+                                    ORDER BY {} ASC""".format(','.join(escaped_columns),
+                                                              post_db.fully_qualified_table_name(schema_name,
+                                                                                                 table_name),
+                                                              post_db.prepare_columns_sql(replication_key))
+    else:
+        sql_key = get_sql_key(replication_key)
+
+        select_sql = """SELECT {} {}, {}
+                                    FROM {}
+                                    ORDER BY {} ASC""".format(sql_key,
+                                                              post_db.prepare_columns_sql(replication_key),
+                                                              ','.join(escaped_columns),
+                                                              post_db.fully_qualified_table_name(schema_name,
+                                                                                                 table_name),
+                                                              sql_key)
+
+    return select_sql
+
+
+def get_sql_key(replication_key):
+    return RESERVED_KEYS_METADATA.get(replication_key).get('replication_key')
+
+
+def form_sql_with_replication_key(desired_columns, replication_key, replication_key_sql_datatype, replication_key_value,
+                                  schema_name, table_name):
+    escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
+
+    if RESERVED_KEYS_METADATA.get(replication_key) is None:
+        select_sql = """SELECT {}
+                                    FROM {}
+                                    WHERE {} >= '{}'::{}
+                                    ORDER BY {} ASC""".format(','.join(escaped_columns),
+                                                              post_db.fully_qualified_table_name(schema_name,
+                                                                                                 table_name),
+                                                              post_db.prepare_columns_sql(replication_key),
+                                                              replication_key_value, replication_key_sql_datatype,
+                                                              post_db.prepare_columns_sql(replication_key))
+    else:
+        sql_key = get_sql_key(replication_key)
+
+        select_sql = """SELECT {} {}, {}
+                                    FROM {}
+                                    WHERE {} >= '{}'::{}
+                                    ORDER BY {} ASC""".format(sql_key,
+                                                              post_db.prepare_columns_sql(replication_key),
+                                                              ','.join(escaped_columns),
+                                                              post_db.fully_qualified_table_name(schema_name,
+                                                                                                 table_name),
+                                                              sql_key,
+                                                              replication_key_value,
+                                                              replication_key_sql_datatype,
+                                                              sql_key)
+
+
+
+
+    return select_sql

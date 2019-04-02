@@ -12,20 +12,12 @@ from psycopg2.extensions import quote_ident
 LOGGER = get_logger()
 
 def get_test_connection_config(target_db='postgres'):
-    missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
-                                os.getenv('TAP_POSTGRES_USER'),
-                                os.getenv('TAP_POSTGRES_PASSWORD'),
-                                os.getenv('TAP_POSTGRES_PORT')] if x == None]
-    if len(missing_envs) != 0:
-        #pylint: disable=line-too-long
-        raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
-
     conn_config = {}
-    conn_config['host'] = os.environ.get('TAP_POSTGRES_HOST')
-    conn_config['user'] = os.environ.get('TAP_POSTGRES_USER')
-    conn_config['password'] = os.environ.get('TAP_POSTGRES_PASSWORD')
-    conn_config['port'] = os.environ.get('TAP_POSTGRES_PORT')
-    conn_config['dbname'] = target_db
+    conn_config['host'] = 'localhost'
+    conn_config['user'] = 'postgres'
+    conn_config['password'] = 'Kalamaja123'
+    conn_config['port'] = '5432'
+    conn_config['dbname'] = 'postgres'
     return conn_config
 
 def get_test_connection(target_db='postgres'):
@@ -89,13 +81,15 @@ def unselect_column(our_stream, col):
     our_stream['metadata'] = metadata.to_list(md)
     return our_stream
 
-def set_replication_method_for_stream(stream, method):
+def set_replication_method_for_stream(stream, method, key = None):
     new_md = metadata.to_map(stream['metadata'])
     old_md = new_md.get(())
     old_md.update({'replication-method': method})
+    old_md.update({'replication-key': key})
 
     stream['metadata'] = metadata.to_list(new_md)
     return stream
+
 
 def select_all_of_stream(stream):
     new_md = metadata.to_map(stream['metadata'])
