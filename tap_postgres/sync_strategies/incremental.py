@@ -105,9 +105,9 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
 
 
 def form_sql_with_no_replication_key(desired_columns, replication_key, schema_name, table_name):
-    escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
 
     if RESERVED_KEYS_METADATA.get(replication_key) is None:
+        escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
         select_sql = """SELECT {}
                                     FROM {}
                                     ORDER BY {} ASC""".format(','.join(escaped_columns),
@@ -115,6 +115,11 @@ def form_sql_with_no_replication_key(desired_columns, replication_key, schema_na
                                                                                                  table_name),
                                                               post_db.prepare_columns_sql(replication_key))
     else:
+        filtered_desired_column = desired_columns.copy()
+        for k in RESERVED_KEYS_METADATA.keys():
+            filtered_desired_column.remove(k)
+
+        escaped_columns = map(post_db.prepare_columns_sql, filtered_desired_column)
         sql_key = get_sql_key(replication_key)
 
         select_sql = """SELECT {} {}, {}
@@ -135,9 +140,10 @@ def get_sql_key(replication_key):
 
 def form_sql_with_replication_key(desired_columns, replication_key, replication_key_sql_datatype, replication_key_value,
                                   schema_name, table_name):
-    escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
 
     if RESERVED_KEYS_METADATA.get(replication_key) is None:
+        escaped_columns = map(post_db.prepare_columns_sql, desired_columns)
+
         select_sql = """SELECT {}
                                     FROM {}
                                     WHERE {} >= '{}'::{}
@@ -148,6 +154,12 @@ def form_sql_with_replication_key(desired_columns, replication_key, replication_
                                                               replication_key_value, replication_key_sql_datatype,
                                                               post_db.prepare_columns_sql(replication_key))
     else:
+        filtered_desired_column = desired_columns.copy()
+        for k in RESERVED_KEYS_METADATA.keys():
+            filtered_desired_column.remove(k)
+
+        escaped_columns = map(post_db.prepare_columns_sql, filtered_desired_column)
+
         sql_key = get_sql_key(replication_key)
 
         select_sql = """SELECT {} {}, {}

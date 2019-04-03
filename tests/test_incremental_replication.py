@@ -77,7 +77,7 @@ class TestIncrementalReplication(unittest.TestCase):
         CAUGHT_MESSAGES.clear()
 
     def test_catalog(self):
-        singer.write_message = singer_write_message_no_cow
+        singer.write_message = singer_write_message_ok
         pg_common.write_schema_message = singer_write_message_ok
 
         conn_config = get_test_connection_config()
@@ -105,6 +105,8 @@ class TestIncrementalReplication(unittest.TestCase):
         # it will sync the first record and then blow up on the 2nd record
 
         tap_postgres.do_sync(get_test_connection_config(), {'streams': streams}, None, state)
+
+        self.assertEqual(True, True)
 
 if __name__ == "__main__":
     test1 = TestIncrementalReplication()

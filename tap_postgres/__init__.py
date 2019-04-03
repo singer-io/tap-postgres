@@ -25,9 +25,10 @@ import tap_postgres.sync_strategies.full_table as full_table
 import tap_postgres.sync_strategies.incremental as incremental
 import tap_postgres.db as post_db
 import tap_postgres.sync_strategies.common as sync_common
+
 LOGGER = singer.get_logger()
 
-#LogMiner do not support LONG, LONG RAW, CLOB, BLOB, NCLOB, ADT, or COLLECTION datatypes.
+# LogMiner do not support LONG, LONG RAW, CLOB, BLOB, NCLOB, ADT, or COLLECTION datatypes.
 Column = collections.namedtuple('Column', [
     "column_name",
     "is_primary_key",
@@ -40,7 +41,6 @@ Column = collections.namedtuple('Column', [
 
 ])
 
-
 REQUIRED_CONFIG_KEYS = [
     'dbname',
     'host',
@@ -49,33 +49,36 @@ REQUIRED_CONFIG_KEYS = [
     'password'
 ]
 
-
 INTEGER_TYPES = {'integer', 'smallint', 'bigint'}
 FLOAT_TYPES = {'real', 'double precision'}
 JSON_TYPES = {'json', 'jsonb'}
 
 RESERVED_INCREMENTAL_KEYS = {
     '__TRANSACTION_COMMIT_TIMESTAMP__': {
-        'sql-datatype': 'timestamp',
-        'inclusion': 'available',
-        'selected-by-default': False
+        'column_schema': {
+            'type': ['null', 'string'],
+            'format': 'date-time'
+        },
+        'column_info': Column('__TRANSACTION_COMMIT_TIMESTAMP__', None, 'timestamp', None, None, None, None, None)
     }
 }
 
+
 def nullable_column(col_type, pk):
     if pk:
-        return  [col_type]
+        return [col_type]
     return ['null', col_type]
+
 
 def schema_for_column_datatype(c):
     schema = {}
-    #remove any array notation from type information as we use a separate field for that
+    # remove any array notation from type information as we use a separate field for that
     data_type = c.sql_data_type.lower().replace('[]', '')
 
     if data_type in INTEGER_TYPES:
         schema['type'] = nullable_column('integer', c.is_primary_key)
-        schema['minimum'] = -1 * (2**(c.numeric_precision - 1))
-        schema['maximum'] = 2**(c.numeric_precision - 1) - 1
+        schema['minimum'] = -1 * (2 ** (c.numeric_precision - 1))
+        schema['maximum'] = 2 ** (c.numeric_precision - 1) - 1
         return schema
     if data_type == 'money':
         schema['type'] = nullable_column('string', c.is_primary_key)
@@ -122,7 +125,7 @@ def schema_for_column_datatype(c):
         return schema
 
     if data_type in {'time without time zone', 'time with time zone'}:
-        #times are treated as ordinary strings as they can not possible match RFC3339
+        # times are treated as ordinary strings as they can not possible match RFC3339
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
@@ -159,16 +162,18 @@ def schema_for_column_datatype(c):
 
     return schema
 
+
 def schema_name_for_numeric_array(precision, scale):
     schema_name = 'sdc_recursive_decimal_{}_{}_array'.format(precision, scale)
     return schema_name
 
-def schema_for_column(c):
-    #NB> from the post postgres docs: The current implementation does not enforce the declared number of dimensions either.
-    #these means we can say nothing about an array column. its items may be more arrays or primitive types like integers
-    #and this can vary on a row by row basis
 
-    column_schema = {'type':["null", "array"]}
+def schema_for_column(c):
+    # NB> from the post postgres docs: The current implementation does not enforce the declared number of dimensions either.
+    # these means we can say nothing about an array column. its items may be more arrays or primitive types like integers
+    # and this can vary on a row by row basis
+
+    column_schema = {'type': ["null", "array"]}
     if not c.is_array:
         return schema_for_column_datatype(c)
 
@@ -221,23 +226,22 @@ def schema_for_column(c):
     elif c.sql_data_type == 'uuid[]':
         column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     else:
-        #custom datatypes like enums
+        # custom datatypes like enums
         column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     return column_schema
 
 
-
-#typlen  -1  == variable length arrays
-#typelem != 0 points to subtypes. 23 in the case of arrays
+# typlen  -1  == variable length arrays
+# typelem != 0 points to subtypes. 23 in the case of arrays
 # so integer arrays are typlen = -1, typelem = 23 because integer types are oid 23
 
-#this seems to identify all arrays:
-#select typname from pg_attribute  as pga join pg_type as pgt on pgt.oid = pga.atttypid  where typlen = -1 and typelem != 0 and pga.attndims > 0;
+# this seems to identify all arrays:
+# select typname from pg_attribute  as pga join pg_type as pgt on pgt.oid = pga.atttypid  where typlen = -1 and typelem != 0 and pga.attndims > 0;
 def produce_table_info(conn):
     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
         cur.itersize = post_db.cursor_iter_size
         table_info = {}
-          # SELECT CASE WHEN $2.typtype = 'd' THEN $2.typbasetype ELSE $1.atttypid END
+        # SELECT CASE WHEN $2.typtype = 'd' THEN $2.typbasetype ELSE $1.atttypid END
         cur.execute("""
 SELECT
   pg_class.reltuples::BIGINT                            AS approximate_row_count,
@@ -286,7 +290,7 @@ AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
                 table_info[schema_name] = {}
 
             if table_info[schema_name].get(table_name) is None:
-                table_info[schema_name][table_name] = {'is_view': is_view, 'row_count' : row_count, 'columns' : {}}
+                table_info[schema_name][table_name] = {'is_view': is_view, 'row_count': row_count, 'columns': {}}
 
             col_name = col_info[0]
 
@@ -294,18 +298,24 @@ AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
 
         return table_info
 
+
 def get_database_name(connection):
     cur = connection.cursor()
 
     rows = cur.execute("SELECT name FROM v$database").fetchall()
     return rows[0][0]
 
-def write_sql_data_type_md(mdata, col_info):
-    c_name = col_info.column_name
+
+def write_sql_data_type_md(mdata, columns_metadata, cname):
+    col_info = columns_metadata.get(cname, None)
+    if col_info is None:
+        col_info = RESERVED_INCREMENTAL_KEYS.get(cname).get('column_info')
+
     if col_info.sql_data_type == 'bit' and col_info.character_maximum_length > 1:
-        mdata = metadata.write(mdata, ('properties', c_name), 'sql-datatype', "bit({})".format(col_info.character_maximum_length))
+        mdata = metadata.write(mdata, ('properties', cname), 'sql-datatype',
+                               "bit({})".format(col_info.character_maximum_length))
     else:
-        mdata = metadata.write(mdata, ('properties', c_name), 'sql-datatype', col_info.sql_data_type)
+        mdata = metadata.write(mdata, ('properties', cname), 'sql-datatype', col_info.sql_data_type)
 
     return mdata
 
@@ -320,21 +330,26 @@ BASE_RECURSIVE_SCHEMAS = {'sdc_recursive_integer_array'   : {'type' : ['null', '
 def include_array_schemas(columns, schema):
     schema['definitions'] = copy.deepcopy(BASE_RECURSIVE_SCHEMAS)
 
-
     decimal_array_columns = [key for key, value in columns.items() if value.sql_data_type == 'numeric[]']
     for c in decimal_array_columns:
         scale = post_db.numeric_scale(columns[c])
         precision = post_db.numeric_precision(columns[c])
         schema_name = schema_name_for_numeric_array(precision, scale)
-        schema['definitions'][schema_name] = {'type' : ['null', 'number', 'array'],
+        schema['definitions'][schema_name] = {'type': ['null', 'number', 'array'],
                                               'multipleOf': post_db.numeric_multiple_of(scale),
-                                              'exclusiveMaximum' : True,
-                                              'maximum' : post_db.numeric_max(precision, scale),
+                                              'exclusiveMaximum': True,
+                                              'maximum': post_db.numeric_max(precision, scale),
                                               'exclusiveMinimum': True,
-                                              'minimum' : post_db.numeric_min(precision, scale),
-                                              'items' : {'$ref': '#/definitions/{}'.format(schema_name)}}
+                                              'minimum': post_db.numeric_min(precision, scale),
+                                              'items': {'$ref': '#/definitions/{}'.format(schema_name)}}
 
     return schema
+
+
+def enrich_system_columns(column_schemas):
+    for key in RESERVED_INCREMENTAL_KEYS.keys():
+        column_schemas[key] = RESERVED_INCREMENTAL_KEYS.get(key).get('column_schema')
+
 
 def discover_columns(connection, table_info):
     entries = []
@@ -342,11 +357,6 @@ def discover_columns(connection, table_info):
         for table_name in table_info[schema_name].keys():
             mdata = {}
             columns = table_info[schema_name][table_name]['columns']
-
-            for key in RESERVED_INCREMENTAL_KEYS.keys():
-                properties = RESERVED_INCREMENTAL_KEYS.get(key)
-                for properties_key in properties.keys():
-                    mdata = metadata.write(mdata, ('properties', key), properties_key, properties.get(properties_key))
 
             table_pks = [col_name for col_name, col_info in columns.items() if col_info.is_primary_key]
             with connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -359,19 +369,24 @@ def discover_columns(connection, table_info):
             metadata.write(mdata, (), 'row-count', table_info[schema_name][table_name]['row_count'])
             metadata.write(mdata, (), 'is-view', table_info[schema_name][table_name].get('is_view'))
 
-            column_schemas = {col_name : schema_for_column(col_info) for col_name, col_info in columns.items()}
+            column_schemas = {col_name: schema_for_column(col_info) for col_name, col_info in columns.items()}
 
-            schema = {'type' : 'object',
+            enrich_system_columns(column_schemas)
+
+            schema = {'type': 'object',
                       'properties': column_schemas,
-                      'definitions' : {}}
+                      'definitions': {}}
 
             schema = include_array_schemas(columns, schema)
 
             for c_name in column_schemas.keys():
-                mdata = write_sql_data_type_md(mdata, columns[c_name])
+                mdata = write_sql_data_type_md(mdata, columns, c_name)
 
                 if column_schemas[c_name].get('type') is None:
                     mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'unsupported')
+                    mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', False)
+                elif RESERVED_INCREMENTAL_KEYS.get(c_name) is not None:
+                    mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'automatic')
                     mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', False)
                 elif table_info[schema_name][table_name]['columns'][c_name].is_primary_key:
                     mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'automatic')
@@ -380,20 +395,22 @@ def discover_columns(connection, table_info):
                     mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'available')
                     mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', True)
 
-            entry = {'table_name'    : table_name,
-                     'stream'        : table_name,
-                     'metadata'      : metadata.to_list(mdata),
-                     'tap_stream_id' : post_db.compute_tap_stream_id(database_name, schema_name, table_name),
-                     'schema'        : schema}
+            entry = {'table_name': table_name,
+                     'stream': table_name,
+                     'metadata': metadata.to_list(mdata),
+                     'tap_stream_id': post_db.compute_tap_stream_id(database_name, schema_name, table_name),
+                     'schema': schema}
 
             entries.append(entry)
 
     return entries
 
+
 def discover_db(connection):
     table_info = produce_table_info(connection)
     db_streams = discover_columns(connection, table_info)
     return db_streams
+
 
 def attempt_connection_to_db(conn_config, dbname):
     nascent_config = copy.deepcopy(conn_config)
@@ -405,11 +422,15 @@ def attempt_connection_to_db(conn_config, dbname):
         conn.close()
         return True
     except Exception as err:
-        LOGGER.warning('Unable to connect to %s. This maybe harmless if you have not desire to replicate from this database: "%s"', dbname, err)
+        LOGGER.warning(
+            'Unable to connect to %s. This maybe harmless if you have not desire to replicate from this database: "%s"',
+            dbname, err)
         return False
 
+
 def dump_catalog(all_streams):
-    json.dump({'streams' : all_streams}, sys.stdout, indent=2)
+    json.dump({'streams': all_streams}, sys.stdout, indent=2)
+
 
 def do_discovery(conn_config):
     all_streams = []
@@ -439,7 +460,6 @@ def do_discovery(conn_config):
             db_streams = discover_db(conn)
             all_streams = all_streams + db_streams
 
-
     if len(all_streams) == 0:
         LOGGER.warning("0 tables were discovered across the entire cluster")
 
@@ -448,12 +468,11 @@ def do_discovery(conn_config):
 
 
 def should_sync_column(md_map, field_name):
-
     inclusion = md_map.get(('properties', field_name), {}).get('inclusion')
     selected = md_map.get(('properties', field_name), {}).get('selected')
     selected_by_default = md_map.get(('properties', field_name), {}).get('selected-by-default')
 
-    #always sync replication_keys
+    # always sync replication_keys
     if md_map.get((), {}).get('replication-key') == field_name:
         return True
 
@@ -471,9 +490,11 @@ def should_sync_column(md_map, field_name):
 
     return False
 
+
 def is_selected_via_metadata(stream):
     table_md = metadata.to_map(stream['metadata']).get((), {})
     return table_md.get('selected')
+
 
 def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
     LOGGER.info("Stream %s is using full_table replication", stream['tap_stream_id'])
@@ -484,13 +505,16 @@ def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
         state = full_table.sync_table(conn_config, stream, state, desired_columns, md_map)
     return state
 
-#Possible state keys: replication_key, replication_key_value, version
+
+# Possible state keys: replication_key, replication_key_value, version
 def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
     replication_key = md_map.get((), {}).get('replication-key')
-    LOGGER.info("Stream %s is using incremental replication with replication key %s", stream['tap_stream_id'], replication_key)
+    LOGGER.info("Stream %s is using incremental replication with replication key %s", stream['tap_stream_id'],
+                replication_key)
 
     stream_state = state.get('bookmarks', {}).get(stream['tap_stream_id'])
-    illegal_bk_keys = set(stream_state.keys()).difference(set(['replication_key', 'replication_key_value', 'version', 'last_replication_method']))
+    illegal_bk_keys = set(stream_state.keys()).difference(
+        set(['replication_key', 'replication_key_value', 'version', 'last_replication_method']))
     if len(illegal_bk_keys) != 0:
         raise Exception("invalid keys found in state: {}".format(illegal_bk_keys))
 
@@ -505,19 +529,21 @@ def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
 
     return state
 
+
 def clear_state_on_replication_change(state, tap_stream_id, replication_key, replication_method):
-    #user changed replication, nuke state
+    # user changed replication, nuke state
     last_replication_method = singer.get_bookmark(state, tap_stream_id, 'last_replication_method')
     if last_replication_method is not None and (replication_method != last_replication_method):
         state = singer.reset_stream(state, tap_stream_id)
 
-    #key changed
+    # key changed
     if replication_method == 'INCREMENTAL':
         if replication_key != singer.get_bookmark(state, tap_stream_id, 'replication_key'):
             state = singer.reset_stream(state, tap_stream_id)
 
     state = singer.write_bookmark(state, tap_stream_id, 'last_replication_method', replication_method)
     return state
+
 
 def sync_method_for_streams(streams, state, default_replication_method):
     lookup = {}
@@ -543,7 +569,9 @@ def sync_method_for_streams(streams, state, default_replication_method):
             continue
 
         if replication_method == 'LOG_BASED' and stream_metadata.get((), {}).get('is-view'):
-            raise Exception('Logical Replication is NOT supported for views. Please change the replication method for {}'.format(stream['tap_stream_id']))
+            raise Exception(
+                'Logical Replication is NOT supported for views. Please change the replication method for {}'.format(
+                    stream['tap_stream_id']))
 
         if replication_method == 'FULL_TABLE':
             lookup[stream['tap_stream_id']] = 'full'
@@ -552,26 +580,31 @@ def sync_method_for_streams(streams, state, default_replication_method):
             lookup[stream['tap_stream_id']] = 'incremental'
             traditional_steams.append(stream)
 
-        elif get_bookmark(state, stream['tap_stream_id'], 'xmin') and get_bookmark(state, stream['tap_stream_id'], 'lsn'):
-            #finishing previously interrupted full-table (first stage of logical replication)
+        elif get_bookmark(state, stream['tap_stream_id'], 'xmin') and get_bookmark(state, stream['tap_stream_id'],
+                                                                                   'lsn'):
+            # finishing previously interrupted full-table (first stage of logical replication)
             lookup[stream['tap_stream_id']] = 'logical_initial_interrupted'
             traditional_steams.append(stream)
 
-        #inconsistent state
-        elif get_bookmark(state, stream['tap_stream_id'], 'xmin') and not get_bookmark(state, stream['tap_stream_id'], 'lsn'):
+        # inconsistent state
+        elif get_bookmark(state, stream['tap_stream_id'], 'xmin') and not get_bookmark(state, stream['tap_stream_id'],
+                                                                                       'lsn'):
             raise Exception("Xmin found(%s) in state implying full-table replication but no lsn is present")
 
-        elif not get_bookmark(state, stream['tap_stream_id'], 'xmin') and not get_bookmark(state, stream['tap_stream_id'], 'lsn'):
-            #initial full-table phase of logical replication
+        elif not get_bookmark(state, stream['tap_stream_id'], 'xmin') and not get_bookmark(state,
+                                                                                           stream['tap_stream_id'],
+                                                                                           'lsn'):
+            # initial full-table phase of logical replication
             lookup[stream['tap_stream_id']] = 'logical_initial'
             traditional_steams.append(stream)
 
-        else: #no xmin but we have an lsn
-            #initial stage of logical replication(full-table) has been completed. moving onto pure logical replication
+        else:  # no xmin but we have an lsn
+            # initial stage of logical replication(full-table) has been completed. moving onto pure logical replication
             lookup[stream['tap_stream_id']] = 'pure_logical'
             logical_streams.append(stream)
 
     return lookup, traditional_steams, logical_streams
+
 
 def sync_traditional_stream(conn_config, stream, state, sync_method):
     LOGGER.info("Beginning sync of stream(%s) with sync method(%s)", stream['tap_stream_id'], sync_method)
@@ -613,9 +646,11 @@ def sync_traditional_stream(conn_config, stream, state, sync_method):
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
     return state
 
+
 def sync_logical_streams(conn_config, logical_streams, state):
     if logical_streams:
-        LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", logical_replication.fetch_current_lsn(conn_config), list(map(lambda s: s['tap_stream_id'], logical_streams)))
+        LOGGER.info("Pure Logical Replication upto lsn %s for (%s)", logical_replication.fetch_current_lsn(conn_config),
+                    list(map(lambda s: s['tap_stream_id'], logical_streams)))
         logical_streams = list(map(logical_replication.add_automatic_properties, logical_streams))
 
         state = logical_replication.sync_tables(conn_config, logical_streams, state)
@@ -626,7 +661,7 @@ def sync_logical_streams(conn_config, logical_streams, state):
 def register_type_adapters(conn_config):
     with post_db.open_connection(conn_config) as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            #citext[]
+            # citext[]
             cur.execute("SELECT typarray FROM pg_type where typname = 'citext'")
             citext_array_oid = cur.fetchone()
             if citext_array_oid:
@@ -634,29 +669,28 @@ def register_type_adapters(conn_config):
                     psycopg2.extensions.new_array_type(
                         (citext_array_oid[0],), 'CITEXT[]', psycopg2.STRING))
 
-            #bit[]
+            # bit[]
             cur.execute("SELECT typarray FROM pg_type where typname = 'bit'")
             bit_array_oid = cur.fetchone()[0]
             psycopg2.extensions.register_type(
                 psycopg2.extensions.new_array_type(
                     (bit_array_oid,), 'BIT[]', psycopg2.STRING))
 
-
-            #UUID[]
+            # UUID[]
             cur.execute("SELECT typarray FROM pg_type where typname = 'uuid'")
             uuid_array_oid = cur.fetchone()[0]
             psycopg2.extensions.register_type(
                 psycopg2.extensions.new_array_type(
                     (uuid_array_oid,), 'UUID[]', psycopg2.STRING))
 
-            #money[]
+            # money[]
             cur.execute("SELECT typarray FROM pg_type where typname = 'money'")
             money_array_oid = cur.fetchone()[0]
             psycopg2.extensions.register_type(
                 psycopg2.extensions.new_array_type(
                     (money_array_oid,), 'MONEY[]', psycopg2.STRING))
 
-            #enum[]'s
+            # enum[]'s
             cur.execute("SELECT distinct(t.typarray) FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid")
             for oid in cur.fetchall():
                 enum_oid = oid[0]
@@ -665,53 +699,56 @@ def register_type_adapters(conn_config):
                         (enum_oid,), 'ENUM_{}[]'.format(enum_oid), psycopg2.STRING))
 
 
-
 def do_sync(conn_config, catalog, default_replication_method, state):
     currently_syncing = singer.get_currently_syncing(state)
     streams = list(filter(is_selected_via_metadata, catalog['streams']))
     streams.sort(key=lambda s: s['tap_stream_id'])
     LOGGER.info("Selected streams: %s ", list(map(lambda s: s['tap_stream_id'], streams)))
 
-    sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state, default_replication_method)
-    #{"chickens" : "full_stream", "cows" : "logical_initial_interrupted_streams", "turkeys": "logical_replication"}
-    #{"logical_streams" : ["turkeys"], "traditional_streams" : ["chickens", "cows"]}
+    sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state,
+                                                                                       default_replication_method)
+    # {"chickens" : "full_stream", "cows" : "logical_initial_interrupted_streams", "turkeys": "logical_replication"}
+    # {"logical_streams" : ["turkeys"], "traditional_streams" : ["chickens", "cows"]}
 
     if currently_syncing:
         LOGGER.info("found currently_syncing: %s", currently_syncing)
         currently_syncing_stream = list(filter(lambda s: s['tap_stream_id'] == currently_syncing, traditional_streams))
         if currently_syncing_stream is None:
-            LOGGER.warning("unable to locate currently_syncing(%s) amongst selected traditional streams(%s). will ignore", currently_syncing, list(map(lambda s: s['tap_stream_id'], traditional_streams)))
+            LOGGER.warning(
+                "unable to locate currently_syncing(%s) amongst selected traditional streams(%s). will ignore",
+                currently_syncing, list(map(lambda s: s['tap_stream_id'], traditional_streams)))
         other_streams = list(filter(lambda s: s['tap_stream_id'] != currently_syncing, traditional_streams))
         traditional_streams = currently_syncing_stream + other_streams
     else:
         LOGGER.info("No currently_syncing found")
 
-
-
     for stream in traditional_streams:
         state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream['tap_stream_id']])
 
     logical_streams.sort(key=lambda s: metadata.to_map(s['metadata']).get(()).get('database-name'))
-    for dbname, streams in itertools.groupby(logical_streams, lambda s: metadata.to_map(s['metadata']).get(()).get('database-name')):
+    for dbname, streams in itertools.groupby(logical_streams,
+                                             lambda s: metadata.to_map(s['metadata']).get(()).get('database-name')):
         conn_config['dbname'] = dbname
         state = sync_logical_streams(conn_config, list(streams), state)
     return state
 
+
 def main_impl():
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
-    conn_config = {'host'     : args.config['host'],
-                   'user'     : args.config['user'],
-                   'password' : args.config['password'],
-                   'port'     : args.config['port'],
-                   'dbname'   : args.config['dbname'],
-                   'filter_dbs' : args.config.get('filter_dbs')}
+    conn_config = {'host': args.config['host'],
+                   'user': args.config['user'],
+                   'password': args.config['password'],
+                   'port': args.config['port'],
+                   'dbname': args.config['dbname'],
+                   'filter_dbs': args.config.get('filter_dbs')}
 
     if args.config.get('ssl') == 'true':
         conn_config['sslmode'] = 'require'
 
     post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
 
-    post_db.include_schemas_in_destination_stream_name = (args.config.get('include_schemas_in_destination_stream_name') == 'true')
+    post_db.include_schemas_in_destination_stream_name = (
+            args.config.get('include_schemas_in_destination_stream_name') == 'true')
 
     if args.discover:
         do_discovery(conn_config)
@@ -720,6 +757,7 @@ def main_impl():
         do_sync(conn_config, args.properties, args.config.get('default_replication_method'), state)
     else:
         LOGGER.info("No properties were selected")
+
 
 def main():
     try:
