@@ -10,6 +10,7 @@ import tap_postgres.db as post_db
 import tap_postgres.sync_strategies.common as sync_common
 from dateutil.parser import parse
 import psycopg2
+from psycopg2 import sql
 import copy
 from select import select
 from functools import reduce
@@ -68,11 +69,14 @@ def tuples_to_map(accum, t):
     accum[t[0]] = t[1]
     return accum
 
+def create_hstore_elem_query(elem):
+    return sql.SQL("SELECT hstore_to_array({})").format(sql.Literal(elem))
+
 def create_hstore_elem(conn_info, elem):
     with post_db.open_connection(conn_info) as conn:
         with conn.cursor() as cur:
-            sql = """SELECT hstore_to_array('{}')""".format(elem)
-            cur.execute(sql)
+            query = create_hstore_elem_query(elem)
+            cur.execute(query)
             res = cur.fetchone()[0]
             hstore_elem = reduce(tuples_to_map, [res[i:i + 2] for i in range(0, len(res), 2)], {})
             return hstore_elem
