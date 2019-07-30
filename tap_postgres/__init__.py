@@ -273,7 +273,7 @@ WHERE attnum > 0
 AND NOT a.attisdropped
 AND pg_class.relkind IN ('r', 'v', 'm')
 AND n.nspname NOT in ('pg_toast', 'pg_catalog', 'information_schema')
-AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
+AND has_column_privilege(pg_class.oid, attname, 'SELECT') = true """)
         for row in cur.fetchall():
             row_count, is_view, schema_name, table_name, *col_info = row
 
