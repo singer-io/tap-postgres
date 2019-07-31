@@ -4,6 +4,7 @@ import math
 import psycopg2
 import psycopg2.extras
 import singer
+from shapely import wkb
 LOGGER = singer.get_logger()
 
 cursor_iter_size = 20000
@@ -49,6 +50,9 @@ def selected_value_to_singer_value_impl(elem, sql_datatype):
     sql_datatype = sql_datatype.replace('[]', '')
     if elem is None:
         cleaned_elem = elem
+    elif sql_datatype == 'geometry':
+        LOGGER.info('geometry!')
+        cleaned_elem = wkb.loads(elem, hex=True).wkt
     elif sql_datatype == 'money':
         cleaned_elem = elem
     elif isinstance(elem, datetime.datetime):

@@ -151,6 +151,9 @@ def schema_for_column_datatype(c):
         schema['type'] = nullable_column('string', c.is_primary_key)
         return schema
 
+    if data_type == 'geometry':
+        schema['type'] = nullable_column('string', c.is_primary_key)
+
     return schema
 
 def schema_name_for_numeric_array(precision, scale):
