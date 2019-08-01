@@ -691,9 +691,9 @@ def main_impl():
 
     if args.discover:
         do_discovery(conn_config)
-    elif args.properties or args.catalog:
+    elif args.properties:
         state = args.state
-        do_sync(conn_config, args.catalog.to_dict() if args.catalog else args.properties, args.config.get('default_replication_method'), state)
+        do_sync(conn_config, args.properties, args.config.get('default_replication_method'), state)
     else:
         LOGGER.info("No properties were selected")
 
