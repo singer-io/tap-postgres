@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='tap-postgres',
-      version='0.0.61',
+      version='0.0.62',
       description='Singer.io tap for extracting data from PostgreSQL',
       author='Stitch',
       url='https://singer.io',
