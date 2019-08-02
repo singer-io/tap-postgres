@@ -493,7 +493,7 @@ def sync_method_for_streams(streams, state, default_replication_method):
         state = clear_state_on_replication_change(state, stream['tap_stream_id'], replication_key, replication_method)
 
         if replication_method not in set(['LOG_BASED', 'FULL_TABLE', 'INCREMENTAL']):
-            raise Exception("Unrecognized replication_method {}".format(replication_method))
+            raise Exception("Unrecognized replication_method {} for stream {}".format(replication_method, stream['tap_stream_id']))
 
         md_map = metadata.to_map(stream['metadata'])
         desired_columns = [c for c in stream['schema']['properties'].keys() if sync_common.should_sync_column(md_map, c)]
