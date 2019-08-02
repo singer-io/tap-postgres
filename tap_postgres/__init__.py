@@ -692,8 +692,11 @@ def main_impl():
     if args.discover:
         do_discovery(conn_config)
     elif args.properties:
+        default_replication_method = args.config.get('default_replication_method')
+        if args.config.get('use_log_based_replication') == 'true':
+            default_replication_method = "LOG_BASED"
         state = args.state
-        do_sync(conn_config, args.properties, args.config.get('default_replication_method'), state)
+        do_sync(conn_config, args.properties, default_replication_method, state)
     else:
         LOGGER.info("No properties were selected")
 
