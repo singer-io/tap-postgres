@@ -168,7 +168,7 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
     if sql_datatype == 'hstore':
         return create_hstore_elem(conn_info, elem)
     if 'numeric' in sql_datatype:
-        return decimal.Decimal(elem)
+        return decimal.Decimal(str(elem))
     if isinstance(elem, int):
         return elem
     if isinstance(elem, float):
