@@ -105,6 +105,8 @@ def create_array_elem(elem, sql_datatype, conn_info):
                 cast_datatype = 'text[]'
             elif sql_datatype == 'integer[]':
                 cast_datatype = 'integer[]'
+            elif sql_datatype == 'bigint[]':
+                cast_datatype = 'bigint[]'
             elif sql_datatype == 'inet[]':
                 cast_datatype = 'inet[]'
             elif sql_datatype == 'json[]':
