@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 # pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code, anomalous-backslash-in-string, too-many-statements, singleton-comparison, consider-using-in
 
-import singer
+from functools import reduce
+from select import select
+import copy
+import csv
 import datetime
 import decimal
+import json
+import re
+
+from dateutil.parser import parse
+import psycopg2
+import singer
 from singer import utils, get_bookmark
 import singer.metadata as metadata
 import tap_postgres.db as post_db
 import tap_postgres.sync_strategies.common as sync_common
-from dateutil.parser import parse
-import psycopg2
-from psycopg2 import sql
-import copy
-from select import select
-from functools import reduce
-import json
-import re
+
 
 LOGGER = singer.get_logger()
 
@@ -65,81 +67,29 @@ def get_stream_version(tap_stream_id, state):
 
     return stream_version
 
-def tuples_to_map(accum, t):
-    accum[t[0]] = t[1]
-    return accum
+def create_hstore_elem(elem):
+    array = [(item.replace('"', '').split('=>')) for item in elem]
+    hstore = {}
+    for item in array:
+        if len(item) == 2:
+            key, value = item
+            if key in hstore:
+                raise KeyError('Duplicate key {} found when creating hstore'.format(key))
+            if value.lower() == 'null':
+                value = None
+            d[key] = value
 
-def create_hstore_elem_query(elem):
-    return sql.SQL("SELECT hstore_to_array({})").format(sql.Literal(elem))
+    return hstore
 
-def create_hstore_elem(conn_info, elem):
-    with post_db.open_connection(conn_info) as conn:
-        with conn.cursor() as cur:
-            query = create_hstore_elem_query(elem)
-            cur.execute(query)
-            res = cur.fetchone()[0]
-            hstore_elem = reduce(tuples_to_map, [res[i:i + 2] for i in range(0, len(res), 2)], {})
-            return hstore_elem
-
-def create_array_elem(elem, sql_datatype, conn_info):
+def create_array_elem(elem):
     if elem is None:
         return None
 
-    with post_db.open_connection(conn_info) as conn:
-        with conn.cursor() as cur:
-            if sql_datatype == 'bit[]':
-                cast_datatype = 'boolean[]'
-            elif sql_datatype == 'boolean[]':
-                cast_datatype = 'boolean[]'
-            elif sql_datatype == 'character varying[]':
-                cast_datatype = 'character varying[]'
-            elif sql_datatype == 'cidr[]':
-                cast_datatype = 'cidr[]'
-            elif sql_datatype == 'citext[]':
-                cast_datatype = 'text[]'
-            elif sql_datatype == 'date[]':
-                cast_datatype = 'text[]'
-            elif sql_datatype == 'double precision[]':
-                cast_datatype = 'double precision[]'
-            elif sql_datatype == 'hstore[]':
-                cast_datatype = 'text[]'
-            elif sql_datatype == 'integer[]':
-                cast_datatype = 'integer[]'
-            elif sql_datatype == 'bigint[]':
-                cast_datatype = 'bigint[]'
-            elif sql_datatype == 'inet[]':
-                cast_datatype = 'inet[]'
-            elif sql_datatype == 'json[]':
-                cast_datatype = 'text[]'
-            elif sql_datatype == 'jsonb[]':
-                cast_datatype = 'text[]'
-            elif sql_datatype == 'macaddr[]':
-                cast_datatype = 'macaddr[]'
-            elif sql_datatype == 'money[]':
-                cast_datatype = 'text[]'
-            elif sql_datatype == 'numeric[]':
-                cast_datatype = 'text[]'
-            elif sql_datatype == 'real[]':
-                cast_datatype = 'real[]'
-            elif sql_datatype == 'smallint[]':
-                cast_datatype = 'smallint[]'
-            elif sql_datatype == 'text[]':
-                cast_datatype = 'text[]'
-            elif sql_datatype in ('time without time zone[]', 'time with time zone[]'):
-                cast_datatype = 'text[]'
-            elif sql_datatype in ('timestamp with time zone[]', 'timestamp without time zone[]'):
-                cast_datatype = 'text[]'
-            elif sql_datatype == 'uuid[]':
-                cast_datatype = 'text[]'
-
-            else:
-                #custom datatypes like enums
-                cast_datatype = 'text[]'
-
-            sql_stmt = """SELECT $stitch_quote${}$stitch_quote$::{}""".format(elem, cast_datatype)
-            cur.execute(sql_stmt)
-            res = cur.fetchone()[0]
-            return res
+    elem = [elem[1:-1]]
+    reader = csv.reader(elem, delimiter=',', escapechar='\\' , quotechar='"')
+    array = next(reader)
+    array = [None if element.lower() == 'null' else element for element in array]
+    return array
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
 def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
@@ -166,17 +116,21 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
         #for ordinary bits, elem will == '1'
         return elem == '1' or elem == True
     if sql_datatype == 'boolean':
-        return elem
+        return bool(elem)
     if sql_datatype == 'hstore':
-        return create_hstore_elem(conn_info, elem)
+        return create_hstore_elem(elem)
     if 'numeric' in sql_datatype:
-        return decimal.Decimal(str(elem))
-    if isinstance(elem, int):
-        return elem
-    if isinstance(elem, float):
-        return elem
-    if isinstance(elem, str):
-        return elem
+        return decimal.Decimal(elem)
+    if sql_datatype == 'money':
+        return decimal.Decimal(elem[1:])
+    if sql_datatype in ('integer', 'smallint', 'bigint'):
+        return int(elem)
+    if sql_datatype in ('double precision', 'real', 'float'):
+        return float(elem)
+    if sql_datatype in ('text', 'character varying'):
+        return elem #  return as string
+    if sql_datatype in ('cidr', 'citext', 'json', 'jsonb', 'inet', 'macaddr', 'uuid'):
+        return elem #  return as string
 
     raise Exception("do not know how to marshall value of type {}".format(elem.__class__))
 
@@ -189,7 +143,7 @@ def selected_array_to_singer_value(elem, sql_datatype, conn_info):
 def selected_value_to_singer_value(elem, sql_datatype, conn_info):
     #are we dealing with an array?
     if sql_datatype.find('[]') > 0:
-        cleaned_elem = create_array_elem(elem, sql_datatype, conn_info)
+        cleaned_elem = create_array_elem(elem)
         return list(map(lambda elem: selected_array_to_singer_value(elem, sql_datatype, conn_info), (cleaned_elem or [])))
 
     return selected_value_to_singer_value_impl(elem, sql_datatype, conn_info)
