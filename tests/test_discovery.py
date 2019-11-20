@@ -365,6 +365,16 @@ class TestHStoreTable(unittest.TestCase):
                                   'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                                  stream_dict.get('schema'))
 
+    def test_escaping_values(self):
+        key = 'nickname'
+        value = "Dave's Courtyard"
+        elem = '"{}"=>"{}"'.format(key, value)
+
+        with get_test_connection() as conn:
+          with conn.cursor() as cur:
+            query = tap_postgres.sync_strategies.logical_replication.create_hstore_elem_query(elem)
+            self.assertEqual(query.as_string(cur), "SELECT hstore_to_array('\"nickname\"=>\"Dave''s Courtyard\"')")
+
 
 class TestEnumTable(unittest.TestCase):
     maxDiff = None
@@ -565,6 +575,63 @@ class TestArraysLikeTable(unittest.TestCase):
                                   'type': 'object',
                                   'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                                  stream_dict.get('schema'))
+
+class TestColumnGrants(unittest.TestCase):
+    maxDiff = None
+    table_name = 'CHICKEN TIMES'
+    user = 'tmp_user_for_grant_tests'
+    password = 'password'
+ 
+    def setUp(self):
+        table_spec = {"columns": [{"name" : "id",                "type" : "integer",  "serial" : True},
+                                 {"name" : 'size integer',      "type" : "integer",  "quoted" : True},
+                                 {"name" : 'size smallint',     "type" : "smallint", "quoted" : True},
+                                 {"name" : 'size bigint',       "type" : "bigint",   "quoted" : True}],
+                     "name" : TestColumnGrants.table_name}
+        ensure_test_table(table_spec)
+
+        with get_test_connection() as conn:
+           cur = conn.cursor()
+
+           sql = """ DROP USER IF EXISTS {} """.format(self.user, self.password)
+           LOGGER.info(sql)
+           cur.execute(sql)
+
+           sql = """ CREATE USER {} WITH PASSWORD '{}' """.format(self.user, self.password)
+           LOGGER.info(sql)
+           cur.execute(sql)
+
+           sql = """ GRANT SELECT ("id") ON "{}" TO {}""".format(TestColumnGrants.table_name, self.user)
+           LOGGER.info("running sql: {}".format(sql))
+           cur.execute(sql)
+
+           
+           
+
+    def test_catalog(self):
+        conn_config = get_test_connection_config()
+        conn_config['user'] = self.user
+        conn_config['password'] = self.password
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [s for s in streams if s['tap_stream_id'] == 'postgres-public-CHICKEN TIMES']
+
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0]
+
+        self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('table_name'))
+        self.assertEqual(TestStringTableWithPK.table_name, stream_dict.get('stream'))
+
+
+        stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
+
+        self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
+                         {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': False, 'row-count': 0},
+                          ('properties', 'id')                     : {'inclusion': 'available', 'sql-datatype' : 'integer', 'selected-by-default' : True}})
+        
+        self.assertEqual({'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS,
+                          'type': 'object',
+                          'properties': {'id': {'type': ['null', 'integer'], 'minimum': -2147483648, 'maximum': 2147483647}}},
+                         stream_dict.get('schema'))
 
 
 if __name__== "__main__":

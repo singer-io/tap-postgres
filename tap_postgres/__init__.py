@@ -273,7 +273,7 @@ WHERE attnum > 0
 AND NOT a.attisdropped
 AND pg_class.relkind IN ('r', 'v', 'm')
 AND n.nspname NOT in ('pg_toast', 'pg_catalog', 'information_schema')
-AND has_table_privilege(pg_class.oid, 'SELECT') = true """)
+AND has_column_privilege(pg_class.oid, attname, 'SELECT') = true """)
         for row in cur.fetchall():
             row_count, is_view, schema_name, table_name, *col_info = row
 
@@ -493,7 +493,7 @@ def sync_method_for_streams(streams, state, default_replication_method):
         state = clear_state_on_replication_change(state, stream['tap_stream_id'], replication_key, replication_method)
 
         if replication_method not in set(['LOG_BASED', 'FULL_TABLE', 'INCREMENTAL']):
-            raise Exception("Unrecognized replication_method {}".format(replication_method))
+            raise Exception("Unrecognized replication_method {} for stream {}".format(replication_method, stream['tap_stream_id']))
 
         md_map = metadata.to_map(stream['metadata'])
         desired_columns = [c for c in stream['schema']['properties'].keys() if sync_common.should_sync_column(md_map, c)]
@@ -691,9 +691,9 @@ def main_impl():
 
     if args.discover:
         do_discovery(conn_config)
-    elif args.properties or args.catalog:
+    elif args.properties:
         state = args.state
-        do_sync(conn_config, args.catalog.to_dict() if args.catalog else args.properties, args.config.get('default_replication_method'), state)
+        do_sync(conn_config, args.properties, args.config.get('default_replication_method'), state)
     else:
         LOGGER.info("No properties were selected")
 
