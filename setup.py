@@ -10,10 +10,10 @@ setup(name='tap-postgres',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       install_requires=[
           'singer-python==5.3.1',
-          'psycopg2==2.7.4',
+          'psycopg2-binary==2.7.5',
           'strict-rfc3339==0.7',
           'nose==1.3.7',
-          'shapely==1.6.4'
+          'shapely==1.6.4.post2'
       ],
       entry_points='''
           [console_scripts]
