@@ -121,14 +121,14 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
                     select_sql = """SELECT {}, xmin::text::bigint
                                       FROM {} where age(xmin::xid) <= age('{}'::xid)
                                      ORDER BY xmin::text::bigint ASC""".format(','.join(escaped_columns),
-                                                                       post_db.fully_qualified_table_name(schema_name, stream['table_name']),
-                                                                       xmin)
+                                                                               post_db.fully_qualified_table_name(schema_name, stream['table_name']),
+                                                                               xmin)
                 else:
                     LOGGER.info("Beginning new Full Table replication %s", nascent_stream_version)
                     select_sql = """SELECT {}, xmin::text::bigint
                                       FROM {}
                                      ORDER BY xmin::text::bigint ASC""".format(','.join(escaped_columns),
-                                                                       post_db.fully_qualified_table_name(schema_name, stream['table_name']))
+                                                                               post_db.fully_qualified_table_name(schema_name, stream['table_name']))
 
 
                 LOGGER.info("select %s with itersize %s", select_sql, cur.itersize)
