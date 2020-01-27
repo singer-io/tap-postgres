@@ -16,6 +16,7 @@ jobs:
             pip install -U 'pip<19.2' setuptools
             pip install .
             pip install pylint
+            source dev_env.sh
             make test
             pylint tap_postgres -d missing-docstring,invalid-name,line-too-long,too-many-locals,too-few-public-methods,fixme,stop-iteration-return,duplicate-code,useless-import-alias
       - add_ssh_keys
