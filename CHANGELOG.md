@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.0.67
+  * Make `bytea[]` fields have `"inclusion" : "unsupported"` metadata [#76](https://github.com/singer-io/tap-postgres/pull/76)
+
 ## 0.0.66
   * Fix sorting for full_table sync by xmin to use integer sorting rather than string sorting [#73](https://github.com/singer-io/tap-postgres/pull/73)
 
