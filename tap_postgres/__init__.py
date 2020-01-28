@@ -54,7 +54,6 @@ INTEGER_TYPES = {'integer', 'smallint', 'bigint'}
 FLOAT_TYPES = {'real', 'double precision'}
 JSON_TYPES = {'json', 'jsonb'}
 
-UNSUPPORTED_TYPES = {'bytea', 'bytea[]'}
 
 def nullable_column(col_type, pk):
     if pk:
@@ -361,7 +360,7 @@ def discover_columns(connection, table_info):
             for c_name in column_schemas.keys():
                 mdata = write_sql_data_type_md(mdata, columns[c_name])
 
-                if column_schemas[c_name].get('type') is None or columns[c_name].sql_data_type in UNSUPPORTED_TYPES:
+                if column_schemas[c_name].get('type') is None:
                     mdata = metadata.write(mdata, ('properties', c_name), 'inclusion', 'unsupported')
                     mdata = metadata.write(mdata, ('properties', c_name), 'selected-by-default', False)
                 elif table_info[schema_name][table_name]['columns'][c_name].is_primary_key:
