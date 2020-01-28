@@ -215,6 +215,9 @@ def schema_for_column(c):
         column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
     elif c.sql_data_type == 'uuid[]':
         column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
+    elif c.sql_data_type == 'bytea[]':
+        # bytea[] are unsupported
+        del column_schema['type']
     else:
         #custom datatypes like enums
         column_schema['items'] = {'$ref': '#/definitions/sdc_recursive_string_array'}
