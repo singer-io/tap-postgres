@@ -28,11 +28,23 @@ def fully_qualified_table_name(schema, table):
     return '"{}"."{}"'.format(canonicalize_identifier(schema), canonicalize_identifier(table))
 
 def open_connection(conn_config, logical_replication=False):
+    cfg = {
+        'host': conn_config['host'],
+        'dbname': conn_config['dbname'],
+        'user': conn_config['user'],
+        'password': conn_config['password'],
+        'port': conn_config['port'],
+        'connect_timeout': 30
+    }
+
+    if conn_config.get('sslmode'):
+        cfg['sslmode'] = conn_config['sslmode']
+
     if logical_replication:
-        conn = psycopg2.connect(host=conn_config['host'], dbname=conn_config['dbname'], user=conn_config['user'], password=conn_config['password'], port=conn_config['port'],
-                                connection_factory=psycopg2.extras.LogicalReplicationConnection, connect_timeout=30)
-    else:
-        conn = psycopg2.connect(host=conn_config['host'], dbname=conn_config['dbname'], user=conn_config['user'], password=conn_config['password'], port=conn_config['port'], connect_timeout=30)
+        cfg['connection_factory'] = psycopg2.extras.LogicalReplicationConnection
+
+    conn = psycopg2.connect(**cfg)
+    LOGGER.info('Connection: %s', str(conn))
 
     return conn
 
