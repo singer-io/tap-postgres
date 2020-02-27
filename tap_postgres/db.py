@@ -44,7 +44,6 @@ def open_connection(conn_config, logical_replication=False):
         cfg['connection_factory'] = psycopg2.extras.LogicalReplicationConnection
 
     conn = psycopg2.connect(**cfg)
-    LOGGER.info('Connection: %s', str(conn))
 
     return conn
 
