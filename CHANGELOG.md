@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.0.68
+  * Respect `ssl` config property (bug fix) [#80](https://github.com/singer-io/tap-postgres/pull/80)
+
 ## 0.0.67
   * Make `bytea[]` fields have `"inclusion" : "unsupported"` metadata [#76](https://github.com/singer-io/tap-postgres/pull/76)
 
