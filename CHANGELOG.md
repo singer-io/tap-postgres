@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.0.69
+  * Add `sslmode` log message when opening connection [#82](https://github.com/singer-io/tap-postgres/pull/82)
+
 ## 0.0.68
   * Respect `ssl` config property (bug fix) [#80](https://github.com/singer-io/tap-postgres/pull/80)
 
