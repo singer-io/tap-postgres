@@ -692,6 +692,8 @@ def main_impl():
 
     post_db.include_schemas_in_destination_stream_name = (args.config.get('include_schemas_in_destination_stream_name') == 'true')
 
+    post_db.get_ssl_status(conn_config)
+
     if args.discover:
         do_discovery(conn_config)
     elif args.properties:

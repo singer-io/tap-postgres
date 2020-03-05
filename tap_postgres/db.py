@@ -9,6 +9,23 @@ LOGGER = singer.get_logger()
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
 
+def get_ssl_status(conn_config):
+    try:
+        matching_rows = []
+        with open_connection(conn_config) as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='stitch_cursor') as cur:
+                select_sql = "SELECT datname,usename, ssl, client_addr FROM pg_stat_ssl JOIN pg_stat_activity ON pg_stat_ssl.pid = pg_stat_activity.pid"
+                cur.execute(select_sql)
+                for row in cur:
+                    if row[0] == conn_config['dbname'] and row[1] == conn_config['user']:
+                        matching_rows.append(row)
+        if len(matching_rows) == 1:
+            LOGGER.info('User %s connected with SSL = %s', conn_config['user'], matching_rows[0][2])
+        else:
+            LOGGER.info('Failed to retrieve SSL status')
+    except:
+        LOGGER.info('Failed to retrieve SSL status')
+
 
 def calculate_destination_stream_name(stream, md_map):
     if include_schemas_in_destination_stream_name:
@@ -44,7 +61,6 @@ def open_connection(conn_config, logical_replication=False):
         cfg['connection_factory'] = psycopg2.extras.LogicalReplicationConnection
 
     conn = psycopg2.connect(**cfg)
-    LOGGER.info('Connected with sslmode = %s', conn.get_dsn_parameters().get('sslmode', 'unknown'))
 
     return conn
 
