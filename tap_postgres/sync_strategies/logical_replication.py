@@ -105,6 +105,8 @@ def create_array_elem(elem, sql_datatype, conn_info):
                 cast_datatype = 'text[]'
             elif sql_datatype == 'integer[]':
                 cast_datatype = 'integer[]'
+            elif sql_datatype == 'bigint[]':
+                cast_datatype = 'bigint[]'
             elif sql_datatype == 'inet[]':
                 cast_datatype = 'inet[]'
             elif sql_datatype == 'json[]':
@@ -134,8 +136,8 @@ def create_array_elem(elem, sql_datatype, conn_info):
                 #custom datatypes like enums
                 cast_datatype = 'text[]'
 
-            sql = """SELECT $stitch_quote${}$stitch_quote$::{}""".format(elem, cast_datatype)
-            cur.execute(sql)
+            sql_stmt = """SELECT $stitch_quote${}$stitch_quote$::{}""".format(elem, cast_datatype)
+            cur.execute(sql_stmt)
             res = cur.fetchone()[0]
             return res
 
@@ -168,7 +170,7 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
     if sql_datatype == 'hstore':
         return create_hstore_elem(conn_info, elem)
     if 'numeric' in sql_datatype:
-        return decimal.Decimal(elem)
+        return decimal.Decimal(str(elem))
     if isinstance(elem, int):
         return elem
     if isinstance(elem, float):

@@ -10,10 +10,13 @@ jobs:
           command: |
             aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/sandbox dev_env.sh
             source dev_env.sh
+            export LC_ALL=C
             python3 -m venv /usr/local/share/virtualenvs/tap-postgres
             source /usr/local/share/virtualenvs/tap-postgres/bin/activate
+            pip install -U 'pip<19.2' setuptools
             pip install .
             pip install pylint
+            source dev_env.sh
             make test
             pylint tap_postgres -d missing-docstring,invalid-name,line-too-long,too-many-locals,too-few-public-methods,fixme,stop-iteration-return,duplicate-code,useless-import-alias
       - add_ssh_keys
