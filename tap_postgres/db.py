@@ -80,7 +80,6 @@ def selected_value_to_singer_value_impl(elem, sql_datatype):
     if elem is None:
         cleaned_elem = elem
     elif sql_datatype == "geometry":
-        LOGGER.info("geometry!")
         cleaned_elem = wkb.loads(elem, hex=True).wkt
     elif sql_datatype == "money":
         cleaned_elem = elem
