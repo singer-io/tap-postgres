@@ -1,0 +1,4 @@
+[flake8]
+exclude =.git,.cache,.pytest_cache,.venv,virtualenv,migrations,snap_*.py, *_data.py
+max-line-length = 100
+extend-ignore = E203

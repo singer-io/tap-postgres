@@ -1,0 +1,4 @@
+singer-python==5.9.0
+psycopg2-binary==2.8.4
+strict-rfc3339==0.7
+shapely==1.7.0
