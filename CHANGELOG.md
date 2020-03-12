@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.0.70
+  * Look up ssl status in `pg_stat_ssl` and `pg_stat_activity` tables [#84](https://github.com/singer-io/tap-postgres/pull/84)
+
 ## 0.0.69
   * Add `sslmode` log message when opening connection [#82](https://github.com/singer-io/tap-postgres/pull/82)
 
