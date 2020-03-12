@@ -23,7 +23,7 @@ def get_ssl_status(conn_config):
             LOGGER.info('User %s connected with SSL = %s', conn_config['user'], matching_rows[0][2])
         else:
             LOGGER.info('Failed to retrieve SSL status')
-    except:
+    except Exception as e:
         LOGGER.info('Failed to retrieve SSL status')
 
 
