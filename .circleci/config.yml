@@ -18,7 +18,7 @@ jobs:
             pip install pylint
             source dev_env.sh
             make test
-            pylint tap_postgres -d missing-docstring,invalid-name,line-too-long,too-many-locals,too-few-public-methods,fixme,stop-iteration-return,duplicate-code,useless-import-alias
+            pylint tap_postgres -d missing-docstring,invalid-name,line-too-long,too-many-locals,too-few-public-methods,fixme,stop-iteration-return,duplicate-code,useless-import-alias,bare-except
       - add_ssh_keys
       - run:
           name: 'Integration Tests'
