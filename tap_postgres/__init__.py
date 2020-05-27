@@ -688,6 +688,11 @@ def main_impl():
     if args.config.get('ssl') == 'true':
         conn_config['sslmode'] = 'require'
 
+        # Handle client authentication. Both key and cert must be set
+        if args.config.get('sslcert') and args.config.get('sslkey'):
+            conn_config['sslcert'] = args.config['sslcert']
+            conn_config['sslkey'] = args.config['sslkey']
+
     post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
 
     post_db.include_schemas_in_destination_stream_name = (args.config.get('include_schemas_in_destination_stream_name') == 'true')
