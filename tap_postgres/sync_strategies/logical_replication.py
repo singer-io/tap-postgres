@@ -235,7 +235,7 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
         #payload['columns']
     record_message = None
     # TODO: It seems that version 2 can't resume in the middle of a transaction, so state should likely only be saved on a `C` message
-    if payload['action'] not in ['I','U','D']:#,'C']:
+    if payload['action'] not in ['U', 'I', 'D']:#,'C']:
         LOGGER.info("Skipping payload of type %s", payload['action'])
         yield None
     else:
@@ -449,7 +449,7 @@ def locate_replication_slot(conn_info):
 
             raise Exception("Unable to find replication slot (stitch || {} with wal2json".format(db_specific_slot))
 
-def try_start_replication(cur):
+def try_start_replication(cur, slot, start_lsn):
     success = False
     try:
         cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn, options={"format-version": 2, "include-timestamp": True})
@@ -477,7 +477,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
         with conn.cursor() as cur:
             LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s. poll_total_seconds: %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn, poll_total_seconds)
             try:
-                try_start_replication(cur)
+                try_start_replication(cur, slot, start_lsn)
             except psycopg2.ProgrammingError:
                 raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
