@@ -8,7 +8,7 @@ import pdb
 from singer import get_logger, metadata
 from psycopg2.extensions import quote_ident
 
-from tests.unittests.utils import get_test_connection, ensure_test_table, get_test_connection_config
+from utils import get_test_connection, ensure_test_table, get_test_connection_config
 
 LOGGER = get_logger()
 
