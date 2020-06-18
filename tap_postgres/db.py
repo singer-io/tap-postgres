@@ -19,7 +19,7 @@ def get_ssl_status(conn_config):
                 for row in cur:
                     if row[0] == conn_config['dbname'] and row[1] == conn_config['user']:
                         matching_rows.append(row)
-        if len(matching_rows) == 1:
+        if len(matching_rows) > 1:
             LOGGER.info('User %s connected with SSL = %s', conn_config['user'], matching_rows[0][2])
         else:
             LOGGER.info('Failed to retrieve SSL status')
