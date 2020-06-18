@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code, anomalous-backslash-in-string, too-many-statements, singleton-comparison, consider-using-in
 
-import backoff
 import singer
 import datetime
 import decimal
@@ -450,53 +449,6 @@ def locate_replication_slot(conn_info):
 
             raise Exception("Unable to find replication slot (stitch || {} with wal2json".format(db_specific_slot))
 
-@backoff.on_exception(backoff.expo,
-                      psycopg2.OperationalError,
-                      max_tries=5,
-                      jitter = None)
-def safe_get_cursor(conn, params):
-    """ If Postgres isn't done cleaning up previous cursor, it'll throw an error. Retry in this case. """
-    cur = conn.cursor()
-    cur.start_replication(**params)
-
-    return cur
-
-def try_start_replication(conn, slot, start_lsn):
-    """
-    Creates a test cursor to try reading records as format-version: 2,
-    falling back to original implementation in the case of failure.
-
-    Returns:
-    `conn.cursor()` object with replication started, and `message_format`
-    set on the cursor object to indicate which version it's using
-    """
-    try:
-        try:
-            v2_params = {"slot_name": slot,
-                         "decode": True,
-                         "start_lsn": start_lsn,
-                         "options": {"format-version": 2, "include-timestamp": True}}
-            with safe_get_cursor(conn, v2_params) as test_cur:
-                # TODO: I refactored this, but the behavior is inconsistent... It sometimes succeeds and sometimes fails
-                # - Back to the drawing board, we might just have to add it as a connection parameter :/
-                test_cur.read_message() # Success here indicates that v2 is supported
-                LOGGER.info("Using wal2json format-version 2")
-            cur = safe_get_cursor(conn, v2_params)
-            setattr(cur, "message_format", "2")
-            return cur
-        except (psycopg2.NotSupportedError, psycopg2.DataError):
-            LOGGER.info("Detected that wal2json format-version 2 is not supported, attempting format-version 1")
-
-        # Older versions of wal2json may not even support an option of format-version, so sending no options
-        v1_params = {"slot_name": slot,
-                     "decode": True,
-                     "start_lsn": start_lsn}
-        cur = safe_get_cursor(conn, v1_params)
-        setattr(cur, "message_format", "1")
-        return cur
-    except psycopg2.ProgrammingError:
-        raise Exception("unable to start replication with logical replication slot {}".format(slot))
-
 
 def sync_tables(conn_info, logical_streams, state, end_lsn):
     start_lsn = min([get_bookmark(state, s['tap_stream_id'], 'lsn') for s in logical_streams])
@@ -511,8 +463,19 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
         sync_common.send_schema_message(s, ['lsn'])
 
     with post_db.open_connection(conn_info, True) as conn:
-        with try_start_replication(conn, slot, start_lsn) as cur:
+        with conn.cursor() as cur:
             LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s. poll_total_seconds: %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn, poll_total_seconds)
+
+            replication_params = {"slot_name": slot,
+                                  "decode": True,
+                                  "start_lsn": start_lsn}
+            if conn_info.get("message_format", "1") == "2":
+                replication_params["options"] = {"format-version": 2, "include-timestamp": True}
+
+            try:
+                cur.start_replication(**replication_params)
+            except psycopg2.ProgrammingError:
+                raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
             rows_saved = 0
             while True:
@@ -529,7 +492,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                         break
 
                     state = consume_message(logical_streams, state, msg, time_extracted,
-                                            conn_info, end_lsn, message_format=cur.message_format)
+                                            conn_info, end_lsn, message_format=conn_info.get("message_format", "1"))
                     #msg has been consumed. it has been processed
                     last_lsn_processed = msg.data_start
                     rows_saved = rows_saved + 1
