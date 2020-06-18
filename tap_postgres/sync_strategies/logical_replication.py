@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code, anomalous-backslash-in-string, too-many-statements, singleton-comparison, consider-using-in
 
+import time
 import singer
 import datetime
 import decimal
@@ -467,6 +468,8 @@ def try_start_replication(conn, slot, start_lsn):
                                            options={"format-version": 2, "include-timestamp": True})
                 test_cur.read_message() # Success here indicates that v2 is supported
                 LOGGER.info("Using wal2json format-version 2")
+            # HACK: Sleep to give time for the DB server to reset from previous cursor
+            time.sleep(5)
             cur = conn.cursor()
             setattr(cur, "message_format", "2")
             cur.start_replication(slot_name=slot,
@@ -478,6 +481,8 @@ def try_start_replication(conn, slot, start_lsn):
             LOGGER.info("Detected that wal2json format-version 2 is not supported, attempting format-version 1")
 
         # Older versions of wal2json may not even support an option of format-version, so sending no options
+        # HACK: Sleep to give time for the DB server to reset from previous cursor
+        time.sleep(5)
         cur = conn.cursor()
         setattr(cur, "message_format", "1")
         cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
