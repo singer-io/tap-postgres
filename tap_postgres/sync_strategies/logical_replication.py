@@ -453,6 +453,7 @@ def try_start_replication(cur, slot, start_lsn):
     success = False
     try:
         cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn, options={"format-version": 2, "include-timestamp": True})
+        msg = cur.read_message()
         LOGGER.info("Using wal2json format-version 2")
         success = True
     except (psycopg2.NotSupportedError, psycopg2.DataError):
@@ -460,6 +461,8 @@ def try_start_replication(cur, slot, start_lsn):
     if not success:
         # Older versions of wal2json may not even support an option of format-version, so sending no options
         cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
+        msg = cur.read_message()
+    return msg
 
 def sync_tables(conn_info, logical_streams, state, end_lsn):
     start_lsn = min([get_bookmark(state, s['tap_stream_id'], 'lsn') for s in logical_streams])
@@ -477,7 +480,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
         with conn.cursor() as cur:
             LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s. poll_total_seconds: %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn, poll_total_seconds)
             try:
-                try_start_replication(cur, slot, start_lsn)
+                msg = try_start_replication(cur, slot, start_lsn)
             except psycopg2.ProgrammingError:
                 raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
@@ -488,7 +491,8 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                     LOGGER.info("breaking after %s seconds of polling with no data", poll_duration)
                     break
 
-                msg = cur.read_message()
+                if not msg:
+                    msg = cur.read_message()
                 if msg:
                     begin_ts = datetime.datetime.now()
                     if msg.data_start > end_lsn:
