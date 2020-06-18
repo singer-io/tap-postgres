@@ -687,7 +687,7 @@ def do_sync(conn_config, catalog, default_replication_method, state):
 
 def main_impl():
     args = utils.parse_args(required_config_keys())
-    if args.config.get('use_ssh_tunnel') == True:
+    if bool(args.config.get('use_ssh_tunnel')) == True:
         args = utils.parse_args(required_config_keys(True))
 
     conn_config = {'host'     : args.config['host'],
@@ -704,7 +704,7 @@ def main_impl():
 
     tunnel = None
     try:    
-        if args.config.get('use_ssh_tunnel') == True:
+        if bool(args.config.get('use_ssh_tunnel')) == True:
             tunnel = sshtunnel.open_tunnel(
                 (args.config['ssh_jump_server'], int(args.config['ssh_jump_server_port'])),
                 ssh_username=args.config['ssh_username'],
