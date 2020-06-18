@@ -455,7 +455,7 @@ def try_start_replication(cur, slot, start_lsn):
         cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn, options={"format-version": 2, "include-timestamp": True})
         LOGGER.info("Using wal2json format-version 2")
         success = True
-    except psycopg2.NotSupportedError:
+    except (psycopg2.NotSupportedError, psycopg2.DataError):
         LOGGER.info("Detected that wal2json format-version 2 is not supported, attempting format-version 1")
     if not success:
         # Older versions of wal2json may not even support an option of format-version, so sending no options
