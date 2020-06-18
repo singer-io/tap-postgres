@@ -19,6 +19,7 @@ import singer.schema
 from singer import utils, metadata, get_bookmark
 from singer.schema import Schema
 from singer.catalog import Catalog, CatalogEntry
+import sshtunnel
 
 import tap_postgres.sync_strategies.logical_replication as logical_replication
 import tap_postgres.sync_strategies.full_table as full_table
@@ -41,13 +42,23 @@ Column = collections.namedtuple('Column', [
 ])
 
 
-REQUIRED_CONFIG_KEYS = [
-    'dbname',
-    'host',
-    'port',
-    'user',
-    'password'
-]
+def required_config_keys(use_ssh_tunnel=False):
+    keys = [
+        'dbname',
+        'host',
+        'port',
+        'user',
+        'password'
+    ]
+    if use_ssh_tunnel:
+        keys += [
+            'ssh_jump_server',
+            'ssh_jump_server_port',
+            'ssh_private_key_password',
+            'ssh_private_key_path',
+            'ssh_username'
+        ]
+    return keys
 
 
 INTEGER_TYPES = {'integer', 'smallint', 'bigint'}
@@ -675,7 +686,10 @@ def do_sync(conn_config, catalog, default_replication_method, state):
     return state
 
 def main_impl():
-    args = utils.parse_args(REQUIRED_CONFIG_KEYS)
+    args = utils.parse_args(required_config_keys())
+    if args.config.get('use_ssh_tunnel') == True:
+        args = utils.parse_args(required_config_keys(True))
+
     conn_config = {'host'     : args.config['host'],
                    'user'     : args.config['user'],
                    'password' : args.config['password'],
@@ -683,24 +697,45 @@ def main_impl():
                    'dbname'   : args.config['dbname'],
                    'filter_dbs' : args.config.get('filter_dbs'),
                    'debug_lsn' : args.config.get('debug_lsn') == 'true',
-                   'logical_poll_total_seconds': float(args.config.get('logical_poll_total_seconds', 0))}
-
+                   'logical_poll_total_seconds': float(args.config.get('logical_poll_total_seconds', 0)),
+                }
     if args.config.get('ssl') == 'true':
         conn_config['sslmode'] = 'require'
 
-    post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
+    tunnel = None
+    try:    
+        if args.config.get('use_ssh_tunnel') == True:
+            tunnel = sshtunnel.open_tunnel(
+                (args.config['ssh_jump_server'], int(args.config['ssh_jump_server_port'])),
+                ssh_username=args.config['ssh_username'],
+                ssh_pkey=args.config['ssh_private_key_path'],
+                ssh_private_key_password=args.config['ssh_private_key_password'] if 'ssh_private_key_password' in conn_config else None,
+                remote_bind_address=(args.config['host'], int(args.config['port'])),
+                # local_bind_address=('0.0.0.0', 10022) # leaving this off uses a random local port
+            )
+            tunnel.start()
+            conn_config['host'] = '127.0.0.1' # rewrite the config to go through our tunnel
+            conn_config['port'] = tunnel.local_bind_port
 
-    post_db.include_schemas_in_destination_stream_name = (args.config.get('include_schemas_in_destination_stream_name') == 'true')
+        post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
 
-    post_db.get_ssl_status(conn_config)
+        post_db.include_schemas_in_destination_stream_name = (args.config.get('include_schemas_in_destination_stream_name') == 'true')
+        
+        post_db.get_ssl_status(conn_config)
+        
+        if args.discover:
+            do_discovery(conn_config)
+        elif args.properties:
+            state = args.state
+            do_sync(conn_config, args.properties, args.config.get('default_replication_method'), state)
+        else:
+            LOGGER.info("No properties were selected")
+    except Exception as ex:
+        LOGGER.critical(ex)
+    finally:
+        if tunnel is not None:
+            tunnel.stop()
 
-    if args.discover:
-        do_discovery(conn_config)
-    elif args.properties:
-        state = args.state
-        do_sync(conn_config, args.properties, args.config.get('default_replication_method'), state)
-    else:
-        LOGGER.info("No properties were selected")
 
 def main():
     try:

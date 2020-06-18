@@ -50,8 +50,8 @@ def open_connection(conn_config, logical_replication=False):
         'dbname': conn_config['dbname'],
         'user': conn_config['user'],
         'password': conn_config['password'],
-        'port': conn_config['port'],
-        'connect_timeout': 30
+        'port': int(conn_config['port']),
+        'connect_timeout': conn_config['connect_timeout'] if 'connect_timeout' in conn_config else 30
     }
 
     if conn_config.get('sslmode'):
@@ -61,7 +61,7 @@ def open_connection(conn_config, logical_replication=False):
         cfg['connection_factory'] = psycopg2.extras.LogicalReplicationConnection
 
     conn = psycopg2.connect(**cfg)
-
+    
     return conn
 
 def prepare_columns_sql(c):
@@ -69,7 +69,10 @@ def prepare_columns_sql(c):
     return column_name
 
 def filter_dbs_sql_clause(sql, filter_dbs):
-    in_clause = " AND datname in (" + ",".join(["'{}'".format(b.strip(' ')) for b in filter_dbs.split(',')]) + ")"
+    if isinstance(filter_dbs, str):
+        filter_dbs = ["{}".format(b.strip(' ')) for b in filter_dbs.split(',')] # split into a list 
+    filter_dbs = ["'{}'".format(b) for b in filter_dbs] # surround with single quotes
+    in_clause = " AND datname in (" + ",".join(filter_dbs) + ")"
     return sql + in_clause
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
