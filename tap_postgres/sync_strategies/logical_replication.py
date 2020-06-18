@@ -469,7 +469,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
             replication_params = {"slot_name": slot,
                                   "decode": True,
                                   "start_lsn": start_lsn}
-            if conn_info.get("message_format", "1") == "2":
+            if conn_info.get("wal2json_message_format", "1") == "2":
                 replication_params["options"] = {"format-version": 2, "include-timestamp": True}
 
             try:
@@ -492,7 +492,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                         break
 
                     state = consume_message(logical_streams, state, msg, time_extracted,
-                                            conn_info, end_lsn, message_format=conn_info.get("message_format", "1"))
+                                            conn_info, end_lsn, message_format=conn_info.get("wal2json_message_format", "1"))
                     #msg has been consumed. it has been processed
                     last_lsn_processed = msg.data_start
                     rows_saved = rows_saved + 1
