@@ -449,20 +449,42 @@ def locate_replication_slot(conn_info):
 
             raise Exception("Unable to find replication slot (stitch || {} with wal2json".format(db_specific_slot))
 
-def try_start_replication(cur, slot, start_lsn):
-    success = False
+def try_start_replication(conn, slot, start_lsn):
+    """
+    Creates a test cursor to try reading records as format-version: 2,
+    falling back to original implementation in the case of failure.
+
+    Returns:
+    `conn.cursor()` object with replication started, and `message_format`
+    set on the cursor object to indicate which version it's using
+    """
     try:
-        cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn, options={"format-version": 2, "include-timestamp": True})
-        msg = cur.read_message()
-        LOGGER.info("Using wal2json format-version 2")
-        success = True
-    except (psycopg2.NotSupportedError, psycopg2.DataError):
-        LOGGER.info("Detected that wal2json format-version 2 is not supported, attempting format-version 1")
-    if not success:
+        try:
+            with conn.cursor() as test_cur:
+                test_cur.start_replication(slot_name=slot,
+                                           decode=True,
+                                           start_lsn=start_lsn,
+                                           options={"format-version": 2, "include-timestamp": True})
+                test_cur.read_message() # Success here indicates that v2 is supported
+                LOGGER.info("Using wal2json format-version 2")
+            cur = conn.cursor()
+            setattr(cur, "message_format", "2")
+            cur.start_replication(slot_name=slot,
+                                  decode=True,
+                                  start_lsn=start_lsn,
+                                  options={"format-version": 2, "include-timestamp": True})
+            return cur
+        except (psycopg2.NotSupportedError, psycopg2.DataError):
+            LOGGER.info("Detected that wal2json format-version 2 is not supported, attempting format-version 1")
+
         # Older versions of wal2json may not even support an option of format-version, so sending no options
+        cur = conn.cursor()
+        setattr(cur, "message_format", "1")
         cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
-        msg = cur.read_message()
-    return msg
+        return cur
+    except psycopg2.ProgrammingError:
+        raise Exception("unable to start replication with logical replication slot {}".format(slot))
+
 
 def sync_tables(conn_info, logical_streams, state, end_lsn):
     start_lsn = min([get_bookmark(state, s['tap_stream_id'], 'lsn') for s in logical_streams])
@@ -477,12 +499,8 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
         sync_common.send_schema_message(s, ['lsn'])
 
     with post_db.open_connection(conn_info, True) as conn:
-        with conn.cursor() as cur:
+        with try_start_replication(conn, slot, start_lsn) as cur:
             LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s. poll_total_seconds: %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn, poll_total_seconds)
-            try:
-                msg = try_start_replication(cur, slot, start_lsn)
-            except psycopg2.ProgrammingError:
-                raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
             rows_saved = 0
             while True:
@@ -491,21 +509,20 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                     LOGGER.info("breaking after %s seconds of polling with no data", poll_duration)
                     break
 
-                if not msg:
-                    msg = cur.read_message()
+                msg = cur.read_message()
                 if msg:
                     begin_ts = datetime.datetime.now()
                     if msg.data_start > end_lsn:
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
                         break
 
-                    state = consume_message(logical_streams, state, msg, time_extracted, conn_info, end_lsn, message_format='2')
+                    state = consume_message(logical_streams, state, msg, time_extracted,
+                                            conn_info, end_lsn, message_format=cur.message_format)
                     #msg has been consumed. it has been processed
                     last_lsn_processed = msg.data_start
                     rows_saved = rows_saved + 1
                     if rows_saved % UPDATE_BOOKMARK_PERIOD == 0:
                         singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
-                    msg = None
                 else:
                     now = datetime.datetime.now()
                     timeout = keep_alive_time - (now - cur.io_timestamp).total_seconds()
