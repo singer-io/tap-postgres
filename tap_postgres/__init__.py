@@ -705,6 +705,7 @@ def main_impl():
     tunnel = None
     try:    
         if bool(args.config.get('use_ssh_tunnel')) == True:
+            LOGGER.info(f"use_ssh_tunnel is set to true; connecting to {args.config['host']}:{args.config['port']} via {args.config['ssh_jump_server']}:{args.config['ssh_jump_server_port']}")
             tunnel = sshtunnel.open_tunnel(
                 (args.config['ssh_jump_server'], int(args.config['ssh_jump_server_port'])),
                 ssh_username=args.config['ssh_username'],
@@ -716,6 +717,9 @@ def main_impl():
             tunnel.start()
             conn_config['host'] = '127.0.0.1' # rewrite the config to go through our tunnel
             conn_config['port'] = tunnel.local_bind_port
+        else:
+            LOGGER.info(f"use_ssh_tunnel is not set or is false; connecting directly to {args.config['host']}:{args.config['port']}")
+
 
         post_db.cursor_iter_size = int(args.config.get('itersize', '20000'))
 
