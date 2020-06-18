@@ -217,14 +217,123 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map,
         version=version,
         time_extracted=time_extracted)
 
-def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn):
-    payload = json.loads(msg.payload)
-    lsn = msg.data_start
 
-    streams_lookup = {}
-    for s in streams:
-        streams_lookup[s['tap_stream_id']] = s
+def consume_message_format_2(payload, conn_info, streams_lookup, state, time_extracted, lsn):
+    # TODO: This needs refactored again, I think. We shoulld figure out what's important and how to make this pattern readable.
+    ## TODO: The structure changes here, it goes off of "action" in [I,U,D,B,C,M,T]
+    # I = Insert
+    # U = Update
+    # D = Delete
+    # B = Being Transaction
+    # C = Commit Transaction
+    # M = Message
+    # T = TRUNCATE
 
+    # {'table': 'test_table', 'schema': 'public', 'action': 'I', 'columns': [{'name': 'id', 'value': 8, 'type': 'integer'}, {'name': 'name', 'value': 'Kyle1', 'type': 'character varying'}]}
+    # message-format v2
+    #if payload['action'] == 'I':
+        #payload['columns']
+    record_message = None
+    # TODO: It seems that version 2 can't resume in the middle of a transaction, so state should likely only be saved on a `C` message
+    if payload['action'] not in ['I','U','D']:#,'C']:
+        LOGGER.info("Skipping payload of type %s", payload['action'])
+        yield None
+    else:
+        if payload['action'] == 'C':
+            LOGGER.info("Found commit of transaction")
+            # TODO: Save LSN here? Maybe only if a B has happened?
+            # TODO How to handle state within a transaction? without a transaction?
+            # DEBUG CODE: This is to catch the end of our transaction and look at this message
+            #import ipdb; ipdb.set_trace()
+            #1+1
+        tap_stream_id = post_db.compute_tap_stream_id(conn_info['dbname'], payload['schema'], payload['table'])
+        if streams_lookup.get(tap_stream_id) is None:
+            yield None
+        else:
+            target_stream = streams_lookup[tap_stream_id]
+            stream_version = get_stream_version(target_stream['tap_stream_id'], state)
+            stream_md_map = metadata.to_map(target_stream['metadata'])
+
+            desired_columns = [col for col in target_stream['schema']['properties'].keys() if sync_common.should_sync_column(stream_md_map, col)]
+
+            if payload['action'] == 'I':
+                col_names = []
+                col_vals = []
+
+                for column in payload['columns']:
+                    if column['name'] in set(desired_columns):
+                        col_names.append(column['name'])
+                        col_vals.append(column['value'])
+
+                col_names = col_names + ['_sdc_deleted_at']
+                col_vals = col_vals + [None]
+                if conn_info.get('debug_lsn'):
+                    col_names = col_names + ['_sdc_lsn']
+                    col_vals = col_vals + [str(lsn)]
+                record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
+
+            elif payload['action'] == 'U':
+                # TODO: Confirm that the full row is ALWAYS in `columns` even without REPLICA IDENTITY FULL
+                # Answer: Yes
+                # {'identity': [{'name': 'id', 'value': 3, 'type': 'integer'}], 'timestamp': '2020-06-17 20:54:18.617957+00', 'table': 'test_table', 'schema': 'public', 'action': 'U', 'columns': [{'name': 'id', 'value': 3, 'type': 'integer'}, {'name': 'name', 'value': 'Fred', 'type': 'character varying'}, {'name': 'other', 'value': 'foo', 'type': 'character varying'}]}
+
+                # {'identity': [{'name': 'id', 'type': 'integer', 'value': 3}], 'schema': 'public', 'action': 'U', 'columns': [{'name': 'id', 'type': 'integer', 'value': 3}, {'name': 'name', 'type': 'character varying', 'value': 'Fred'}], 'table': 'test_table'}
+                # After running ALTER TABLE test_table REPLICA IDENTITY FULL;
+                # {'table': 'test_table', 'identity': [{'value': 3, 'name': 'id', 'type': 'integer'}, {'value': 'Joe', 'name': 'name', 'type': 'character varying'}], 'schema': 'public', 'timestamp': '2020-06-17 20:13:12.722037+00', 'action': 'U', 'columns': [{'value': 3, 'name': 'id', 'type': 'integer'}, {'value': 'Fred', 'name': 'name', 'type': 'character varying'}]}
+                import ipdb; ipdb.set_trace()
+                1+1
+                col_names = []
+                col_vals = []
+                for column in payload['columns']:
+                    if column['name'] in set(desired_columns):
+                        col_names.append(column['name'])
+                        col_vals.append(column['value'])
+
+                col_names = col_names + ['_sdc_deleted_at']
+                col_vals = col_vals + [None]
+
+                if conn_info.get('debug_lsn'):
+                    col_vals = col_vals + [str(lsn)]
+                    col_names = col_names + ['_sdc_lsn']
+                record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
+
+            elif payload['action'] == 'D':
+                # Basic Response:
+                # {'schema': 'public', 'action': 'D', 'identity': [{'name': 'id', 'value': 3, 'type': 'integer'}], 'table': 'test_table'}
+                # After running ALTER TABLE test_table REPLICA IDENTITY FULL;
+                # {'identity': [{'value': 3, 'name': 'id', 'type': 'integer'}, {'value': 'Fred', 'name': 'name', 'type': 'character varying'}], 'schema': 'public', 'timestamp': '2020-06-17 20:13:12.722037+00', 'action': 'D', 'table': 'test_table'}
+
+                # RESULT: The below code should work, it'll just emit a record with only PKs if only PKs are available
+                col_names = []
+                col_vals = []
+
+                for column in payload['identity']:
+                    if column['name'] in set(desired_columns):
+                        col_names.append(column['name'])
+                        col_vals.append(column['value'])
+
+                col_names = col_names + ['_sdc_deleted_at']
+                #col_vals = col_vals  + [singer.utils.strftime(time_extracted)]
+                # Timestamp here requires an option to be set along with format-version
+                col_vals = col_vals + [singer.utils.strftime(singer.utils.strptime_to_utc(payload['timestamp']))]
+                if conn_info.get('debug_lsn'):
+                    col_vals = col_vals + [str(lsn)]
+                    col_names = col_names + ['_sdc_lsn']
+                record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
+
+            # Yield 1 record to match the API of V1
+            yield record_message
+
+            # TODO: Should this happen? Can we resume inside a transaction using v2 consumer? Does the LSN change?
+            # This is also here to match V1, but it seems necessary to continue to keep-alive between messages
+            # Also, do we want to bookmark if record_message is null? (probably?)
+            state = singer.write_bookmark(state,
+                                          target_stream['tap_stream_id'],
+                                          'lsn',
+                                          lsn)
+
+# message-format v1
+def consume_message_format_1(payload, conn_info, streams_lookup, state, time_extracted, lsn):
     for c in payload['change']:
         tap_stream_id = post_db.compute_tap_stream_id(conn_info['dbname'], c['schema'], c['table'])
         if streams_lookup.get(tap_stream_id) is None:
@@ -269,6 +378,8 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn):
             record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
 
         elif c['kind'] == 'delete':
+            import ipdb; ipdb.set_trace()
+            1+1
             col_names = []
             col_vals = []
             for idx, col in enumerate(c['oldkeys']['keynames']):
@@ -288,20 +399,44 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn):
             raise Exception("unrecognized replication operation: {}".format(c['kind']))
 
 
-        singer.write_message(record_message)
+        yield record_message
         state = singer.write_bookmark(state,
                                       target_stream['tap_stream_id'],
                                       'lsn',
                                       lsn)
+
+
+def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn, message_format="1"):
+    LOGGER.info("About to load msg.payload")
+    payload = json.loads(msg.payload)
+    lsn = msg.data_start
+    LOGGER.info("LSN: %s", lsn)
+
+    streams_lookup = {}
+    for s in streams:
+        streams_lookup[s['tap_stream_id']] = s
+
+    # Removing all IPDBs so it doesn't timeout and break
+    #import ipdb; ipdb.set_trace()
+    #1+1
+    if message_format == "1":
+        records = consume_message_format_1(payload, conn_info, streams_lookup, state, time_extracted, lsn)
+    elif message_format == "2":
+        records = consume_message_format_2(payload, conn_info, streams_lookup, state, time_extracted, lsn)
+
+    for record_message in records:
+        if record_message:
+            singer.write_message(record_message)
+        # Pulled out of refactor so we send a keep-alive per-record
+        # TODO: This can be adjusted
         LOGGER.debug("sending feedback to server with NO flush_lsn. just a keep-alive")
         msg.cursor.send_feedback()
-
 
     LOGGER.debug("sending feedback to server. flush_lsn = %s", msg.data_start)
     if msg.data_start > end_lsn:
         raise Exception("incorrectly attempting to flush an lsn({}) > end_lsn({})".format(msg.data_start, end_lsn))
 
-    msg.cursor.send_feedback(flush_lsn=msg.data_start)
+    #msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
 
     return state
@@ -323,6 +458,17 @@ def locate_replication_slot(conn_info):
 
             raise Exception("Unable to find replication slot (stitch || {} with wal2json".format(db_specific_slot))
 
+def try_start_replication(cur):
+    success = False
+    try:
+        cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn, options={"format-version": 2, "include-timestamp": True})
+        LOGGER.info("Using wal2json format-version 2")
+        success = True
+    except psycopg2.NotSupportedError:
+        LOGGER.info("Detected that wal2json format-version 2 is not supported, attempting format-version 1")
+    if not success:
+        # Older versions of wal2json may not even support an option of format-version, so sending no options
+        cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
 
 def sync_tables(conn_info, logical_streams, state, end_lsn):
     start_lsn = min([get_bookmark(state, s['tap_stream_id'], 'lsn') for s in logical_streams])
@@ -340,7 +486,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
         with conn.cursor() as cur:
             LOGGER.info("Starting Logical Replication for %s(%s): %s -> %s. poll_total_seconds: %s", list(map(lambda s: s['tap_stream_id'], logical_streams)), slot, start_lsn, end_lsn, poll_total_seconds)
             try:
-                cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
+                try_start_replication(cur)
             except psycopg2.ProgrammingError:
                 raise Exception("unable to start replication with logical replication slot {}".format(slot))
 
@@ -358,7 +504,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                         LOGGER.info("gone past end_lsn %s for run. breaking", end_lsn)
                         break
 
-                    state = consume_message(logical_streams, state, msg, time_extracted, conn_info, end_lsn)
+                    state = consume_message(logical_streams, state, msg, time_extracted, conn_info, end_lsn, message_format='2')
                     #msg has been consumed. it has been processed
                     last_lsn_processed = msg.data_start
                     rows_saved = rows_saved + 1
