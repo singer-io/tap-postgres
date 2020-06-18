@@ -54,7 +54,6 @@ def required_config_keys(use_ssh_tunnel=False):
         keys += [
             'ssh_jump_server',
             'ssh_jump_server_port',
-            'ssh_private_key_password',
             'ssh_private_key_path',
             'ssh_username'
         ]
@@ -464,8 +463,8 @@ def do_sync_full_table(conn_config, stream, state, desired_columns, md_map):
     return state
 
 #Possible state keys: replication_key, replication_key_value, version
-def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
-    replication_key = md_map.get((), {}).get('replication-key')
+def do_sync_incremental(conn_config, stream, state, desired_columns, md_map, default_replication_key):
+    replication_key = md_map.get((), {}).get('replication-key') or default_replication_key
     LOGGER.info("Stream %s is using incremental replication with replication key %s", stream['tap_stream_id'], replication_key)
 
     stream_state = state.get('bookmarks', {}).get(stream['tap_stream_id'])
@@ -476,7 +475,7 @@ def do_sync_incremental(conn_config, stream, state, desired_columns, md_map):
     state = singer.write_bookmark(state, stream['tap_stream_id'], 'replication_key', replication_key)
 
     sync_common.send_schema_message(stream, [replication_key])
-    state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map)
+    state = incremental.sync_table(conn_config, stream, state, desired_columns, md_map, default_replication_key)
 
     return state
 
@@ -494,7 +493,7 @@ def clear_state_on_replication_change(state, tap_stream_id, replication_key, rep
     state = singer.write_bookmark(state, tap_stream_id, 'last_replication_method', replication_method)
     return state
 
-def sync_method_for_streams(streams, state, default_replication_method):
+def sync_method_for_streams(streams, state, default_replication_method, default_replication_key):
     lookup = {}
     traditional_steams = []
     logical_streams = []
@@ -502,7 +501,7 @@ def sync_method_for_streams(streams, state, default_replication_method):
     for stream in streams:
         stream_metadata = metadata.to_map(stream['metadata'])
         replication_method = stream_metadata.get((), {}).get('replication-method', default_replication_method)
-        replication_key = stream_metadata.get((), {}).get('replication-key')
+        replication_key = stream_metadata.get((), {}).get('replication-key', default_replication_key)
 
         state = clear_state_on_replication_change(state, stream['tap_stream_id'], replication_key, replication_method)
 
@@ -548,7 +547,7 @@ def sync_method_for_streams(streams, state, default_replication_method):
 
     return lookup, traditional_steams, logical_streams
 
-def sync_traditional_stream(conn_config, stream, state, sync_method, end_lsn):
+def sync_traditional_stream(conn_config, stream, state, sync_method, end_lsn, default_replication_key):
     LOGGER.info("Beginning sync of stream(%s) with sync method(%s)", stream['tap_stream_id'], sync_method)
     md_map = metadata.to_map(stream['metadata'])
     conn_config['dbname'] = md_map.get(()).get('database-name')
@@ -566,7 +565,7 @@ def sync_traditional_stream(conn_config, stream, state, sync_method, end_lsn):
         state = do_sync_full_table(conn_config, stream, state, desired_columns, md_map)
     elif sync_method == 'incremental':
         state = singer.set_currently_syncing(state, stream['tap_stream_id'])
-        state = do_sync_incremental(conn_config, stream, state, desired_columns, md_map)
+        state = do_sync_incremental(conn_config, stream, state, desired_columns, md_map, default_replication_key)
     elif sync_method == 'logical_initial':
         state = singer.set_currently_syncing(state, stream['tap_stream_id'])
         LOGGER.info("Performing initial full table sync")
@@ -652,7 +651,7 @@ def any_logical_streams(streams, default_replication_method):
 
     return False
 
-def do_sync(conn_config, catalog, default_replication_method, state):
+def do_sync(conn_config, catalog, default_replication_method, default_replication_key, state):
     currently_syncing = singer.get_currently_syncing(state)
     streams = list(filter(is_selected_via_metadata, catalog['streams']))
     streams.sort(key=lambda s: s['tap_stream_id'])
@@ -664,7 +663,7 @@ def do_sync(conn_config, catalog, default_replication_method, state):
     else:
         end_lsn = None
 
-    sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state, default_replication_method)
+    sync_method_lookup, traditional_streams, logical_streams = sync_method_for_streams(streams, state, default_replication_method, default_replication_key)
 
     if currently_syncing:
         LOGGER.info("found currently_syncing: %s", currently_syncing)
@@ -677,7 +676,7 @@ def do_sync(conn_config, catalog, default_replication_method, state):
         LOGGER.info("No currently_syncing found")
 
     for stream in traditional_streams:
-        state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream['tap_stream_id']], end_lsn)
+        state = sync_traditional_stream(conn_config, stream, state, sync_method_lookup[stream['tap_stream_id']], end_lsn, default_replication_key)
 
     logical_streams.sort(key=lambda s: metadata.to_map(s['metadata']).get(()).get('database-name'))
     for dbname, streams in itertools.groupby(logical_streams, lambda s: metadata.to_map(s['metadata']).get(()).get('database-name')):
@@ -699,7 +698,7 @@ def main_impl():
                    'debug_lsn' : args.config.get('debug_lsn') == 'true',
                    'logical_poll_total_seconds': float(args.config.get('logical_poll_total_seconds', 0)),
                 }
-    if args.config.get('ssl') == 'true':
+    if bool(args.config.get('ssl')) == True:
         conn_config['sslmode'] = 'require'
 
     tunnel = None
@@ -731,7 +730,9 @@ def main_impl():
             do_discovery(conn_config)
         elif args.properties or args.catalog:
             state = args.state
-            do_sync(conn_config, args.catalog.to_dict() if args.catalog else args.properties, args.config.get('default_replication_method'), state)
+            default_replication_method = args.config.get('default_replication_method')
+            default_replication_key = args.config.get('default_replication_key')
+            do_sync(conn_config, args.catalog.to_dict() if args.catalog else args.properties, default_replication_method, default_replication_key, state)
         else:
             LOGGER.info("No properties were selected")
     except Exception as ex:
