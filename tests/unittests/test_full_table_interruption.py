@@ -6,10 +6,8 @@ import tap_postgres.sync_strategies.common as pg_common
 import pdb
 import singer
 from singer import get_logger, metadata, write_bookmark
-try:
-    from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
-except ImportError:
-    from utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
+
+from tests.unittests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
 
 import decimal
 import math
