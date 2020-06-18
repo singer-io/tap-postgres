@@ -31,7 +31,7 @@ jobs:
                      --email=harrison+sandboxtest@stitchdata.com \
                      --password=$SANDBOX_PASSWORD \
                      --client-id=50 \
-                     tests/integration
+                     tests
 workflows:
   version: 2
   commit:
