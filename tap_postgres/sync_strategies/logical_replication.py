@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,invalid-name,too-many-return-statements,too-many-branches,len-as-condition,too-many-nested-blocks,wrong-import-order,duplicate-code, anomalous-backslash-in-string, too-many-statements, singleton-comparison, consider-using-in
 
-import time
+import backoff
 import singer
 import datetime
 import decimal
@@ -450,6 +450,17 @@ def locate_replication_slot(conn_info):
 
             raise Exception("Unable to find replication slot (stitch || {} with wal2json".format(db_specific_slot))
 
+@backoff.on_exception(backoff.expo,
+                      psycopg2.OperationalError,
+                      max_tries=5,
+                      jitter = None)
+def safe_get_cursor(conn, params):
+    """ If Postgres isn't done cleaning up previous cursor, it'll throw an error. Retry in this case. """
+    cur = conn.cursor()
+    cur.start_replication(**params)
+
+    return cur
+
 def try_start_replication(conn, slot, start_lsn):
     """
     Creates a test cursor to try reading records as format-version: 2,
@@ -461,31 +472,27 @@ def try_start_replication(conn, slot, start_lsn):
     """
     try:
         try:
-            with conn.cursor() as test_cur:
-                test_cur.start_replication(slot_name=slot,
-                                           decode=True,
-                                           start_lsn=start_lsn,
-                                           options={"format-version": 2, "include-timestamp": True})
+            v2_params = {"slot_name": slot,
+                         "decode": True,
+                         "start_lsn": start_lsn,
+                         "options": {"format-version": 2, "include-timestamp": True}}
+            with safe_get_cursor(conn, v2_params) as test_cur:
+                # TODO: I refactored this, but the behavior is inconsistent... It sometimes succeeds and sometimes fails
+                # - Back to the drawing board, we might just have to add it as a connection parameter :/
                 test_cur.read_message() # Success here indicates that v2 is supported
                 LOGGER.info("Using wal2json format-version 2")
-            # HACK: Sleep to give time for the DB server to reset from previous cursor
-            time.sleep(5)
-            cur = conn.cursor()
+            cur = safe_get_cursor(conn, v2_params)
             setattr(cur, "message_format", "2")
-            cur.start_replication(slot_name=slot,
-                                  decode=True,
-                                  start_lsn=start_lsn,
-                                  options={"format-version": 2, "include-timestamp": True})
             return cur
         except (psycopg2.NotSupportedError, psycopg2.DataError):
             LOGGER.info("Detected that wal2json format-version 2 is not supported, attempting format-version 1")
 
         # Older versions of wal2json may not even support an option of format-version, so sending no options
-        # HACK: Sleep to give time for the DB server to reset from previous cursor
-        time.sleep(5)
-        cur = conn.cursor()
+        v1_params = {"slot_name": slot,
+                     "decode": True,
+                     "start_lsn": start_lsn}
+        cur = safe_get_cursor(conn, v1_params)
         setattr(cur, "message_format", "1")
-        cur.start_replication(slot_name=slot, decode=True, start_lsn=start_lsn)
         return cur
     except psycopg2.ProgrammingError:
         raise Exception("unable to start replication with logical replication slot {}".format(slot))
