@@ -244,8 +244,6 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
             # TODO: Save LSN here? Maybe only if a B has happened?
             # TODO How to handle state within a transaction? without a transaction?
             # DEBUG CODE: This is to catch the end of our transaction and look at this message
-            #import ipdb; ipdb.set_trace()
-            #1+1
         tap_stream_id = post_db.compute_tap_stream_id(conn_info['dbname'], payload['schema'], payload['table'])
         if streams_lookup.get(tap_stream_id) is None:
             yield None
@@ -280,8 +278,6 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
                 # {'identity': [{'name': 'id', 'type': 'integer', 'value': 3}], 'schema': 'public', 'action': 'U', 'columns': [{'name': 'id', 'type': 'integer', 'value': 3}, {'name': 'name', 'type': 'character varying', 'value': 'Fred'}], 'table': 'test_table'}
                 # After running ALTER TABLE test_table REPLICA IDENTITY FULL;
                 # {'table': 'test_table', 'identity': [{'value': 3, 'name': 'id', 'type': 'integer'}, {'value': 'Joe', 'name': 'name', 'type': 'character varying'}], 'schema': 'public', 'timestamp': '2020-06-17 20:13:12.722037+00', 'action': 'U', 'columns': [{'value': 3, 'name': 'id', 'type': 'integer'}, {'value': 'Fred', 'name': 'name', 'type': 'character varying'}]}
-                import ipdb; ipdb.set_trace()
-                1+1
                 col_names = []
                 col_vals = []
                 for column in payload['columns']:
@@ -378,8 +374,6 @@ def consume_message_format_1(payload, conn_info, streams_lookup, state, time_ext
             record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
 
         elif c['kind'] == 'delete':
-            import ipdb; ipdb.set_trace()
-            1+1
             col_names = []
             col_vals = []
             for idx, col in enumerate(c['oldkeys']['keynames']):
@@ -416,9 +410,6 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn, mes
     for s in streams:
         streams_lookup[s['tap_stream_id']] = s
 
-    # Removing all IPDBs so it doesn't timeout and break
-    #import ipdb; ipdb.set_trace()
-    #1+1
     if message_format == "1":
         records = consume_message_format_1(payload, conn_info, streams_lookup, state, time_extracted, lsn)
     elif message_format == "2":
@@ -436,7 +427,7 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn, mes
     if msg.data_start > end_lsn:
         raise Exception("incorrectly attempting to flush an lsn({}) > end_lsn({})".format(msg.data_start, end_lsn))
 
-    #msg.cursor.send_feedback(flush_lsn=msg.data_start)
+    msg.cursor.send_feedback(flush_lsn=msg.data_start)
 
 
     return state
