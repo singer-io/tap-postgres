@@ -20,6 +20,7 @@ from singer import utils, metadata, get_bookmark
 from singer.schema import Schema
 from singer.catalog import Catalog, CatalogEntry
 import sshtunnel
+import time
 
 import tap_postgres.sync_strategies.logical_replication as logical_replication
 import tap_postgres.sync_strategies.full_table as full_table
@@ -714,6 +715,7 @@ def main_impl():
                 # local_bind_address=('0.0.0.0', 10022) # leaving this off uses a random local port
             )
             tunnel.start()
+            time.sleep(1)
             conn_config['host'] = '127.0.0.1' # rewrite the config to go through our tunnel
             conn_config['port'] = tunnel.local_bind_port
         else:
