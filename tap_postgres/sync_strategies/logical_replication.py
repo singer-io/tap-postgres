@@ -217,33 +217,22 @@ def row_to_singer_message(stream, row, version, columns, time_extracted, md_map,
         version=version,
         time_extracted=time_extracted)
 
-
 def consume_message_format_2(payload, conn_info, streams_lookup, state, time_extracted, lsn):
-    # TODO: This needs refactored again, I think. We shoulld figure out what's important and how to make this pattern readable.
-    ## TODO: The structure changes here, it goes off of "action" in [I,U,D,B,C,M,T]
+    ## Action Types:
     # I = Insert
     # U = Update
     # D = Delete
-    # B = Being Transaction
+    # B = Begin Transaction
     # C = Commit Transaction
     # M = Message
-    # T = TRUNCATE
-
-    # {'table': 'test_table', 'schema': 'public', 'action': 'I', 'columns': [{'name': 'id', 'value': 8, 'type': 'integer'}, {'name': 'name', 'value': 'Kyle1', 'type': 'character varying'}]}
-    # message-format v2
-    #if payload['action'] == 'I':
-        #payload['columns']
+    # T = Truncate
     record_message = None
-    # TODO: It seems that version 2 can't resume in the middle of a transaction, so state should likely only be saved on a `C` message
-    if payload['action'] not in ['U', 'I', 'D']:#,'C']:
-        LOGGER.info("Skipping payload of type %s", payload['action'])
+
+    action = payload['action']
+    if action not in ['U', 'I', 'D']:
+        LOGGER.debug("Skipping message of type %s", action)
         yield None
     else:
-        if payload['action'] == 'C':
-            LOGGER.info("Found commit of transaction")
-            # TODO: Save LSN here? Maybe only if a B has happened?
-            # TODO How to handle state within a transaction? without a transaction?
-            # DEBUG CODE: This is to catch the end of our transaction and look at this message
         tap_stream_id = post_db.compute_tap_stream_id(conn_info['dbname'], payload['schema'], payload['table'])
         if streams_lookup.get(tap_stream_id) is None:
             yield None
@@ -271,13 +260,6 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
                 record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
 
             elif payload['action'] == 'U':
-                # TODO: Confirm that the full row is ALWAYS in `columns` even without REPLICA IDENTITY FULL
-                # Answer: Yes
-                # {'identity': [{'name': 'id', 'value': 3, 'type': 'integer'}], 'timestamp': '2020-06-17 20:54:18.617957+00', 'table': 'test_table', 'schema': 'public', 'action': 'U', 'columns': [{'name': 'id', 'value': 3, 'type': 'integer'}, {'name': 'name', 'value': 'Fred', 'type': 'character varying'}, {'name': 'other', 'value': 'foo', 'type': 'character varying'}]}
-
-                # {'identity': [{'name': 'id', 'type': 'integer', 'value': 3}], 'schema': 'public', 'action': 'U', 'columns': [{'name': 'id', 'type': 'integer', 'value': 3}, {'name': 'name', 'type': 'character varying', 'value': 'Fred'}], 'table': 'test_table'}
-                # After running ALTER TABLE test_table REPLICA IDENTITY FULL;
-                # {'table': 'test_table', 'identity': [{'value': 3, 'name': 'id', 'type': 'integer'}, {'value': 'Joe', 'name': 'name', 'type': 'character varying'}], 'schema': 'public', 'timestamp': '2020-06-17 20:13:12.722037+00', 'action': 'U', 'columns': [{'value': 3, 'name': 'id', 'type': 'integer'}, {'value': 'Fred', 'name': 'name', 'type': 'character varying'}]}
                 col_names = []
                 col_vals = []
                 for column in payload['columns']:
@@ -294,12 +276,6 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
                 record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
 
             elif payload['action'] == 'D':
-                # Basic Response:
-                # {'schema': 'public', 'action': 'D', 'identity': [{'name': 'id', 'value': 3, 'type': 'integer'}], 'table': 'test_table'}
-                # After running ALTER TABLE test_table REPLICA IDENTITY FULL;
-                # {'identity': [{'value': 3, 'name': 'id', 'type': 'integer'}, {'value': 'Fred', 'name': 'name', 'type': 'character varying'}], 'schema': 'public', 'timestamp': '2020-06-17 20:13:12.722037+00', 'action': 'D', 'table': 'test_table'}
-
-                # RESULT: The below code should work, it'll just emit a record with only PKs if only PKs are available
                 col_names = []
                 col_vals = []
 
@@ -309,8 +285,6 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
                         col_vals.append(column['value'])
 
                 col_names = col_names + ['_sdc_deleted_at']
-                #col_vals = col_vals  + [singer.utils.strftime(time_extracted)]
-                # Timestamp here requires an option to be set along with format-version
                 col_vals = col_vals + [singer.utils.strftime(singer.utils.strptime_to_utc(payload['timestamp']))]
                 if conn_info.get('debug_lsn'):
                     col_vals = col_vals + [str(lsn)]
@@ -320,9 +294,6 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
             # Yield 1 record to match the API of V1
             yield record_message
 
-            # TODO: Should this happen? Can we resume inside a transaction using v2 consumer? Does the LSN change?
-            # This is also here to match V1, but it seems necessary to continue to keep-alive between messages
-            # Also, do we want to bookmark if record_message is null? (probably?)
             state = singer.write_bookmark(state,
                                           target_stream['tap_stream_id'],
                                           'lsn',
@@ -401,10 +372,8 @@ def consume_message_format_1(payload, conn_info, streams_lookup, state, time_ext
 
 
 def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn, message_format="1"):
-    LOGGER.info("About to load msg.payload")
     payload = json.loads(msg.payload)
     lsn = msg.data_start
-    LOGGER.info("LSN: %s", lsn)
 
     streams_lookup = {}
     for s in streams:
@@ -419,7 +388,6 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn, mes
         if record_message:
             singer.write_message(record_message)
         # Pulled out of refactor so we send a keep-alive per-record
-        # TODO: This can be adjusted
         LOGGER.debug("sending feedback to server with NO flush_lsn. just a keep-alive")
         msg.cursor.send_feedback()
 

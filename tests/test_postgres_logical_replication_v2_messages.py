@@ -288,7 +288,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 'user' : os.getenv('TAP_POSTGRES_USER'),
                 'default_replication_method' : 'LOG_BASED',
                 'logical_poll_total_seconds': '10',
-                'wal2json_message_format': '1'
+                'wal2json_message_format': '2'
         }
 
 
