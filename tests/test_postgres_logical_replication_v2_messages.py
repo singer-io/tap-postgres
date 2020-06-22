@@ -273,7 +273,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         return "tap-postgres"
 
     def name(self):
-        return "tap_tester_postgres_logical_replication"
+        return "tap_tester_postgres_logical_replication_v2_message"
 
     def get_type(self):
         return "platform.postgres"
