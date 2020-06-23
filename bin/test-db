@@ -10,7 +10,8 @@ full_image_name = "singerio/postgres:9.6-wal2json-2.2"
 
 def start_container(name):
     START_COMMAND = """
-    sudo docker run -e "POSTGRES_USER={0}" -e "POSTGRES_PASSWORD={1}" -p {2}:{2} --name {3} -d {4}
+    sudo docker run -e "POSTGRES_USER={0}" -e "POSTGRES_PASSWORD={1}" -p {2}:{2} --name {3} -d {4} \
+                    postgres -c config_file=/usr/local/share/postgresql/postgresql.conf.sample
     """.format(os.getenv('TAP_POSTGRES_USER'),
                os.getenv('TAP_POSTGRES_PASSWORD'),
                5432,

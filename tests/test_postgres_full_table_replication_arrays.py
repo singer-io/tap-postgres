@@ -15,6 +15,7 @@ import pytz
 import uuid
 import json
 from functools import reduce
+import db_utils
 from singer import utils, metadata
 
 import decimal
@@ -93,28 +94,17 @@ def insert_record(cursor, table_name, data):
                      VALUES ( {} )""".format(quote_ident(table_name, cursor), columns_sql, value_sql)
     cursor.execute(insert_sql, our_values)
 
-def get_test_connection(dbname=os.getenv('TAP_POSTGRES_DBNAME'), logical_replication=False):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(os.getenv('TAP_POSTGRES_HOST'),
-                                                                                   dbname,
-                                                                                   os.getenv('TAP_POSTGRES_USER'),
-                                                                                   os.getenv('TAP_POSTGRES_PASSWORD'),
-                                                                                   os.getenv('TAP_POSTGRES_PORT'))
-    if logical_replication:
-        return psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
-    else:
-        return psycopg2.connect(conn_string)
-
-
 def canonicalized_table_name(schema, table, cur):
     return "{}.{}".format(quote_ident(schema, cur), quote_ident(table, cur))
 
 
 class PostgresFullTableRepArrays(unittest.TestCase):
     def tearDown(self):
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
 
     def setUp(self):
+        db_utils.ensure_db()
         self.maxDiff = None
         creds = {}
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
@@ -126,7 +116,7 @@ class PostgresFullTableRepArrays(unittest.TestCase):
             #pylint: disable=line-too-long
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 old_table = cur.execute("""SELECT EXISTS (
@@ -254,7 +244,7 @@ CREATE TABLE {} (id                      SERIAL PRIMARY KEY,
         our_ts_tz = None
         our_date = None
         our_uuid = str(uuid.uuid1())
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor() as cur:
                 #insert fixture data 2

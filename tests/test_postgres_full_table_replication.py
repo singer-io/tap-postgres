@@ -15,6 +15,7 @@ import pytz
 import uuid
 import json
 from functools import reduce
+import db_utils
 from singer import utils, metadata
 
 import decimal
@@ -63,15 +64,6 @@ expected_schemas = {'postgres_full_table_replication_test':
                                     'our_money': {'type': ['null', 'string']}
                      }}}
 
-def get_test_connection(dbname=os.getenv('TAP_POSTGRES_DBNAME') ):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(os.getenv('TAP_POSTGRES_HOST'),
-                                                                                   dbname,
-                                                                                   os.getenv('TAP_POSTGRES_USER'),
-                                                                                   os.getenv('TAP_POSTGRES_PASSWORD'),
-                                                                                   os.getenv('TAP_POSTGRES_PORT'))
-    conn = psycopg2.connect(conn_string)
-    return conn
-
 test_schema_name = "public"
 test_table_name = "postgres_full_table_replication_test"
 
@@ -96,6 +88,7 @@ def insert_record(cursor, table_name, data):
 class PostgresFullTable(unittest.TestCase):
 
     def setUp(self):
+        db_utils.ensure_db("dev")
         self.maxDiff = None
         creds = {}
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
@@ -107,7 +100,7 @@ class PostgresFullTable(unittest.TestCase):
             #pylint: disable=line-too-long
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
@@ -279,7 +272,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 'frequency_in_minutes': '1',
                 # 'default_replication_method' : 'LOG_BASED',
                 'filter_dbs' : 'postgres,dev',
-                'ssl' : 'true',
+                # 'ssl' : 'true', # TODO: Disabling for docker-based container
                 'itersize' : '10'
         }
 

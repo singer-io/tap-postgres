@@ -15,6 +15,7 @@ import pytz
 import uuid
 import json
 from functools import reduce
+import db_utils
 from singer import utils, metadata
 
 import decimal
@@ -34,17 +35,6 @@ def insert_record(cursor, table_name, data):
     cursor.execute(insert_sql, our_values)
 
 
-def get_test_connection(dbname=os.getenv('TAP_POSTGRES_DBNAME'), logical_replication=False):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(os.getenv('TAP_POSTGRES_HOST'),
-                                                                                   dbname,
-                                                                                   os.getenv('TAP_POSTGRES_USER'),
-                                                                                   os.getenv('TAP_POSTGRES_PASSWORD'),
-                                                                                   os.getenv('TAP_POSTGRES_PORT'))
-    if logical_replication:
-        return psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
-    else:
-        return psycopg2.connect(conn_string)
-
 test_schema_name = "public"
 test_table_name_cows = "postgres_logical_replication_test_cows"
 test_table_name_chickens = "postgres_logical_replication_test_chickens"
@@ -55,17 +45,19 @@ def canonicalized_table_name(schema, table, cur):
 
 class PostgresLogicalRepMultipleDBs(unittest.TestCase):
     def tearDown(self):
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(""" SELECT pg_drop_replication_slot('stitch_dev') """)
 
-        with get_test_connection('postgres') as conn:
+        with db_utils.get_test_connection('postgres') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(""" SELECT pg_drop_replication_slot('stitch_postgres') """)
 
     def setUp(self):
+        db_utils.ensure_db('dev')
+        db_utils.ensure_db('postgres')
         self.maxDiff = None
         creds = {}
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
@@ -78,14 +70,14 @@ class PostgresLogicalRepMultipleDBs(unittest.TestCase):
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
 
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(""" SELECT EXISTS (SELECT 1
                                                 FROM  pg_replication_slots
                                                WHERE  slot_name = 'stitch_dev') """)
                 old_slot = cur.fetchone()[0]
-                with get_test_connection('dev', True) as conn2:
+                with db_utils.get_test_connection('dev', True) as conn2:
                     with conn2.cursor() as cur2:
                         if old_slot:
                             cur2.drop_replication_slot("stitch_dev")
@@ -116,14 +108,14 @@ class PostgresLogicalRepMultipleDBs(unittest.TestCase):
                 insert_record(cur, test_table_name_cows, self.cows_rec_1)
 
 
-        with get_test_connection('postgres') as conn:
+        with db_utils.get_test_connection('postgres') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(""" SELECT EXISTS (SELECT 1
                                                 FROM  pg_replication_slots
                                                WHERE  slot_name = 'stitch_postgres') """)
                 old_slot = cur.fetchone()[0]
-                with get_test_connection('postgres', True) as conn2:
+                with db_utils.get_test_connection('postgres', True) as conn2:
                     with conn2.cursor() as cur2:
                         if old_slot:
                             cur2.drop_replication_slot("stitch_postgres")
@@ -280,14 +272,14 @@ class PostgresLogicalRepMultipleDBs(unittest.TestCase):
         #----------------------------------------------------------------------
         print("inserting 1 more cows and 1 more chickens")
 
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor() as cur:
                 #insert another cow
                 self.cows_rec_2 = {'cow_name' : "betty cow", 'cow_age' : 21}
                 insert_record(cur, test_table_name_cows, self.cows_rec_2)
 
-        with get_test_connection('postgres') as conn:
+        with db_utils.get_test_connection('postgres') as conn:
             conn.autocommit = True
             with conn.cursor() as cur:
                 #insert another chicken

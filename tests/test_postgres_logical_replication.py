@@ -15,6 +15,7 @@ import pytz
 import uuid
 import json
 from functools import reduce
+import db_utils
 from singer import utils, metadata
 
 import decimal
@@ -76,17 +77,6 @@ def insert_record(cursor, table_name, data):
     cursor.execute(insert_sql, our_values)
 
 
-def get_test_connection(dbname=os.getenv('TAP_POSTGRES_DBNAME'), logical_replication=False):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(os.getenv('TAP_POSTGRES_HOST'),
-                                                                                   dbname,
-                                                                                   os.getenv('TAP_POSTGRES_USER'),
-                                                                                   os.getenv('TAP_POSTGRES_PASSWORD'),
-                                                                                   os.getenv('TAP_POSTGRES_PORT'))
-    if logical_replication:
-        return psycopg2.connect(conn_string, connection_factory=psycopg2.extras.LogicalReplicationConnection)
-    else:
-        return psycopg2.connect(conn_string)
-
 test_schema_name = "public"
 test_table_name = "postgres_logical_replication_test"
 
@@ -96,12 +86,13 @@ def canonicalized_table_name(schema, table, cur):
 
 class PostgresLogicalRep(unittest.TestCase):
     def tearDown(self):
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
 
     def setUp(self):
+        db_utils.ensure_db('dev')
         self.maxDiff = None
         creds = {}
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
@@ -113,7 +104,7 @@ class PostgresLogicalRep(unittest.TestCase):
             #pylint: disable=line-too-long
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(""" SELECT EXISTS (SELECT 1
@@ -121,7 +112,7 @@ class PostgresLogicalRep(unittest.TestCase):
                                                WHERE  slot_name = 'stitch') """)
 
                 old_slot = cur.fetchone()[0]
-                with get_test_connection('dev', True) as conn2:
+                with db_utils.get_test_connection('dev', True) as conn2:
                     with conn2.cursor() as cur2:
                         if old_slot:
                             cur2.drop_replication_slot("stitch")
@@ -382,7 +373,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         #----------------------------------------------------------------------
         print("inserting a record 3")
 
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor() as cur:
                 #insert fixture data 3
@@ -510,7 +501,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # invoke the sync job again after deleting a record
         #----------------------------------------------------------------------
         print("delete row from source db")
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("DELETE FROM {} WHERE id = 3".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
@@ -572,7 +563,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # invoke the sync job again after updating a record
         #----------------------------------------------------------------------
         print("updating row from source db")
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("UPDATE {} SET our_varchar = 'THIS HAS BEEN UPDATED', our_money = '$56.811', our_decimal = 'NaN', our_real = '+Infinity', our_double = 'NaN' WHERE id = 1".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
@@ -585,7 +576,6 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    conn_id,
                                                                    self.expected_sync_streams(),
                                                                    self.expected_pks())
-
         self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 2 })
         records_by_stream = runner.get_records_from_target_output()
         for stream, recs in records_by_stream.items():
@@ -598,6 +588,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # verify tap and target exit codes
         exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
         menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
+
 
         self.assertEqual(len(records_by_stream['postgres_logical_replication_test']['messages']), 2)
         #first record will be the previous delete

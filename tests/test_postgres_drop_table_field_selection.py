@@ -7,19 +7,11 @@ import unittest
 import psycopg2
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
+import db_utils
 from singer import metadata
 
 test_schema_name = "public"
 test_table_name = "postgres_drop_table_test"
-
-def get_test_connection(dbname=os.getenv('TAP_POSTGRES_DBNAME') ):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(os.getenv('TAP_POSTGRES_HOST'),
-                                                                                   dbname,
-                                                                                   os.getenv('TAP_POSTGRES_USER'),
-                                                                                   os.getenv('TAP_POSTGRES_PASSWORD'),
-                                                                                   os.getenv('TAP_POSTGRES_PORT'))
-    conn = psycopg2.connect(conn_string)
-    return conn
 
 def canonicalized_table_name(schema, table, cur):
     return "{}.{}".format(quote_ident(schema, cur), quote_ident(table, cur))
@@ -51,6 +43,7 @@ class PostgresDropTable(unittest.TestCase):
 
 
     def setUp(self):
+        db_utils.ensure_db('discovery0')
         creds = {}
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
                                     os.getenv('TAP_POSTGRES_USER'),
@@ -61,7 +54,7 @@ class PostgresDropTable(unittest.TestCase):
             #pylint: disable=line-too-long
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
-        with get_test_connection('discovery0') as conn:
+        with db_utils.get_test_connection('discovery0') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 old_table = cur.execute("""SELECT EXISTS (
@@ -96,7 +89,7 @@ class PostgresDropTable(unittest.TestCase):
         menagerie.verify_check_exit_status(self, exit_status, check_job_name)
 
         # There should not be any tables in this database
-        with get_test_connection('discovery0') as conn:
+        with db_utils.get_test_connection('discovery0') as conn:
             cur = conn.cursor()
             cur.execute("DROP TABLE {}".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
 

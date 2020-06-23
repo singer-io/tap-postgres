@@ -15,6 +15,7 @@ import pytz
 import uuid
 import json
 from functools import reduce
+import db_utils
 from singer import utils, metadata
 
 import decimal
@@ -60,16 +61,6 @@ expected_schemas = {test_table_name:
                                     'our_money': {'type': ['null', 'string']}
                      }}}
 
-def get_test_connection(dbname=os.getenv('TAP_POSTGRES_DBNAME') ):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(os.getenv('TAP_POSTGRES_HOST'),
-                                                                                   dbname,
-                                                                                   os.getenv('TAP_POSTGRES_USER'),
-                                                                                   os.getenv('TAP_POSTGRES_PASSWORD'),
-                                                                                   os.getenv('TAP_POSTGRES_PORT'))
-    conn = psycopg2.connect(conn_string)
-    return conn
-
-
 def canonicalized_table_name(schema, table, cur):
     return "{}.{}".format(quote_ident(schema, cur), quote_ident(table, cur))
 
@@ -90,6 +81,7 @@ def insert_record(cursor, table_name, data):
 class PostgresIncrementalTable(unittest.TestCase):
 
     def setUp(self):
+        db_utils.ensure_db('dev')
         self.maxDiff = None
         creds = {}
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
@@ -101,7 +93,7 @@ class PostgresIncrementalTable(unittest.TestCase):
             #pylint: disable=line-too-long
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
@@ -506,7 +498,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         our_time_tz = our_time.isoformat() + "-04:00"
         our_date = datetime.date(1999, 9, 9)
         my_uuid =  str(uuid.uuid1())
-        with get_test_connection('dev') as conn:
+        with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 

@@ -383,6 +383,8 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn, mes
         records = consume_message_format_1(payload, conn_info, streams_lookup, state, time_extracted, lsn)
     elif message_format == "2":
         records = consume_message_format_2(payload, conn_info, streams_lookup, state, time_extracted, lsn)
+    else:
+        raise Exception("Unknown wal2json message format version: {}".format(message_format))
 
     for record_message in records:
         if record_message:
@@ -437,7 +439,8 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
             replication_params = {"slot_name": slot,
                                   "decode": True,
                                   "start_lsn": start_lsn}
-            if conn_info.get("wal2json_message_format", "1") == "2":
+            message_format = conn_info.get("wal2json_message_format") or "1"
+            if message_format == "2":
                 LOGGER.info("Using wal2json format-version 2")
                 replication_params["options"] = {"format-version": 2, "include-timestamp": True}
 
@@ -461,7 +464,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                         break
 
                     state = consume_message(logical_streams, state, msg, time_extracted,
-                                            conn_info, end_lsn, message_format=conn_info.get("wal2json_message_format", "1"))
+                                            conn_info, end_lsn, message_format=message_format)
                     #msg has been consumed. it has been processed
                     last_lsn_processed = msg.data_start
                     rows_saved = rows_saved + 1

@@ -12,6 +12,7 @@ import psycopg2.extras
 from psycopg2.extensions import quote_ident
 import pdb
 from functools import reduce
+import db_utils
 from singer import utils, metadata
 import decimal
 
@@ -36,16 +37,6 @@ expected_schemas = {'chicken_view':
                         'sdc_recursive_timestamp_array' : { 'type' : ['null', 'string', 'array'], 'format' : 'date-time', 'items' : { '$ref': '#/definitions/sdc_recursive_timestamp_array'}},
                         'sdc_recursive_object_array' : { 'type' : ['null','object', 'array'], 'items' : { '$ref': '#/definitions/sdc_recursive_object_array'}}
                      }}}
-
-def get_test_connection(dbname=os.getenv('TAP_POSTGRES_DBNAME')):
-    conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(os.getenv('TAP_POSTGRES_HOST'),
-                                                                       dbname,
-                                                                       os.getenv('TAP_POSTGRES_USER'),
-                                                                       os.getenv('TAP_POSTGRES_PASSWORD'),
-                                                                       os.getenv('TAP_POSTGRES_PORT'))
-    conn = psycopg2.connect(conn_string)
-    return conn
-
 
 def canonicalized_table_name(schema, table, cur):
     return "{}.{}".format(quote_ident(schema, cur), quote_ident(table, cur))
@@ -73,6 +64,7 @@ test_view = 'chicken_view'
 
 class PostgresViewsIncrementalReplication(unittest.TestCase):
     def setUp(self):
+        db_utils.ensure_db()
         self.maxDiff = None
         creds = {}
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
@@ -84,7 +76,7 @@ class PostgresViewsIncrementalReplication(unittest.TestCase):
             #pylint: disable=line-too-long
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
-        with get_test_connection() as conn:
+        with db_utils.get_test_connection() as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 for table in [test_table_name_1, test_table_name_2]:
