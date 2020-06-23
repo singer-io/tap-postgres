@@ -438,6 +438,7 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
                                   "decode": True,
                                   "start_lsn": start_lsn}
             if conn_info.get("wal2json_message_format", "1") == "2":
+                LOGGER.info("Using wal2json format-version 2")
                 replication_params["options"] = {"format-version": 2, "include-timestamp": True}
 
             try:
