@@ -6,7 +6,7 @@ import os
 import pdb
 import singer
 from singer import get_logger, metadata, write_bookmark
-from utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
+from utils import ensure_db, get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
 import decimal
 import math
 import pytz
@@ -25,6 +25,7 @@ class Unsupported(unittest.TestCase):
     table_name = 'CHICKEN TIMES'
 
     def setUp(self):
+        ensure_db()
         with get_test_connection() as conn:
             cur = conn.cursor()
             table_spec = {"columns": [{"name": "interval_col",   "type": "INTERVAL"},

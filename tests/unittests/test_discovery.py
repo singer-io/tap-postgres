@@ -8,7 +8,7 @@ import pdb
 from singer import get_logger, metadata
 from psycopg2.extensions import quote_ident
 
-from utils import get_test_connection, ensure_test_table, get_test_connection_config
+from utils import ensure_db, get_test_connection, ensure_test_table, get_test_connection_config
 
 LOGGER = get_logger()
 
@@ -21,13 +21,14 @@ class TestStringTableWithPK(unittest.TestCase):
     maxDiff = None
     table_name = 'CHICKEN TIMES'
     def setUp(self):
-       table_spec = {"columns": [{"name" : "id", "type" : "integer", "primary_key" : True, "serial" : True},
-                                 {"name" : '"character-varying_name"',  "type": "character varying"},
-                                 {"name" : '"varchar-name"',            "type": "varchar(28)"},
-                                 {"name" :  'char_name',                "type": "char(10)"},
-                                 {"name" : '"text-name"',               "type": "text"}],
-                     "name" : TestStringTableWithPK.table_name}
-       ensure_test_table(table_spec)
+        ensure_db()
+        table_spec = {"columns": [{"name" : "id", "type" : "integer", "primary_key" : True, "serial" : True},
+                                  {"name" : '"character-varying_name"',  "type": "character varying"},
+                                  {"name" : '"varchar-name"',            "type": "varchar(28)"},
+                                  {"name" :  'char_name',                "type": "char(10)"},
+                                  {"name" : '"text-name"',               "type": "text"}],
+                      "name" : TestStringTableWithPK.table_name}
+        ensure_test_table(table_spec)
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
@@ -326,17 +327,18 @@ class TestHStoreTable(unittest.TestCase):
     table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : 'our_pk',          "type" : "hstore", "primary_key" : True },
-                                 {"name" : 'our_hstore',      "type" : "hstore" }],
-                     "name" : TestHStoreTable.table_name}
-       with get_test_connection() as conn:
-           cur = conn.cursor()
-           cur.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
-           if cur.fetchone()[0] is None:
-               cur.execute(""" CREATE EXTENSION hstore; """)
+        ensure_db()
+        table_spec = {"columns": [{"name" : 'our_pk',          "type" : "hstore", "primary_key" : True },
+                                  {"name" : 'our_hstore',      "type" : "hstore" }],
+                      "name" : TestHStoreTable.table_name}
+        with get_test_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
+            if cur.fetchone()[0] is None:
+                cur.execute(""" CREATE EXTENSION hstore; """)
 
 
-       ensure_test_table(table_spec)
+        ensure_test_table(table_spec)
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
@@ -379,15 +381,16 @@ class TestEnumTable(unittest.TestCase):
     table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : 'our_mood_enum_pk',          "type" : "mood_enum", "primary_key" : True },
-                                 {"name" : 'our_mood_enum',             "type" : "mood_enum" }],
-                     "name" : TestHStoreTable.table_name}
-       with get_test_connection() as conn:
-           cur = conn.cursor()
-           cur.execute("""     DROP TYPE IF EXISTS mood_enum CASCADE """)
-           cur.execute("""     CREATE TYPE mood_enum AS ENUM ('sad', 'ok', 'happy'); """)
+        ensure_db()
+        table_spec = {"columns": [{"name" : 'our_mood_enum_pk',          "type" : "mood_enum", "primary_key" : True },
+                                  {"name" : 'our_mood_enum',             "type" : "mood_enum" }],
+                      "name" : TestHStoreTable.table_name}
+        with get_test_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""     DROP TYPE IF EXISTS mood_enum CASCADE """)
+            cur.execute("""     CREATE TYPE mood_enum AS ENUM ('sad', 'ok', 'happy'); """)
 
-       ensure_test_table(table_spec)
+        ensure_test_table(table_spec)
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
@@ -420,10 +423,11 @@ class TestMoney(unittest.TestCase):
     table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : 'our_money_pk',          "type" : "money", "primary_key" : True },
-                                 {"name" : 'our_money',             "type" : "money" }],
-                     "name" : TestHStoreTable.table_name}
-       ensure_test_table(table_spec)
+        ensure_db()
+        table_spec = {"columns": [{"name" : 'our_money_pk',          "type" : "money", "primary_key" : True },
+                                  {"name" : 'our_money',             "type" : "money" }],
+                      "name" : TestHStoreTable.table_name}
+        ensure_test_table(table_spec)
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
@@ -455,10 +459,11 @@ class TestArraysTable(unittest.TestCase):
     table_name = 'CHICKEN TIMES'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : 'our_int_array_pk',          "type" : "integer[]", "primary_key" : True },
-                                 {"name" : 'our_string_array',          "type" : "varchar[]" }],
-                     "name" : TestHStoreTable.table_name}
-       ensure_test_table(table_spec)
+        ensure_db()
+        table_spec = {"columns": [{"name" : 'our_int_array_pk',          "type" : "integer[]", "primary_key" : True },
+                                  {"name" : 'our_string_array',          "type" : "varchar[]" }],
+                      "name" : TestHStoreTable.table_name}
+        ensure_test_table(table_spec)
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
@@ -493,14 +498,16 @@ class TestMultiDB(unittest.TestCase):
     table_name = 'different_chicken'
 
     def setUp(self):
-       table_spec = {"columns": [{"name" : 'our_date',                   "type" : "DATE", "primary_key": True },
-                                 {"name" : 'our_ts',                     "type" : "TIMESTAMP"},
-                                 {"name" : 'our_ts_tz',                  "type" : "TIMESTAMP WITH TIME ZONE"},
-                                 {"name" : 'our_time',                   "type" : "TIME"},
-                                 {"name" : 'our_time_tz',                "type" : "TIME WITH TIME ZONE"}],
-                     "name" : TestMultiDB.table_name}
-       ensure_test_table(table_spec, 'dev')
-       ensure_test_table(table_spec, 'postgres')
+        ensure_db('dev')
+        ensure_db('postgres')
+        table_spec = {"columns": [{"name" : 'our_date',                   "type" : "DATE", "primary_key": True },
+                                  {"name" : 'our_ts',                     "type" : "TIMESTAMP"},
+                                  {"name" : 'our_ts_tz',                  "type" : "TIMESTAMP WITH TIME ZONE"},
+                                  {"name" : 'our_time',                   "type" : "TIME"},
+                                  {"name" : 'our_time_tz',                "type" : "TIME WITH TIME ZONE"}],
+                      "name" : TestMultiDB.table_name}
+        ensure_test_table(table_spec, 'dev')
+        ensure_test_table(table_spec, 'postgres')
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
@@ -537,6 +544,7 @@ class TestArraysLikeTable(unittest.TestCase):
     like_table_name = 'LIKE CHICKEN TIMES'
 
     def setUp(self):
+        ensure_db('postgres')
         with get_test_connection('postgres') as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute('DROP MATERIALIZED VIEW IF EXISTS "LIKE CHICKEN TIMES"')
@@ -562,7 +570,7 @@ class TestArraysLikeTable(unittest.TestCase):
         stream_dict = chicken_streams[0]
         stream_dict.get('metadata').sort(key=lambda md: md['breadcrumb'])
 
-        with get_test_connection() as conn:
+        with get_test_connection('postgres') as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 self.assertEqual(metadata.to_map(stream_dict.get('metadata')),
                                  {() : {'table-key-properties': [], 'database-name': 'postgres', 'schema-name': 'public', 'is-view': True, 'row-count': 0},
@@ -581,6 +589,7 @@ class TestColumnGrants(unittest.TestCase):
     password = 'password'
  
     def setUp(self):
+        ensure_db()
         table_spec = {"columns": [{"name" : "id",                "type" : "integer",  "serial" : True},
                                  {"name" : 'size integer',      "type" : "integer",  "quoted" : True},
                                  {"name" : 'size smallint',     "type" : "smallint", "quoted" : True},
