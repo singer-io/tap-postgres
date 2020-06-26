@@ -243,25 +243,9 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
 
             desired_columns = [col for col in target_stream['schema']['properties'].keys() if sync_common.should_sync_column(stream_md_map, col)]
 
-            if payload['action'] == 'I':
-                col_names = []
-                col_vals = []
-
-                for column in payload['columns']:
-                    if column['name'] in set(desired_columns):
-                        col_names.append(column['name'])
-                        col_vals.append(column['value'])
-
-                col_names = col_names + ['_sdc_deleted_at']
-                col_vals = col_vals + [None]
-                if conn_info.get('debug_lsn'):
-                    col_names = col_names + ['_sdc_lsn']
-                    col_vals = col_vals + [str(lsn)]
-                record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
-
-            elif payload['action'] == 'U':
-                col_names = []
-                col_vals = []
+            col_names = []
+            col_vals = []
+            if payload['action'] in ['I','U']:
                 for column in payload['columns']:
                     if column['name'] in set(desired_columns):
                         col_names.append(column['name'])
@@ -271,14 +255,10 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
                 col_vals = col_vals + [None]
 
                 if conn_info.get('debug_lsn'):
-                    col_vals = col_vals + [str(lsn)]
                     col_names = col_names + ['_sdc_lsn']
-                record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
+                    col_vals = col_vals + [str(lsn)]
 
             elif payload['action'] == 'D':
-                col_names = []
-                col_vals = []
-
                 for column in payload['identity']:
                     if column['name'] in set(desired_columns):
                         col_names.append(column['name'])
@@ -286,13 +266,13 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
 
                 col_names = col_names + ['_sdc_deleted_at']
                 col_vals = col_vals + [singer.utils.strftime(singer.utils.strptime_to_utc(payload['timestamp']))]
+
                 if conn_info.get('debug_lsn'):
                     col_vals = col_vals + [str(lsn)]
                     col_names = col_names + ['_sdc_lsn']
-                record_message = row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
 
             # Yield 1 record to match the API of V1
-            yield record_message
+            yield row_to_singer_message(target_stream, col_vals, stream_version, col_names, time_extracted, stream_md_map, conn_info)
 
             state = singer.write_bookmark(state,
                                           target_stream['tap_stream_id'],
@@ -375,9 +355,7 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn, mes
     payload = json.loads(msg.payload)
     lsn = msg.data_start
 
-    streams_lookup = {}
-    for s in streams:
-        streams_lookup[s['tap_stream_id']] = s
+    streams_lookup = {s['tap_stream_id']: s for s in streams}
 
     if message_format == "1":
         records = consume_message_format_1(payload, conn_info, streams_lookup, state, time_extracted, lsn)
