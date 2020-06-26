@@ -226,8 +226,6 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
     # C = Commit Transaction
     # M = Message
     # T = Truncate
-    record_message = None
-
     action = payload['action']
     if action not in ['U', 'I', 'D']:
         LOGGER.debug("Skipping message of type %s", action)
@@ -245,7 +243,7 @@ def consume_message_format_2(payload, conn_info, streams_lookup, state, time_ext
 
             col_names = []
             col_vals = []
-            if payload['action'] in ['I','U']:
+            if payload['action'] in ['I', 'U']:
                 for column in payload['columns']:
                     if column['name'] in set(desired_columns):
                         col_names.append(column['name'])

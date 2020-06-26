@@ -7,7 +7,7 @@ jobs:
         environment:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
-        command: [postgres, -c, config_file=/usr/local/share/postgresql/postgresql.conf.sample]
+        command: [postgres, -c, config_file=/usr/local/share/postgresql/postgresql.conf]
     steps:
       - checkout
       - run:

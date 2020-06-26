@@ -9,9 +9,8 @@ RUN apt-get update && apt-get install -y postgresql-server-dev-9.6 gcc git make 
     && (cd /wal2json && git checkout $WAL2JSON_COMMIT_ID && make && make install) \
     && rm -rf wal2json
 
-# Copy the custom configuration which will be passed down to the server (using a .sample file is the preferred way of doing it by
-# the base Docker image)
-COPY postgresql.conf.sample /usr/local/share/postgresql/postgresql.conf.sample
+# Copy the custom configuration which will be passed down to the server
+COPY postgresql.conf /usr/local/share/postgresql/postgresql.conf
 
 # Copy the script which will initialize the replication permissions
 COPY /docker-entrypoint-initdb.d /docker-entrypoint-initdb.d
