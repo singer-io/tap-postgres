@@ -63,6 +63,17 @@ def build_table(table, cur):
 
     return sql
 
+def ensure_db(dbname='postgres'):
+    # Create database dev if not exists
+    with get_test_connection() as conn:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = '{}'".format(dbname))
+            exists = cur.fetchone()
+            if not exists:
+                print("Creating database {}".format(dbname))
+                cur.execute("CREATE DATABASE {}".format(dbname))
+
 @nottest
 def ensure_test_table(table_spec, target_db='postgres'):
     with get_test_connection(target_db) as conn:
