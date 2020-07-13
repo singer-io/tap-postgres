@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+import os
+import sys
+import argparse
+import subprocess
+import time
+from argparse import RawTextHelpFormatter
+
+full_image_name = "singerio/postgres:9.6-wal2json-2.2"
+
+def start_container(name):
+    START_COMMAND = """
+    sudo docker run -e "POSTGRES_USER={0}" -e "POSTGRES_PASSWORD={1}" -p {2}:{2} --name {3} -d {4} \
+                    postgres -c config_file=/usr/local/share/postgresql/postgresql.conf
+    """.format(os.getenv('TAP_POSTGRES_USER'),
+               os.getenv('TAP_POSTGRES_PASSWORD'),
+               5432,
+               name,
+               full_image_name)
+
+    print("Starting Docker process {} using command: {}".format(name, START_COMMAND))
+
+    proc = subprocess.run(START_COMMAND, shell=True)
+    if proc.returncode != 0:
+        sys.exit("Exited with code: {}, the docker process failed to start.".format(proc.returncode))
+    print("Process started successfully.")
+
+def get_ip_addr(name):
+    IP_ADDR_COMMAND = "docker inspect {} | jq -r .[].NetworkSettings.IPAddress"
+    print("Retrieving IP addr of postgres container")
+    ip_addr = subprocess.check_output(IP_ADDR_COMMAND.format(name), shell=True).decode('utf-8').rstrip()
+    print(ip_addr)
+    return ip_addr
+
+
+def stop_container(name):
+    STOP_COMMAND = "sudo docker stop {0} && sudo docker rm {0}"
+
+    print("Stopping Docker process {}".format(name))
+    proc = subprocess.run(STOP_COMMAND.format(name), shell=True)
+    if proc.returncode != 0:
+        sys.exit("Exited with code: {}, the docker process failed to stop.".format(proc.returncode))
+    print("Process stopped successfully")
+
+def connect_to_db(name):
+    CONNECT_COMMAND = 'docker run -it --rm -e "PGPASSWORD={}" {} psql --host {} -U {}'
+
+    ip_addr = get_ip_addr(name)
+
+    print("Attempting to connect to running container using a postgres container via psql")
+    connect_command_format = CONNECT_COMMAND.format(os.getenv('TAP_POSTGRES_PASSWORD'),
+                                                    full_image_name,
+                                                    ip_addr,
+                                                    os.getenv('TAP_POSTGRES_USER'))
+    print(connect_command_format)
+    # NB: Using call instead of run here because it is blocking
+    #     This returns only an exit code.
+    returncode = subprocess.call(connect_command_format,
+                                 shell=True)
+    if returncode != 0:
+        sys.exit("Exited with code: {}, could not connect.".format(returncode))
+
+DESCRIPTION = """
+Manage docker instance for tap-postgres testing.
+
+Uses environment variables:
+    TAP_POSTGRES_USER
+    TAP_POSTGRES_PASSWORD
+"""
+parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=RawTextHelpFormatter)
+parser.add_argument('action', choices=['start','stop', 'connect'], help='action to perform with the container')
+parser.add_argument('--name', help="name assigned to running docker process", default='postgres1')
+
+def main():
+    parsed_args = parser.parse_args()
+    # Potential arguments to add: pull, changing docker cointainer, changing password
+    if parsed_args.action == 'start':
+        start_container(parsed_args.name)
+    elif parsed_args.action == 'stop':
+        stop_container(parsed_args.name)
+    elif parsed_args.action == 'connect':
+        connect_to_db(parsed_args.name)
+
+if __name__ == "__main__":
+    main()

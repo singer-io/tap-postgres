@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.0
+  * Add support for `wal2json` message format v2 via config parameter [91](https://github.com/singer-io/tap-postgres/pull/91)
+
 ## 0.0.70
   * Look up ssl status in `pg_stat_ssl` and `pg_stat_activity` tables [#84](https://github.com/singer-io/tap-postgres/pull/84)
 
