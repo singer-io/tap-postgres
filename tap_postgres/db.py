@@ -64,7 +64,7 @@ def open_connection(conn_config, logical_replication=False):
 
     conn = psycopg2.connect(**cfg)
 
-    typecasters.register_type_casters(conn)
+    register_typecasters(conn)
     
     return conn
 
@@ -204,3 +204,7 @@ def numeric_max(precision, scale):
 
 def numeric_min(precision, scale):
     return -10 ** (precision - scale)
+
+
+def register_typecasters(connection):
+    typecasters.invalid_timestamp_caster.register_type(connection)
