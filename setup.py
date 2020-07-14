@@ -25,5 +25,5 @@ setup(name='tap-postgres',
           [console_scripts]
           tap-postgres=tap_postgres:main
       ''',
-      packages=['tap_postgres', 'tap_postgres.sync_strategies']
+      packages=['tap_postgres', 'tap_postgres.sync_strategies', 'tap_postgres.typecasters']
       )
