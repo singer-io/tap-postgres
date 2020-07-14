@@ -31,6 +31,23 @@ Check out `config.json.sample` for an example configuration file.
 | ssh_username               | No        |         | Only used if `use_ssh_tunnel` is set to true. This is the username to be used to connect to the jump server                                                               |
 | ssl                        | No        |         | If true, the sslmode value is set to "require" otherwise sslmode value is not set                                                                                         |
 
+## Development
+### Running tests
+Install requirements for development: `pip install -e .[test]`
+
+Install postgres to run tests:
+1. sudo apt update
+1. sudo apt install postgresql postgresql-contrib
+1. sudo service postgresql start
+1. sudo passwd postgres (set to postgres)
+1. sudo -u postgres psql
+1. alter user postgres password 'postgres'
+1. \q
+
+Run unit tests: `nosetests --where tests/unittests`
+
+
+
 ---
 
 Copyright &copy; 2018 Stitch
