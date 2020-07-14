@@ -1,4 +1,4 @@
-from tap_postgres.typecasters.invalid_timestamp_caster import register_type as register_invalid_timestamp_type
+import tap_postgres.typecasters.invalid_timestamp_caster as invalid_timestamp
 
 def register_typecasters(connection):
-    register_invalid_timestamp_type(connection)
+    invalid_timestamp.register_type(connection)
