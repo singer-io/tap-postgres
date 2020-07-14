@@ -6,7 +6,7 @@ import psycopg2.extras
 import singer
 LOGGER = singer.get_logger()
 
-from tap_postgres.typecasters.register_typecasters import register_typecasters
+from .typecasters.register_typecasters import register_typecasters
 
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
