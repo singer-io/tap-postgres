@@ -12,12 +12,18 @@ setup(name='tap-postgres',
           'singer-python==5.3.1',
           'psycopg2==2.8.4',
           'strict-rfc3339==0.7',
-          'nose==1.3.7',
           'sshtunnel==0.1.5'
       ],
+      extras_require={
+          'dev': [
+              'autopep8>=1.5.3',
+              'python-dotenv>=0.14.0',
+              'nose>=1.3.7',
+          ]
+      },
       entry_points='''
           [console_scripts]
           tap-postgres=tap_postgres:main
       ''',
       packages=['tap_postgres', 'tap_postgres.sync_strategies']
-)
+      )

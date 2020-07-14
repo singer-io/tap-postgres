@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from singer import get_logger, metadata
 from nose.tools import nottest
 import psycopg2
@@ -10,6 +11,8 @@ import pdb
 from psycopg2.extensions import quote_ident
 
 LOGGER = get_logger()
+load_dotenv()
+
 
 def get_test_connection_config(target_db='postgres'):
     missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
@@ -18,7 +21,8 @@ def get_test_connection_config(target_db='postgres'):
                                 os.getenv('TAP_POSTGRES_PORT')] if x == None]
     if len(missing_envs) != 0:
         #pylint: disable=line-too-long
-        raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
+        raise Exception(
+            "set TAP_POSTGRES_HOST, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
     conn_config = {}
     conn_config['host'] = os.environ.get('TAP_POSTGRES_HOST')
@@ -28,6 +32,7 @@ def get_test_connection_config(target_db='postgres'):
     conn_config['dbname'] = target_db
     return conn_config
 
+
 def get_test_connection(target_db='postgres'):
     conn_config = get_test_connection_config(target_db)
     conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(conn_config['host'],
@@ -36,11 +41,13 @@ def get_test_connection(target_db='postgres'):
                                                                                    conn_config['password'],
                                                                                    conn_config['port'])
     LOGGER.info("connecting to {}".format(conn_config['host']))
+    print(conn_string)
 
     conn = psycopg2.connect(conn_string)
     conn.autocommit = True
 
     return conn
+
 
 def build_col_sql(col, cur):
     if col.get('quoted'):
@@ -50,29 +57,34 @@ def build_col_sql(col, cur):
 
     return col_sql
 
+
 def build_table(table, cur):
     create_sql = "CREATE TABLE {}\n".format(quote_ident(table['name'], cur))
     col_sql = map(lambda c: build_col_sql(c, cur), table['columns'])
     pks = [c['name'] for c in table['columns'] if c.get('primary_key')]
     if len(pks) != 0:
-        pk_sql = ",\n CONSTRAINT {}  PRIMARY KEY({})".format(quote_ident(table['name'] + "_pk", cur), " ,".join(pks))
+        pk_sql = ",\n CONSTRAINT {}  PRIMARY KEY({})".format(
+            quote_ident(table['name'] + "_pk", cur), " ,".join(pks))
     else:
-       pk_sql = ""
+        pk_sql = ""
 
     sql = "{} ( {} {})".format(create_sql, ",\n".join(col_sql), pk_sql)
 
     return sql
+
 
 def ensure_db(dbname='postgres'):
     # Create database dev if not exists
     with get_test_connection() as conn:
         conn.autocommit = True
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = '{}'".format(dbname))
+            cur.execute(
+                "SELECT 1 FROM pg_database WHERE datname = '{}'".format(dbname))
             exists = cur.fetchone()
             if not exists:
                 print("Creating database {}".format(dbname))
                 cur.execute("CREATE DATABASE {}".format(dbname))
+
 
 @nottest
 def ensure_test_table(table_spec, target_db='postgres'):
@@ -88,17 +100,20 @@ def ensure_test_table(table_spec, target_db='postgres'):
             old_table = cur.fetchall()
 
             if len(old_table) != 0:
-                cur.execute('DROP TABLE {} cascade'.format(quote_ident(table_spec['name'], cur)))
+                cur.execute('DROP TABLE {} cascade'.format(
+                    quote_ident(table_spec['name'], cur)))
 
             sql = build_table(table_spec, cur)
             LOGGER.info("create table sql: %s", sql)
             cur.execute(sql)
+
 
 def unselect_column(our_stream, col):
     md = metadata.to_map(our_stream['metadata'])
     md.get(('properties', col))['selected'] = False
     our_stream['metadata'] = metadata.to_list(md)
     return our_stream
+
 
 def set_replication_method_for_stream(stream, method):
     new_md = metadata.to_map(stream['metadata'])
@@ -108,16 +123,17 @@ def set_replication_method_for_stream(stream, method):
     stream['metadata'] = metadata.to_list(new_md)
     return stream
 
+
 def select_all_of_stream(stream):
     new_md = metadata.to_map(stream['metadata'])
 
     old_md = new_md.get(())
     old_md.update({'selected': True})
     for col_name, col_schema in stream['schema']['properties'].items():
-        #explicitly select column if it is not automatic
+        # explicitly select column if it is not automatic
         if new_md.get(('properties', col_name)).get('inclusion') != 'automatic' and new_md.get(('properties', col_name)).get('inclusion') != 'unsupported':
             old_md = new_md.get(('properties', col_name))
-            old_md.update({'selected' : True})
+            old_md.update({'selected': True})
 
     stream['metadata'] = metadata.to_list(new_md)
     return stream
@@ -148,13 +164,14 @@ def crud_up_value(value):
     elif isinstance(value, datetime.date):
         return "Date  '{}'".format(str(value))
     else:
-        raise Exception("crud_up_value does not yet support {}".format(value.__class__))
+        raise Exception(
+            "crud_up_value does not yet support {}".format(value.__class__))
+
 
 def insert_record(cursor, table_name, data):
     our_keys = list(data.keys())
     our_keys.sort()
-    our_values = list(map( lambda k: data.get(k), our_keys))
-
+    our_values = list(map(lambda k: data.get(k), our_keys))
 
     columns_sql = ", \n".join(map(lambda k: quote_ident(k, cursor), our_keys))
     value_sql = ",".join(["%s" for i in range(len(our_keys))])
@@ -184,13 +201,15 @@ def verify_crud_messages(that, caught_messages, pks):
     that.assertTrue(isinstance(caught_messages[12], singer.StateMessage))
     that.assertTrue(isinstance(caught_messages[13], singer.StateMessage))
 
-    #schema includes scn && _sdc_deleted_at because we selected logminer as our replication method
-    that.assertEqual({"type" : ['integer']}, caught_messages[0].schema.get('properties').get('scn') )
-    that.assertEqual({"type" : ['null', 'string'], "format" : "date-time"}, caught_messages[0].schema.get('properties').get('_sdc_deleted_at') )
+    # schema includes scn && _sdc_deleted_at because we selected logminer as our replication method
+    that.assertEqual({"type": ['integer']}, caught_messages[0].schema.get(
+        'properties').get('scn'))
+    that.assertEqual({"type": ['null', 'string'], "format": "date-time"},
+                     caught_messages[0].schema.get('properties').get('_sdc_deleted_at'))
 
     that.assertEqual(pks, caught_messages[0].key_properties)
 
-    #verify first STATE message
+    # verify first STATE message
     bookmarks_1 = caught_messages[2].value.get('bookmarks')['ROOT-CHICKEN']
     that.assertIsNotNone(bookmarks_1)
     bookmarks_1_scn = bookmarks_1.get('scn')
@@ -198,7 +217,7 @@ def verify_crud_messages(that, caught_messages, pks):
     that.assertIsNotNone(bookmarks_1_scn)
     that.assertIsNotNone(bookmarks_1_version)
 
-    #verify STATE message after UPDATE
+    # verify STATE message after UPDATE
     bookmarks_2 = caught_messages[6].value.get('bookmarks')['ROOT-CHICKEN']
     that.assertIsNotNone(bookmarks_2)
     bookmarks_2_scn = bookmarks_2.get('scn')
