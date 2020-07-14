@@ -6,6 +6,8 @@ import psycopg2.extras
 import singer
 LOGGER = singer.get_logger()
 
+from tap_postgres import typecasters
+
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
 
@@ -61,6 +63,8 @@ def open_connection(conn_config, logical_replication=False):
         cfg['connection_factory'] = psycopg2.extras.LogicalReplicationConnection
 
     conn = psycopg2.connect(**cfg)
+
+    typecasters.register_type_casters(conn)
     
     return conn
 
