@@ -6,7 +6,7 @@ import psycopg2.extras
 import singer
 LOGGER = singer.get_logger()
 
-import tap_postgres.typecasters as typecasters
+from tap_postgres.typecasters import register_type_casters
 
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
@@ -64,7 +64,7 @@ def open_connection(conn_config, logical_replication=False):
 
     conn = psycopg2.connect(**cfg)
 
-    register_typecasters(conn)
+    register_type_casters(conn)    
     
     return conn
 
@@ -206,5 +206,5 @@ def numeric_min(precision, scale):
     return -10 ** (precision - scale)
 
 
-def register_typecasters(connection):
-    typecasters.invalid_timestamp_caster.register_type(connection)
+# def register_typecasters(connection):
+#     typecasters.invalid_timestamp_caster.register_type(connection)
