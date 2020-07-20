@@ -61,6 +61,7 @@ expected_schemas = {'postgres_full_table_replication_test':
                                     'our_inet': {'type': ['null', 'string']},
                                     'our_mac': {'type': ['null', 'string']},
                                     'our_alignment_enum': {'type': ['null', 'string']},
+                                    'our_text_domain': {'type': ['null', 'string']},
                                     'our_money': {'type': ['null', 'string']}
                      }}}
 
@@ -123,6 +124,9 @@ class PostgresFullTable(unittest.TestCase):
                 cur.execute(""" DROP TYPE IF EXISTS ALIGNMENT CASCADE """)
                 cur.execute(""" CREATE TYPE ALIGNMENT AS ENUM ('good', 'bad', 'ugly') """)
 
+                cur.execute(""" DROP DOMAIN IF EXISTS text_domain_type CASCADE """)
+                cur.execute(""" CREATE DOMAIN text_domain_type text""")
+
                 create_table_sql = """
 CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 our_varchar    VARCHAR,
@@ -150,6 +154,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 our_cidr       cidr,
                 our_mac        macaddr,
                 our_alignment_enum ALIGNMENT,
+                our_text_domain    domain_type,
                 our_money          money)
                 """.format(canonicalized_table_name(test_schema_name, test_table_name, cur), NUMERIC_PRECISION, NUMERIC_SCALE)
 
@@ -188,6 +193,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                               'our_inet': '192.168.100.128/24',
                               'our_mac' : '08:00:2b:01:02:03',
                               'our_alignment_enum': 'good',
+                              'our_text_domain': 'hello, world!',
                               'our_money':    '100.1122',
                 }
 
@@ -338,6 +344,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
              ('properties', 'our_cidr'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'cidr'},
              ('properties', 'our_mac'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'macaddr'},
              ('properties', 'our_alignment_enum'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'alignment'},
+             ('properties', 'our_text_domain'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'text'},
              ('properties', 'our_money'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'money'}},
             metadata.to_map(md))
 
@@ -414,6 +421,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                              'our_cidr'    : self.rec_1['our_cidr'],
                              'our_mac'    : self.rec_1['our_mac'],
                              'our_alignment_enum' : self.rec_1['our_alignment_enum'],
+                             'our_text_domain' : self.rec_1['our_text_domain'],
                              'our_money'      : '$100.11'
         }
 

@@ -59,6 +59,7 @@ expected_schemas = {'postgres_logical_replication_test':
                                     'our_inet': {'type': ['null', 'string']},
                                     'our_mac': {'type': ['null', 'string']},
                                     'our_alignment_enum': {'type': ['null', 'string']},
+                                    'our_text_domain': {'type': ['null', 'string']},
                                     'our_money': {'type': ['null', 'string']}}}}
 
 
@@ -139,6 +140,8 @@ class PostgresLogicalRep(unittest.TestCase):
                 cur.execute(""" DROP TYPE IF EXISTS ALIGNMENT CASCADE """)
                 cur.execute(""" CREATE TYPE ALIGNMENT AS ENUM ('good', 'bad', 'ugly') """)
 
+                cur.execute(""" DROP DOMAIN IF EXISTS text_domain_type CASCADE """)
+                cur.execute(""" CREATE DOMAIN text_domain_type text""")
 
                 create_table_sql = """
 CREATE TABLE {} (id            SERIAL PRIMARY KEY,
@@ -168,6 +171,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 our_inet       inet,
                 our_mac            macaddr,
                 our_alignment_enum ALIGNMENT,
+                our_text_domain text_domain_type,
                 our_money          money)
                 """.format(canonicalized_table_name(test_schema_name, test_table_name, cur))
 
@@ -206,7 +210,8 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                               'our_cidr' : '192.168.100.128/25',
                               'our_inet': '192.168.100.128/24',
                               'our_mac' : '08:00:2b:01:02:03',
-                              'our_alignment_enum': 'bad'}
+                              'our_alignment_enum': 'bad',
+                              'our_text_domain': 'hello, world!'}
 
 
                 insert_record(cur, test_table_name, self.rec_1)
@@ -472,6 +477,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                     'our_inet': '192.168.102.128',
                                     'our_mac': self.rec_3['our_mac'],
                                     'our_alignment_enum' : None,
+                                    'our_text_domain': None,
                                     'our_money'          :'$412.12'
         }
         self.assertEqual(set(actual_record_1.keys()), set(expected_inserted_record.keys()),
@@ -628,6 +634,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                 'our_inet': self.rec_1['our_inet'],
                                 'our_mac': self.rec_1['our_mac'],
                                 'our_alignment_enum' : 'bad',
+                                'our_text_domain': 'hello, world!',
                                 'our_money' : '$56.81'
         }
 

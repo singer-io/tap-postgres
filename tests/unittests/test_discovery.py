@@ -453,7 +453,94 @@ class TestMoney(unittest.TestCase):
                                   'type': 'object',
                                   'definitions' : tap_postgres.BASE_RECURSIVE_SCHEMAS},
                                  stream_dict.get('schema'))
+class TestDomainsTable(unittest.TestCase):
+    maxDiff = None
+    table_name = "CHICKEN TIMES"
 
+    def setUp(self):
+        table_spec = {
+            "columns": [
+                {
+                    "name": "our_test_domain_pk",
+                    "type": "test_domain",
+                    "primary_key": True,
+                },
+                {"name": "our_test_domain", "type": "test_domain"},
+                {"name": "our_test_integer_domain", "type": "test_integer_domain"},
+            ],
+            "name": TestHStoreTable.table_name,
+        }
+        with get_test_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""     DROP DOMAIN IF EXISTS test_domain CASCADE """)
+            cur.execute("""     CREATE DOMAIN test_domain AS text; """)
+            cur.execute("""     DROP DOMAIN IF EXISTS test_integer_domain CASCADE """)
+            cur.execute("""     CREATE DOMAIN test_integer_domain AS integer; """)
+
+        ensure_test_table(table_spec)
+
+    def test_catalog(self):
+        conn_config = get_test_connection_config()
+        streams = tap_postgres.do_discovery(conn_config)
+        chicken_streams = [
+            s for s in streams if s["tap_stream_id"] == "public-CHICKEN TIMES"
+        ]
+        self.assertEqual(len(chicken_streams), 1)
+        stream_dict = chicken_streams[0]
+        stream_dict.get("metadata").sort(key=lambda md: md["breadcrumb"])
+
+        with get_test_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(
+                    """INSERT INTO "CHICKEN TIMES" (our_test_domain_pk, our_test_domain, our_test_integer_domain) VALUES ('sad', 'happy', 3)"""
+                )
+                cur.execute("""SELECT * FROM  "CHICKEN TIMES" """)
+
+                self.assertEqual(
+                    metadata.to_map(stream_dict.get("metadata")),
+                    {
+                        (): {
+                            "table-key-properties": ["our_test_domain_pk"],
+                            "database-name": "postgres",
+                            "schema-name": "public",
+                            "is-view": False,
+                            "row-count": 0,
+                        },
+                        ("properties", "our_test_domain_pk"): {
+                            "inclusion": "automatic",
+                            "sql-datatype": "text",
+                            "selected-by-default": True,
+                        },
+                        ("properties", "our_test_domain"): {
+                            "inclusion": "available",
+                            "sql-datatype": "text",
+                            "selected-by-default": True,
+                        },
+                        ("properties", "our_test_integer_domain"): {
+                            "inclusion": "available",
+                            "sql-datatype": "integer",
+                            "selected-by-default": True,
+                        },
+                    },
+                )
+
+                self.assertEqual(
+                    {
+                        "properties": {
+                            "our_test_domain_pk": {"type": ["string"]},
+                            "our_test_domain": {"type": ["null", "string"]},
+                            "our_test_integer_domain": {
+                                "minimum": -2147483648,
+                                "maximum": 2147483647,
+                                "type": ["null", "integer"],
+                            },
+                        },
+                        "type": "object",
+                        "definitions": BASE_RECURSIVE_SCHEMAS,
+                    },
+                    stream_dict.get("schema"),
+                )
+                
 class TestArraysTable(unittest.TestCase):
     maxDiff = None
     table_name = 'CHICKEN TIMES'
