@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.0
+  * Add support to discover partitioned tables [101](https://github.com/singer-io/tap-postgres/pull/101)
+
 ## 0.1.0
   * Add support for `wal2json` message format v2 via config parameter [91](https://github.com/singer-io/tap-postgres/pull/91)
 
