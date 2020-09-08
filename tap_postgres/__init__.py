@@ -274,7 +274,7 @@ LEFT OUTER JOIN pg_type AS subpgt
  AND pgt.typelem != 0
 WHERE attnum > 0
 AND NOT a.attisdropped
-AND pg_class.relkind IN ('r', 'v', 'm')
+AND pg_class.relkind IN ('r', 'v', 'm', 'p')
 AND n.nspname NOT in ('pg_toast', 'pg_catalog', 'information_schema')
 AND has_column_privilege(pg_class.oid, attname, 'SELECT') = true """)
         for row in cur.fetchall():
@@ -683,7 +683,8 @@ def main_impl():
                    'dbname'   : args.config['dbname'],
                    'filter_dbs' : args.config.get('filter_dbs'),
                    'debug_lsn' : args.config.get('debug_lsn') == 'true',
-                   'logical_poll_total_seconds': float(args.config.get('logical_poll_total_seconds', 0))}
+                   'logical_poll_total_seconds': float(args.config.get('logical_poll_total_seconds', 0)),
+                   'wal2json_message_format': args.config.get('wal2json_message_format')}
 
     if args.config.get('ssl') == 'true':
         conn_config['sslmode'] = 'require'

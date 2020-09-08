@@ -1,2 +1,2 @@
 test:
-	nosetests -v
+	nosetests -v tests/unittests

@@ -6,10 +6,8 @@ import tap_postgres.sync_strategies.common as pg_common
 import pdb
 import singer
 from singer import get_logger, metadata, write_bookmark
-try:
-    from tests.utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
-except ImportError:
-    from utils import get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
+
+from utils import ensure_db, get_test_connection, ensure_test_table, select_all_of_stream, set_replication_method_for_stream, insert_record, get_test_connection_config
 
 import decimal
 import math
@@ -56,6 +54,7 @@ class LogicalInterruption(unittest.TestCase):
     maxDiff = None
 
     def setUp(self):
+        ensure_db()
         table_spec_1 = {"columns": [{"name": "id", "type" : "serial",       "primary_key" : True},
                                     {"name" : 'name', "type": "character varying"},
                                     {"name" : 'colour', "type": "character varying"}],
