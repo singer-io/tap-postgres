@@ -638,7 +638,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         lsn_3 = bookmark['lsn']
         self.assertTrue(lsn_3 >= lsn_2)
         #----------------------------------------------------------------------
-        # invoke the sync job again after deleting a record using the 'id IN' format
+        # invoke the sync job again after deleting a record using the 'id IN (SELECT ...)' format
         #----------------------------------------------------------------------
         print("delete row from source db")
         with db_utils.get_test_connection('dev') as conn:
@@ -698,7 +698,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertEqual(bookmark['version'], table_version,
                          msg="expected bookmark for stream postgres_logical_replication_test to match version")
         #----------------------------------------------------------------------
-        # invoke the sync job again after deleting a record using the 'id IN' format
+        # invoke the sync job again after deleting a record using the 'id IN (<id>, <id>)' format
         #----------------------------------------------------------------------
         print("delete row from source db")
         with db_utils.get_test_connection('dev') as conn:
