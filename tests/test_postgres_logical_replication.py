@@ -743,7 +743,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertIsNotNone(chicken_bookmark['lsn'],
                              msg="expected bookmark for stream public-postgres_logical_replication_test to have an scn")
         lsn_5 = chicken_bookmark['lsn']
-        self.assertTrue(lsn_4 >= lsn_4)
+        self.assertTrue(lsn_5 >= lsn_4)
 
         #table_version does NOT change
         self.assertEqual(chicken_bookmark['version'], table_version,
