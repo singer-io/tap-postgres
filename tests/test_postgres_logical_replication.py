@@ -503,7 +503,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         print("delete row from source db")
         with db_utils.get_test_connection('dev') as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute("DELETE FROM {} WHERE id = 3".format(canonicalized_table_name(test_schema_name, test_table_name, cur), canonicalized_table_name(test_schema_name, test_table_name, cur)))
+                cur.execute("DELETE FROM {} WHERE id = 3".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
         sync_job_name = runner.run_sync_mode(self, conn_id)
 
