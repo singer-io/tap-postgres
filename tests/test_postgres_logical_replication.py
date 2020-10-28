@@ -503,7 +503,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         print("delete row from source db")
         with db_utils.get_test_connection('dev') as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute("DELETE FROM {} WHERE id = 3".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
+                cur.execute("DELETE FROM {} WHERE id = 3".format(canonicalized_table_name(test_schema_name, test_table_name, cur), canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
         sync_job_name = runner.run_sync_mode(self, conn_id)
 
@@ -555,6 +555,62 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         lsn_3 = bookmark['lsn']
         self.assertTrue(lsn_3 >= lsn_2)
+        #----------------------------------------------------------------------
+        # invoke the sync job again after deleting a record using the 'id IN' format
+        #----------------------------------------------------------------------
+        print("delete row from source db")
+        with db_utils.get_test_connection('dev') as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("DELETE FROM {} WHERE id IN (SELECT id FROM {} WHERE id=2)".format(canonicalized_table_name(test_schema_name, test_table_name, cur), canonicalized_table_name(test_schema_name, test_table_name, cur)))
+
+        sync_job_name = runner.run_sync_mode(self, conn_id)
+
+        # verify tap and target exit codes
+        exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
+        menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
+
+        record_count_by_stream = runner.examine_target_output_file(self,
+                                                                   conn_id,
+                                                                   self.expected_sync_streams(),
+                                                                   self.expected_pks())
+
+
+        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 2 })
+        records_by_stream = runner.get_records_from_target_output()
+
+        for stream, recs in records_by_stream.items():
+            # verify the persisted schema was correct
+            self.assertEqual(recs['schema'],
+                             expected_schemas[stream],
+                             msg="Persisted schema did not match expected schema for stream `{}`.".format(stream))
+
+        #first record will be the previous delete
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][0]
+        sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
+        self.assertIsNotNone(sdc_deleted_at)
+        self.assertEqual(delete_message['data']['id'], 3)
+
+
+
+        #the 2nd message will be the more recent delete
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][1]
+        self.assertEqual(delete_message['action'], 'upsert')
+
+        sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
+        self.assertIsNotNone(sdc_deleted_at)
+        self.assertEqual(delete_message['data']['id'], 2)
+        print("deleted record is correct")
+
+        state = menagerie.get_state(conn_id)
+        bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
+
+        self.assertIsNotNone(bookmark['lsn'],
+                             msg="expected bookmark for stream ROOT-CHICKEN to have an scn")
+
+        lsn_4 = bookmark['lsn']
+        self.assertTrue(lsn_4 >= lsn_3)
+
 
         #table_version does NOT change
         self.assertEqual(bookmark['version'], table_version,
@@ -595,7 +651,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         delete_message = records_by_stream['postgres_logical_replication_test']['messages'][0]
         sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
         self.assertIsNotNone(sdc_deleted_at)
-        self.assertEqual(delete_message['data']['id'], 3)
+        self.assertEqual(delete_message['data']['id'], 2)
 
         #second record will be the new update
         update_message = records_by_stream['postgres_logical_replication_test']['messages'][1]
@@ -647,8 +703,8 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
         self.assertIsNotNone(chicken_bookmark['lsn'],
                              msg="expected bookmark for stream public-postgres_logical_replication_test to have an scn")
-        lsn_3 = chicken_bookmark['lsn']
-        self.assertTrue(lsn_3 >= lsn_2)
+        lsn_5 = chicken_bookmark['lsn']
+        self.assertTrue(lsn_5 >= lsn_4)
 
         #table_version does NOT change
         self.assertEqual(chicken_bookmark['version'], table_version,
@@ -686,8 +742,8 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
         self.assertIsNotNone(chicken_bookmark['lsn'],
                              msg="expected bookmark for stream public-postgres_logical_replication_test to have an scn")
-        lsn_4 = chicken_bookmark['lsn']
-        self.assertTrue(lsn_4 >= lsn_3)
+        lsn_5 = chicken_bookmark['lsn']
+        self.assertTrue(lsn_4 >= lsn_4)
 
         #table_version does NOT change
         self.assertEqual(chicken_bookmark['version'], table_version,
