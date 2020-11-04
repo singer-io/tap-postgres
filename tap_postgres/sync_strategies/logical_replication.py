@@ -158,7 +158,10 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
         if  isinstance(elem, datetime.date):
             #logical replication gives us dates as strings UNLESS they from an array
             return elem.isoformat() + 'T00:00:00+00:00'
-        return parse(elem).isoformat() + "+00:00"
+        try:
+            return parse(elem).isoformat() + "+00:00"
+        except ValueError:
+            return parse('9999-12-31T00:00:00+00:00').isoformat()
     if sql_datatype == 'time with time zone':
         return parse(elem).isoformat().split('T')[1]
     if sql_datatype == 'bit':
