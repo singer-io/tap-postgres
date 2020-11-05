@@ -8,7 +8,7 @@ from singer import utils, get_bookmark
 import singer.metadata as metadata
 import tap_postgres.db as post_db
 import tap_postgres.sync_strategies.common as sync_common
-from dateutil.parser import parse
+from flexidate import parse
 import psycopg2
 from psycopg2 import sql
 import copy
