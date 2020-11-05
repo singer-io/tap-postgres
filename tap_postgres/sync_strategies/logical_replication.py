@@ -409,9 +409,14 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
     poll_total_seconds = conn_info['logical_poll_total_seconds'] or 60 * 30  #we are willing to poll for a total of 30 minutes without finding a record
     keep_alive_time = 10.0
     begin_ts = datetime.datetime.now()
+    add_tables = []
 
     for s in logical_streams:
         sync_common.send_schema_message(s, ['lsn'])
+
+
+    for s in logical_streams:
+        add_tables.append("{}.{}".format(s["metadata"][0]["metadata"]["schema-name"], s["table_name"]))
 
     with post_db.open_connection(conn_info, True) as conn:
         with conn.cursor() as cur:
@@ -419,11 +424,15 @@ def sync_tables(conn_info, logical_streams, state, end_lsn):
 
             replication_params = {"slot_name": slot,
                                   "decode": True,
-                                  "start_lsn": start_lsn}
+                                  "start_lsn": start_lsn,
+                                  "options": {
+                                      "add-tables": ", ".join(add_tables)
+                                  }}
             message_format = conn_info.get("wal2json_message_format") or "1"
             if message_format == "2":
                 LOGGER.info("Using wal2json format-version 2")
-                replication_params["options"] = {"format-version": 2, "include-timestamp": True}
+                replication_params["options"]["format-version"] = 2
+                replication_params["options"]["include-timestamp"] = True
 
             try:
                 cur.start_replication(**replication_params)
