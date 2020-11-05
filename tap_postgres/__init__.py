@@ -684,7 +684,8 @@ def main_impl():
                    'filter_dbs' : args.config.get('filter_dbs'),
                    'debug_lsn' : args.config.get('debug_lsn') == 'true',
                    'logical_poll_total_seconds': float(args.config.get('logical_poll_total_seconds', 0)),
-                   'wal2json_message_format': args.config.get('wal2json_message_format')}
+                   'wal2json_message_format': args.config.get('wal2json_message_format'),
+                   'wal2json_slot_name': args.config.get('wal2json_slot_name')}
 
     if args.config.get('ssl') == 'true':
         conn_config['sslmode'] = 'require'
