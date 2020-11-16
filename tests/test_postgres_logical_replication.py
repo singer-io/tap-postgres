@@ -249,6 +249,82 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
                 insert_record(cur, test_table_name, self.rec_2)
 
+                #insert fixture data 3
+                our_ts = datetime.datetime(1997, 2, 2, 2, 2, 2, 722184)
+                nyc_tz = pytz.timezone('America/New_York')
+                our_ts_tz = nyc_tz.localize(our_ts)
+                our_time  = datetime.time(12,11,10)
+                our_time_tz = our_time.isoformat() + "-04:00"
+                our_date = datetime.date(1998, 3, 4)
+                my_uuid =  str(uuid.uuid1())
+
+                self.rec_3 = {'our_varchar' : "our_varchar 3",
+                              'our_varchar_10' : "varchar_10",
+                              'our_text' : "some text",
+                              'our_text_2' : "NOT SELECTED",
+                              'our_integer' : 44100,
+                              'our_smallint' : 1, 'our_bigint' : 1000000,
+                              'our_decimal' : decimal.Decimal('1234567890.01'),
+                              quote_ident('OUR TS', cur) : our_ts,
+                              quote_ident('OUR TS TZ', cur) : our_ts_tz,
+                              quote_ident('OUR TIME', cur) : our_time,
+                              quote_ident('OUR TIME TZ', cur) : our_time_tz,
+                              quote_ident('OUR DATE', cur) : our_date,
+                              'our_double' : 1.1,
+                              'our_real' : 1.2,
+                              'our_boolean' : True,
+                              'our_bit' : '0',
+                              'our_json' : json.dumps({'secret' : 55}),
+                              'our_jsonb' : json.dumps(['burgers are good']),
+                              'our_uuid' : my_uuid,
+                              'our_store' : 'size=>"small",name=>"betty"',
+                              'our_citext': 'maGICKal',
+                              'our_cidr' : '192.168.100.128/25',
+                              'our_inet': '192.168.100.128/24',
+                              'our_mac' : '08:00:2b:01:02:03',
+                              'our_alignment_enum': 'bad'}
+
+
+                insert_record(cur, test_table_name, self.rec_3)
+
+                #insert fixture data 4
+                our_ts = datetime.datetime(1987, 3, 3, 3, 3, 3, 733184)
+                nyc_tz = pytz.timezone('America/New_York')
+                our_ts_tz = nyc_tz.localize(our_ts)
+                our_time  = datetime.time(10,9,8)
+                our_time_tz = our_time.isoformat() + "-04:00"
+                our_date = datetime.date(1964, 7, 1)
+                my_uuid =  str(uuid.uuid1())
+
+                self.rec_4 = {'our_varchar' : "our_varchar 4",
+                              'our_varchar_10' : "varchar_10",
+                              'our_text' : "some text 2",
+                              'our_text_2' : "NOT SELECTED",
+                              'our_integer' : 44101,
+                              'our_smallint' : 2,
+                              'our_bigint' : 1000001,
+                              'our_decimal' : decimal.Decimal('9876543210.02'),
+                              quote_ident('OUR TS', cur) : our_ts,
+                              quote_ident('OUR TS TZ', cur) : our_ts_tz,
+                              quote_ident('OUR TIME', cur) : our_time,
+                              quote_ident('OUR TIME TZ', cur) : our_time_tz,
+                              quote_ident('OUR DATE', cur) : our_date,
+                              'our_double' : 1.1,
+                              'our_real' : 1.2,
+                              'our_boolean' : True,
+                              'our_bit' : '1',
+                              'our_json' : json.dumps({'nymn' : 77}),
+                              'our_jsonb' : json.dumps({'burgers' : 'good++'}),
+                              'our_uuid' : my_uuid,
+                              'our_store' : 'dances=>"floor",name=>"betty"',
+                              'our_citext': 'maGICKal 2',
+                              'our_cidr' : '192.168.101.128/25',
+                              'our_inet': '192.168.101.128/24',
+                              'our_mac' : '08:00:2b:01:02:04',
+                }
+
+                insert_record(cur, test_table_name, self.rec_4)
+
     def expected_check_streams(self):
         return { 'dev-public-postgres_logical_replication_test'}
 
@@ -336,7 +412,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    self.expected_pks())
 
 
-        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 2})
+        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 4})
         records_by_stream = runner.get_records_from_target_output()
 
         table_version = records_by_stream['postgres_logical_replication_test']['table_version']
@@ -351,6 +427,12 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                          'upsert')
 
         self.assertEqual(records_by_stream['postgres_logical_replication_test']['messages'][3]['action'],
+                         'upsert')
+
+        self.assertEqual(records_by_stream['postgres_logical_replication_test']['messages'][4]['action'],
+                         'upsert')
+
+        self.assertEqual(records_by_stream['postgres_logical_replication_test']['messages'][5]['action'],
                          'activate_version')
 
         # verify state and bookmarks
@@ -371,7 +453,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         #----------------------------------------------------------------------
         # invoke the sync job again after adding a record
         #----------------------------------------------------------------------
-        print("inserting a record 3")
+        print("inserting a record 5")
 
         with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
@@ -390,7 +472,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 #OUR TS TZ: '1993-03-03 08:03:03.333333+00'
                 #'OUR TIME': '03:04:05'
                 #'OUR TIME TZ': '03:04:05+00'
-                self.rec_3 = {'our_varchar' : "our_varchar 3", # str
+                self.rec_5 = {'our_varchar' : "our_varchar 5", # str
                               'our_varchar_10' : "varchar13", # str
                               'our_text' : "some text 3", #str
                               'our_text_2' : "NOT SELECTED",
@@ -418,7 +500,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                               'our_money':     '$412.1234'
                 }
 
-                insert_record(cur, test_table_name, self.rec_3)
+                insert_record(cur, test_table_name, self.rec_5)
 
         sync_job_name = runner.run_sync_mode(self, conn_id)
 
@@ -450,27 +532,27 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                     '_sdc_deleted_at': None,
                                     'our_store' : {'name' : 'betty', 'jumps' : 'high' },
                                     'our_bigint': 3000000,
-                                    'our_varchar': 'our_varchar 3',
+                                    'our_varchar': 'our_varchar 5',
                                     'our_double': decimal.Decimal('3.3'),
                                     'our_bit': True,
-                                    'our_uuid': self.rec_3['our_uuid'],
+                                    'our_uuid': self.rec_5['our_uuid'],
                                     'OUR TS': '1993-03-03T03:03:03.333333+00:00',
                                     'OUR TS TZ': '1993-03-03T08:03:03.333333+00:00',
                                     'OUR TIME': '03:04:05',
                                     'OUR TIME TZ': '03:04:05-04:00',
                                     'OUR DATE': '1933-03-03T00:00:00+00:00',
                                     'our_decimal': decimal.Decimal('1234567890.03'),
-                                    'id': 3,
+                                    'id': 5,
                                     'our_varchar_10': 'varchar13',
                                     'our_json': '{"secret": 33}',
-                                    'our_jsonb': self.rec_3['our_jsonb'],
+                                    'our_jsonb': self.rec_5['our_jsonb'],
                                     'our_smallint': 3,
                                     'our_integer': 96000,
                                     'our_boolean': True,
                                     'our_citext': 'maGICKal 3',
-                                    'our_cidr': self.rec_3['our_cidr'],
+                                    'our_cidr': self.rec_5['our_cidr'],
                                     'our_inet': '192.168.102.128',
-                                    'our_mac': self.rec_3['our_mac'],
+                                    'our_mac': self.rec_5['our_mac'],
                                     'our_alignment_enum' : None,
                                     'our_money'          :'$412.12'
         }
@@ -555,10 +637,137 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         lsn_3 = bookmark['lsn']
         self.assertTrue(lsn_3 >= lsn_2)
+        #----------------------------------------------------------------------
+        # invoke the sync job again after deleting a record using the 'id IN (SELECT ...)' format
+        #----------------------------------------------------------------------
+        print("delete row from source db")
+        with db_utils.get_test_connection('dev') as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("DELETE FROM {} WHERE id IN (SELECT id FROM {} WHERE id=2)".format(canonicalized_table_name(test_schema_name, test_table_name, cur), canonicalized_table_name(test_schema_name, test_table_name, cur)))
+
+        sync_job_name = runner.run_sync_mode(self, conn_id)
+
+        # verify tap and target exit codes
+        exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
+        menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
+
+        record_count_by_stream = runner.examine_target_output_file(self,
+                                                                   conn_id,
+                                                                   self.expected_sync_streams(),
+                                                                   self.expected_pks())
+
+
+        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 2 })
+        records_by_stream = runner.get_records_from_target_output()
+
+        for stream, recs in records_by_stream.items():
+            # verify the persisted schema was correct
+            self.assertEqual(recs['schema'],
+                             expected_schemas[stream],
+                             msg="Persisted schema did not match expected schema for stream `{}`.".format(stream))
+
+        #first record will be the previous delete
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][0]
+        sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
+        self.assertIsNotNone(sdc_deleted_at)
+        self.assertEqual(delete_message['data']['id'], 3)
+
+
+
+        #the 2nd message will be the more recent delete
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][1]
+        self.assertEqual(delete_message['action'], 'upsert')
+
+        sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
+        self.assertIsNotNone(sdc_deleted_at)
+        self.assertEqual(delete_message['data']['id'], 2)
+        print("deleted record is correct")
+
+        state = menagerie.get_state(conn_id)
+        bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
+
+        self.assertIsNotNone(bookmark['lsn'],
+                             msg="expected bookmark for stream ROOT-CHICKEN to have an scn")
+
+        lsn_4 = bookmark['lsn']
+        self.assertTrue(lsn_4 >= lsn_3)
+
 
         #table_version does NOT change
         self.assertEqual(bookmark['version'], table_version,
                          msg="expected bookmark for stream postgres_logical_replication_test to match version")
+        #----------------------------------------------------------------------
+        # invoke the sync job again after deleting a record using the 'id IN (<id>, <id>)' format
+        #----------------------------------------------------------------------
+        print("delete row from source db")
+        with db_utils.get_test_connection('dev') as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute("DELETE FROM {} WHERE id IN (4, 5)".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
+
+        sync_job_name = runner.run_sync_mode(self, conn_id)
+
+        # verify tap and target exit codes
+        exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
+        menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
+
+        record_count_by_stream = runner.examine_target_output_file(self,
+                                                                   conn_id,
+                                                                   self.expected_sync_streams(),
+                                                                   self.expected_pks())
+
+
+        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 3 })
+        records_by_stream = runner.get_records_from_target_output()
+
+        for stream, recs in records_by_stream.items():
+            # verify the persisted schema was correct
+            self.assertEqual(recs['schema'],
+                             expected_schemas[stream],
+                             msg="Persisted schema did not match expected schema for stream `{}`.".format(stream))
+
+        #first record will be the previous delete
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][0]
+        sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
+        self.assertIsNotNone(sdc_deleted_at)
+        self.assertEqual(delete_message['data']['id'], 2)
+
+
+
+        #the 2nd message will be the more recent delete
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][1]
+        self.assertEqual(delete_message['action'], 'upsert')
+
+        sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
+        self.assertIsNotNone(sdc_deleted_at)
+        self.assertEqual(delete_message['data']['id'], 4)
+        print("deleted record is correct")
+
+        #the 3rd message will be the more recent delete
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
+        self.assertEqual(delete_message['action'], 'upsert')
+
+        sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
+        self.assertIsNotNone(sdc_deleted_at)
+        self.assertEqual(delete_message['data']['id'], 5)
+        print("deleted record is correct")
+
+
+        state = menagerie.get_state(conn_id)
+        bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
+
+        self.assertIsNotNone(bookmark['lsn'],
+                             msg="expected bookmark for stream ROOT-CHICKEN to have an scn")
+
+        lsn_5 = bookmark['lsn']
+        self.assertTrue(lsn_5 >= lsn_4)
+
+
+        #table_version does NOT change
+        self.assertEqual(bookmark['version'], table_version,
+                         msg="expected bookmark for stream postgres_logical_replication_test to match version")
+
         #----------------------------------------------------------------------
         # invoke the sync job again after updating a record
         #----------------------------------------------------------------------
@@ -576,7 +785,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    conn_id,
                                                                    self.expected_sync_streams(),
                                                                    self.expected_pks())
-        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 2 })
+        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 3 })
         records_by_stream = runner.get_records_from_target_output()
         for stream, recs in records_by_stream.items():
             # verify the persisted schema was correct
@@ -590,15 +799,21 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
 
 
-        self.assertEqual(len(records_by_stream['postgres_logical_replication_test']['messages']), 2)
-        #first record will be the previous delete
+        self.assertEqual(len(records_by_stream['postgres_logical_replication_test']['messages']), 3)
+        #first record will be the previous first delete
         delete_message = records_by_stream['postgres_logical_replication_test']['messages'][0]
         sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
         self.assertIsNotNone(sdc_deleted_at)
-        self.assertEqual(delete_message['data']['id'], 3)
+        self.assertEqual(delete_message['data']['id'], 4)
 
-        #second record will be the new update
-        update_message = records_by_stream['postgres_logical_replication_test']['messages'][1]
+        #second record will be the previous second delete
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][1]
+        sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
+        self.assertIsNotNone(sdc_deleted_at)
+        self.assertEqual(delete_message['data']['id'], 5)
+
+        #third record will be the new update
+        update_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
         self.assertEqual(update_message['action'], 'upsert')
 
         expected_updated_rec = {'our_varchar' : 'THIS HAS BEEN UPDATED',
@@ -647,8 +862,8 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
         self.assertIsNotNone(chicken_bookmark['lsn'],
                              msg="expected bookmark for stream public-postgres_logical_replication_test to have an scn")
-        lsn_3 = chicken_bookmark['lsn']
-        self.assertTrue(lsn_3 >= lsn_2)
+        lsn_6 = chicken_bookmark['lsn']
+        self.assertTrue(lsn_6 >= lsn_5)
 
         #table_version does NOT change
         self.assertEqual(chicken_bookmark['version'], table_version,
@@ -669,7 +884,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    self.expected_pks())
         #we will get the previous update record again
         self.assertEqual(record_count_by_stream, {'postgres_logical_replication_test': 1})
-        update_message = records_by_stream['postgres_logical_replication_test']['messages'][1]
+        update_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
         self.assertEqual(update_message['action'], 'upsert')
 
         self.assertEqual(set(update_message['data'].keys()), set(expected_updated_rec.keys()),
@@ -686,8 +901,8 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
         self.assertIsNotNone(chicken_bookmark['lsn'],
                              msg="expected bookmark for stream public-postgres_logical_replication_test to have an scn")
-        lsn_4 = chicken_bookmark['lsn']
-        self.assertTrue(lsn_4 >= lsn_3)
+        lsn_7 = chicken_bookmark['lsn']
+        self.assertTrue(lsn_7 >= lsn_6)
 
         #table_version does NOT change
         self.assertEqual(chicken_bookmark['version'], table_version,
