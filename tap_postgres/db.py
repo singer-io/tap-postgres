@@ -6,6 +6,8 @@ import psycopg2.extras
 import singer
 LOGGER = singer.get_logger()
 
+from tap_postgres.typecasters.register_typecasters import register_typecasters
+
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
 
@@ -19,7 +21,7 @@ def get_ssl_status(conn_config):
                 for row in cur:
                     if row[0] == conn_config['dbname'] and row[1] == conn_config['user']:
                         matching_rows.append(row)
-        if len(matching_rows) == 1:
+        if len(matching_rows) > 1:
             LOGGER.info('User %s connected with SSL = %s', conn_config['user'], matching_rows[0][2])
         else:
             LOGGER.info('Failed to retrieve SSL status')
@@ -50,8 +52,8 @@ def open_connection(conn_config, logical_replication=False):
         'dbname': conn_config['dbname'],
         'user': conn_config['user'],
         'password': conn_config['password'],
-        'port': conn_config['port'],
-        'connect_timeout': 30
+        'port': int(conn_config['port']),
+        'connect_timeout': conn_config['connect_timeout'] if 'connect_timeout' in conn_config else 30
     }
 
     if conn_config.get('sslmode'):
@@ -62,6 +64,8 @@ def open_connection(conn_config, logical_replication=False):
 
     conn = psycopg2.connect(**cfg)
 
+    register_typecasters(conn)    
+    
     return conn
 
 def prepare_columns_sql(c):
@@ -69,7 +73,10 @@ def prepare_columns_sql(c):
     return column_name
 
 def filter_dbs_sql_clause(sql, filter_dbs):
-    in_clause = " AND datname in (" + ",".join(["'{}'".format(b.strip(' ')) for b in filter_dbs.split(',')]) + ")"
+    if isinstance(filter_dbs, str):
+        filter_dbs = ["{}".format(b.strip(' ')) for b in filter_dbs.split(',')] # split into a list 
+    filter_dbs = ["'{}'".format(b) for b in filter_dbs] # surround with single quotes
+    in_clause = " AND datname in (" + ",".join(filter_dbs) + ")"
     return sql + in_clause
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
@@ -197,3 +204,7 @@ def numeric_max(precision, scale):
 
 def numeric_min(precision, scale):
     return -10 ** (precision - scale)
+
+
+# def register_typecasters(connection):
+#     typecasters.invalid_timestamp_caster.register_type(connection)
