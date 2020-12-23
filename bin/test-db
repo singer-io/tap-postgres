@@ -6,7 +6,7 @@ import subprocess
 import time
 from argparse import RawTextHelpFormatter
 
-full_image_name = "singerio/postgres:9.6-wal2json-2.2"
+full_image_name = "singerio/postgres:9.6-wal2json-2.2-ssl"
 
 def start_container(name):
     START_COMMAND = """
