@@ -14,3 +14,9 @@ COPY postgresql.conf /usr/local/share/postgresql/postgresql.conf
 
 # Copy the script which will initialize the replication permissions
 COPY /docker-entrypoint-initdb.d /docker-entrypoint-initdb.d
+
+# Copy the self-signed cert for general SSL testing
+# Must be owned by postgres:postgres according to https://www.postgresql.org/docs/9.6/ssl-tcp.html
+# NOTE: ONLY TO BE USED FOR TESTING, this is a publicly published keypair
+COPY server.key server.crt /var/lib/postgresql/
+RUN chown postgres:postgres /var/lib/postgresql/server.*
