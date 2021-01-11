@@ -6,10 +6,27 @@ import psycopg2.extras
 import singer
 LOGGER = singer.get_logger()
 
-import tap_postgres.typecasters.invalid_timestamp_caster as timestamp_caster
-
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
+
+
+ # This function defines types cast, and as returned database literal is already a string, no  additional logic required
+def cast_invalid_timestamp(value, cursor):
+    return value
+
+InvalidDate = None
+def register_invalid_timestamp_typecaster(connection):
+    global InvalidDate
+    if not InvalidDate:
+        cursor = connection.cursor()
+        # some databases have timestamp defaults of 0001-01-01... instead of NULL defaults
+        cursor.execute("select to_timestamp('0001-01-01 00:00:00','YYYY-MM-DD HH24:MI:SS')::timestamp without time zone")
+        psql_timestamp_oid = cursor.description[0][1]
+
+        InvalidDate = psycopg2.extensions.new_type((psql_timestamp_oid,), 'TIMESTAMP WITHOUT TIMEZONE', cast_invalid_timestamp)
+        psycopg2.extensions.register_type(InvalidDate)
+
+
 
 def get_ssl_status(conn_config):
     try:
@@ -64,7 +81,7 @@ def open_connection(conn_config, logical_replication=False):
 
     conn = psycopg2.connect(**cfg)
 
-    timestamp_caster.register_typecaster(conn)
+    register_invalid_timestamp_typecaster(conn)
     
     return conn
 
