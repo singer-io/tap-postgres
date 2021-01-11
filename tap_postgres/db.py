@@ -7,7 +7,6 @@ import singer
 LOGGER = singer.get_logger()
 
 import tap_postgres.typecasters.invalid_timestamp_caster as timestamp_caster
-from tap_postgres import typecasters
 
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
