@@ -6,7 +6,7 @@ InvalidDate = None
 def cast_invalid_timestamp(value, cursor):
     return value
 
-def register_type(connection):
+def register_typecaster(connection):
     global InvalidDate
     if not InvalidDate:
         cursor = connection.cursor()

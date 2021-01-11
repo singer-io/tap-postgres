@@ -6,6 +6,7 @@ import psycopg2.extras
 import singer
 LOGGER = singer.get_logger()
 
+import tap_postgres.typecasters.invalid_timestamp_caster as timestamp_caster
 from tap_postgres import typecasters
 
 cursor_iter_size = 20000
@@ -64,7 +65,7 @@ def open_connection(conn_config, logical_replication=False):
 
     conn = psycopg2.connect(**cfg)
 
-    typecasters.register_type_casters(conn)
+    timestamp_caster.register_typecaster(conn)
     
     return conn
 
