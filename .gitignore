@@ -106,4 +106,5 @@ ENV/
 env-vars.txt
 tap_oracle/__pycache__/
 *~
-config.json
+*config.json
+.vscode/

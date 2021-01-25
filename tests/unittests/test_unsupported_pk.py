@@ -15,10 +15,13 @@ import copy
 
 LOGGER = get_logger()
 
+
 def do_not_dump_catalog(catalog):
     pass
 
+
 tap_postgres.dump_catalog = do_not_dump_catalog
+
 
 class Unsupported(unittest.TestCase):
     maxDiff = None
@@ -29,30 +32,38 @@ class Unsupported(unittest.TestCase):
         with get_test_connection() as conn:
             cur = conn.cursor()
             table_spec = {"columns": [{"name": "interval_col",   "type": "INTERVAL"},
-                                      {"name": "bit_string_col", "type": "bit(5)"},
+                                      {"name": "bit_string_col",
+                                          "type": "bit(5)"},
                                       {"name": "bytea_col",      "type": "bytea"},
                                       {"name": "point_col",      "type": "point"},
                                       {"name": "line_col",      "type": "line"},
                                       {"name": "lseg_col",      "type": "lseg"},
                                       {"name": "box_col",      "type": "box"},
-                                      {"name": "polygon_col",      "type": "polygon"},
-                                      {"name": "circle_col",      "type": "circle"},
+                                      {"name": "polygon_col",
+                                          "type": "polygon"},
+                                      {"name": "circle_col",
+                                          "type": "circle"},
                                       {"name": "xml_col",      "type": "xml"},
-                                      {"name": "composite_col",      "type": "person_composite"},
-                                      {"name": "int_range_col",      "type": "int4range"},
-            ],
+                                      {"name": "composite_col",
+                                          "type": "person_composite"},
+                                      {"name": "int_range_col",
+                                          "type": "int4range"},
+                                      ],
                           "name": Unsupported.table_name}
             with get_test_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("""     DROP TYPE IF EXISTS person_composite CASCADE """)
-                cur.execute("""     CREATE TYPE person_composite AS (age int, name text) """)
+                cur.execute(
+                    """     DROP TYPE IF EXISTS person_composite CASCADE """)
+                cur.execute(
+                    """     CREATE TYPE person_composite AS (age int, name text) """)
 
             ensure_test_table(table_spec)
 
     def test_catalog(self):
         conn_config = get_test_connection_config()
         streams = tap_postgres.do_discovery(conn_config)
-        chicken_streams = [s for s in streams if s['tap_stream_id'] == "postgres-public-CHICKEN TIMES"]
+        chicken_streams = [
+            s for s in streams if s['tap_stream_id'] == "postgres-public-CHICKEN TIMES"]
 
         self.assertEqual(len(chicken_streams), 1)
         stream_dict = chicken_streams[0]
@@ -72,10 +83,10 @@ class Unsupported(unittest.TestCase):
                           ('properties', 'composite_col'):      {'sql-datatype': 'person_composite', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'interval_col'):       {'sql-datatype': 'interval', 'selected-by-default': False, 'inclusion': 'unsupported'},
                           ('properties', 'point_col'):          {'sql-datatype': 'point', 'selected-by-default': False, 'inclusion': 'unsupported'}}
-        )
+                         )
 
 
-if __name__== "__main__":
+if __name__ == "__main__":
     test1 = Unsupported()
     test1.setUp()
     test1.test_catalog()

@@ -24,7 +24,7 @@ def fetch_max_replication_key(conn_config, replication_key, schema_name, table_n
             LOGGER.info("max replication key value: %s", max_key)
             return max_key
 
-def sync_table(conn_info, stream, state, desired_columns, md_map):
+def sync_table(conn_info, stream, state, desired_columns, md_map, default_replication_key):
     time_extracted = utils.now()
 
     stream_version = singer.get_bookmark(state, stream['tap_stream_id'], 'version')
@@ -48,7 +48,7 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
 
     singer.write_message(activate_version_message)
 
-    replication_key = md_map.get((), {}).get('replication-key')
+    replication_key = md_map.get((), {}).get('replication-key', default_replication_key)
     replication_key_value = singer.get_bookmark(state, stream['tap_stream_id'], 'replication_key_value')
     replication_key_sql_datatype = md_map.get(('properties', replication_key)).get('sql-datatype')
 
