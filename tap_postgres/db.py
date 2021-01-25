@@ -9,6 +9,25 @@ LOGGER = singer.get_logger()
 cursor_iter_size = 20000
 include_schemas_in_destination_stream_name = False
 
+
+ # This function defines types cast, and as returned database literal is already a string, no  additional logic required
+def cast_invalid_timestamp(value, cursor):
+    return value
+
+InvalidDate = None
+def register_invalid_timestamp_typecaster(connection):
+    global InvalidDate
+    if not InvalidDate:
+        cursor = connection.cursor()
+        # some databases have timestamp defaults of 0001-01-01... instead of NULL defaults
+        cursor.execute("select to_timestamp('0001-01-01 00:00:00','YYYY-MM-DD HH24:MI:SS')::timestamp without time zone")
+        psql_timestamp_oid = cursor.description[0][1]
+
+        InvalidDate = psycopg2.extensions.new_type((psql_timestamp_oid,), 'TIMESTAMP WITHOUT TIMEZONE', cast_invalid_timestamp)
+        psycopg2.extensions.register_type(InvalidDate)
+
+
+
 def get_ssl_status(conn_config):
     try:
         matching_rows = []
@@ -19,7 +38,7 @@ def get_ssl_status(conn_config):
                 for row in cur:
                     if row[0] == conn_config['dbname'] and row[1] == conn_config['user']:
                         matching_rows.append(row)
-        if len(matching_rows) == 1:
+        if len(matching_rows) > 1:
             LOGGER.info('User %s connected with SSL = %s', conn_config['user'], matching_rows[0][2])
         else:
             LOGGER.info('Failed to retrieve SSL status')
@@ -50,8 +69,8 @@ def open_connection(conn_config, logical_replication=False):
         'dbname': conn_config['dbname'],
         'user': conn_config['user'],
         'password': conn_config['password'],
-        'port': conn_config['port'],
-        'connect_timeout': 30
+        'port': int(conn_config['port']),
+        'connect_timeout': conn_config['connect_timeout'] if 'connect_timeout' in conn_config else 30
     }
 
     if conn_config.get('sslmode'):
@@ -62,6 +81,8 @@ def open_connection(conn_config, logical_replication=False):
 
     conn = psycopg2.connect(**cfg)
 
+    register_invalid_timestamp_typecaster(conn)
+    
     return conn
 
 def prepare_columns_sql(c):
@@ -69,7 +90,10 @@ def prepare_columns_sql(c):
     return column_name
 
 def filter_dbs_sql_clause(sql, filter_dbs):
-    in_clause = " AND datname in (" + ",".join(["'{}'".format(b.strip(' ')) for b in filter_dbs.split(',')]) + ")"
+    if isinstance(filter_dbs, str):
+        filter_dbs = ["{}".format(b.strip(' ')) for b in filter_dbs.split(',')] # split into a list 
+    filter_dbs = ["'{}'".format(b) for b in filter_dbs] # surround with single quotes
+    in_clause = " AND datname in (" + ",".join(filter_dbs) + ")"
     return sql + in_clause
 
 #pylint: disable=too-many-branches,too-many-nested-blocks

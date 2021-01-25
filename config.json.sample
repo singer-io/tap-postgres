@@ -1,0 +1,15 @@
+{
+    "dbname": "dbname",
+    "default_replication_method": "INCREMENTAL",
+    "default_replication_key": "updated_at",
+    "host": "host",
+    "password": "password",
+    "port": "5432",
+    "user": "user",
+    "use_ssh_tunnel": true,
+    "ssh_jump_server": "jumpserver.mydomain.com",
+    "ssh_jump_server_port": 22,
+    "ssh_private_key_path": "~/.ssh/my-key.pem",
+    "ssh_username": "username",
+    "ssl": true
+}
