@@ -884,7 +884,8 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    self.expected_pks())
         #we will get the previous update record again
         self.assertEqual(record_count_by_stream, {'postgres_logical_replication_test': 1})
-        update_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
+        records_by_stream = runner.get_records_from_target_output()
+        update_message = records_by_stream['postgres_logical_replication_test']['messages'][0]
         self.assertEqual(update_message['action'], 'upsert')
 
         self.assertEqual(set(update_message['data'].keys()), set(expected_updated_rec.keys()),
