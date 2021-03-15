@@ -336,6 +336,8 @@ CREATE TABLE {} (
                 expected_replication_method = None
                 expected_automatic_fields = expected_primary_keys
                 expected_unsupported_fields = self.expected_unsupported_fields()
+                expected_fields_to_datatypes = self.expected_schema_types()
+                expected_row_count = len(self.recs)
 
                 # collecting actual values...
                 schema_and_metadata = menagerie.get_annotated_schema(conn_id, catalog['stream_id'])
@@ -353,7 +355,10 @@ CREATE TABLE {} (
                     item.get("breadcrumb", ["properties", None])[1] for item in metadata
                     if item.get("metadata").get("inclusion") == "unsupported"
                 )
-
+                actual_fields_to_datatypes = {
+                    item['breadcrumb'][1]: item['metadata'].get('sql-datatype')
+                    for item in metadata[1:]
+                }
 
                 # Verify there is only 1 top level breadcrumb in metadata
                 self.assertEqual(1, len(top_level_metadata))
@@ -399,7 +404,6 @@ CREATE TABLE {} (
                     msg="Not all non key properties are set to available in metadata")
 
                 # Verify row-count metadata matches expectations
-                expected_row_count = len(self.recs)
                 self.assertEqual(expected_row_count, stream_properties['row-count'])
 
                 # Verify selected metadata is None for all streams
@@ -415,13 +419,7 @@ CREATE TABLE {} (
                 self.assertEqual(test_schema_name, stream_properties['schema-name'])
                 self.assertEqual(test_db, stream_properties['database-name'])
 
-                # TODO Verify schema types match expectations
-                expected_fields_to_datatypes = self.expected_schema_types()
-                actual_fields_to_datatypes = {md['breadcrumb'][1]: md['metadata'].get('sql-datatype')
-                                              for md in metadata[1:]}
-                # for field in KNOWN_MISSING:
-                #     del expected_fields_to_datatypes[field]
-                #     del actual_fields_to_datatypes[field]
+                # Verify schema types match expectations
                 self.assertDictEqual(expected_fields_to_datatypes, actual_fields_to_datatypes)
 
 SCENARIOS.add(PostgresDiscovery)
