@@ -22,7 +22,7 @@ import decimal
 
 test_schema_name = "public"
 test_table_name = "postgres_discovery_test"
-test_db = "dev"
+test_db = "discovery0"  # also used by PostgresDropTable test
 
 
 class PostgresDiscovery(unittest.TestCase):
@@ -75,7 +75,7 @@ class PostgresDiscovery(unittest.TestCase):
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
-                db_utils.ensure_replication_slot(cur)
+                db_utils.ensure_replication_slot(cur, test_db)
 
                 canonicalized_table_name = db_utils.canonicalized_table_name(cur, test_schema_name, test_table_name)
 
@@ -286,8 +286,9 @@ CREATE TABLE {} (
                 'port' : os.getenv('TAP_POSTGRES_PORT'),
                 'user' : os.getenv('TAP_POSTGRES_USER'),
                 'default_replication_method' : self.FULL_TABLE,  # 'LOG_BASED',
-                'logical_poll_total_seconds': '10',
-                'wal2json_message_format': '1'
+                'filter_dbs' : 'discovery0'
+                # 'logical_poll_total_seconds': '10',
+                # 'wal2json_message_format': '1'
         }
 
     def test_run(self):

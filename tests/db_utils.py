@@ -37,7 +37,7 @@ def get_test_connection(dbname=os.getenv('TAP_POSTGRES_DBNAME'), logical_replica
 def canonicalized_table_name(conn_cursor, schema, table):
     return "{}.{}".format(quote_ident(schema, conn_cursor), quote_ident(table, conn_cursor))
 
-def ensure_replication_slot(conn_cursor, slot_name='stitch'):
+def ensure_replication_slot(conn_cursor, db_name=os.getenv('TAP_POSTGRES_DBNAME'), slot_name='stitch'):
     conn_cursor.execute("""SELECT EXISTS (
                   SELECT 1
                   FROM  pg_replication_slots
@@ -45,7 +45,7 @@ def ensure_replication_slot(conn_cursor, slot_name='stitch'):
 
     old_slot = conn_cursor.fetchone()[0]
 
-    with get_test_connection('dev', True) as conn2:
+    with get_test_connection(db_name, True) as conn2:
         with conn2.cursor() as conn_2_cursor:
             if old_slot:
                 conn_2_cursor.drop_replication_slot(slot_name)
