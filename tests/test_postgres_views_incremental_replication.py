@@ -254,5 +254,6 @@ class PostgresViewsIncrementalReplication(unittest.TestCase):
         self.assertEqual(chicken_bookmark['replication_key_value'],'2111-01-01T12:12:12.222111+00:00')
         print("bookmarks are correct")
 
+        # TODO Verify expected fields have inclusion of 'automatic'
 
 SCENARIOS.add(PostgresViewsIncrementalReplication)

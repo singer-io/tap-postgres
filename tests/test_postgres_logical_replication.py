@@ -884,6 +884,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    self.expected_pks())
         #we will get the previous update record again
         self.assertEqual(record_count_by_stream, {'postgres_logical_replication_test': 1})
+        # TODO the next line is not grabing the record from the latest sync, opening potential for false negatives
         update_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
         self.assertEqual(update_message['action'], 'upsert')
 
