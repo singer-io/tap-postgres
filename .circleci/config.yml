@@ -31,7 +31,7 @@ jobs:
           name: 'JSON Validator'
           command: |
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
-            stitch-validate-json ~/.virtualenvs/tap-postgres/lib/python3.8/site-packages/tap_postgres/schemas/*.json
+            stitch-validate-json tap_postgres/schemas/*.json
       - add_ssh_keys
       - run:
           name: 'Integration Tests'
