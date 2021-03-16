@@ -219,7 +219,7 @@ CREATE TABLE {} (
         }
     @staticmethod
     def expected_schema_types():
-        return {  # TODO Are these 'conversions' correct??
+        return {
             'id': 'integer',  # 'serial primary key',
             'our_varchar': 'character varying',  # 'varchar'
             'our_varchar_10': 'character varying',  # 'varchar(10)',
@@ -301,9 +301,8 @@ CREATE TABLE {} (
         return return_value
 
     def test_run(self):
-        # self.INCREMENTAL
-        # self.FULL_TABLE
-        # self.LOG_BASED
+        """Parametrized discovery test running against each replicatio method."""
+
         self.default_replication_method = self.FULL_TABLE
         full_table_conn_id = connections.ensure_connection(self, original_properties=False)
         self.discovery_test(full_table_conn_id)
@@ -317,12 +316,37 @@ CREATE TABLE {} (
         self.discovery_test(log_based_conn_id)
 
     def discovery_test(self, conn_id):
+        """
+        Basic Discovery Test for a database tap.
+
+        Test Description:
+          Ensure discovery runs without exit codes and generates a catalog of the expected form
+
+        Test Cases:
+            - Verify discovery generated the expected catalogs by name.
+            - Verify that the table_name is in the format <collection_name> for each stream.
+            - Verify the caatalog is found for a given stream.
+            - Verify there is only 1 top level breadcrumb in metadata for a given stream.
+            - Verify replication key(s) match expectations for a given stream.
+            - Verify primary key(s) match expectations for a given stream.
+            - Verify the replication method matches our expectations for a given stream.
+            - Verify that only primary keys are given the inclusion of automatic in metadata
+              for a given stream.
+            - Verify expected unsupported fields are given the inclusion of unsupported in
+              metadata for a given stream.
+            - Verify that all fields for a given stream which are not unsupported or automatic
+              have inclusion of available.
+            - Verify row-count metadata matches expectations for a given stream.
+            - Verify selected metadata is None for all streams.
+            - Verify is-view metadata is False for a given stream.
+            - Verify no forced-replication-method is present in metadata for a given stream.
+            - Verify schema and db match expectations for a given stream.
+            - Verify schema types match expectations for a given stream.
+        """
         ##########################################################################
         ### TODO
-        ###   [x] Cleanup the setUp by moving reusable sections into db_utils
         ###   [] Generate multiple tables (streams) and maybe dbs too?
-        ###   [] Cleanup assertions from mongodb
-        ###   [] Add appropriate assertions from standard saas test
+        ###   [] Investigate potential bug, see DOCS_BUG_1
         ##########################################################################
 
         # run discovery (check mode)
@@ -402,7 +426,10 @@ CREATE TABLE {} (
                 self.assertSetEqual(expected_primary_keys, actual_automatic_fields)
 
 
-                KNOWN_MISSING = { # TODO | BUG | the following fields were converted and selected, but docs say unsupported
+                # DOCS_BUG_1 ? | The following types were converted and selected, but docs say unsupported.
+                #                Still need to investigate how the tap handles values of these datatypes
+                #                during sync.
+                KNOWN_MISSING = {
                     'invalid_bigserial', # BIGSERIAL -> bigint
                     'invalid_serial',  # SERIAL -> integer
                     'invalid_smallserial',  # SMALLSERIAL -> smallint
