@@ -22,7 +22,7 @@ import decimal
 
 test_schema_name = "public"
 test_table_name = "postgres_discovery_test"
-test_db = "discovery0"  # also used by PostgresDropTable test
+test_db = "discovery1"
 
 
 class PostgresDiscovery(unittest.TestCase):
@@ -56,6 +56,7 @@ class PostgresDiscovery(unittest.TestCase):
         "TXID_SNAPSHOT",
         "XML",
     }
+    default_replication_method = ""
     create_table_sql = """"""
 
     def tearDown(self):
@@ -280,18 +281,39 @@ CREATE TABLE {} (
     def get_credentials(self):
         return {'password': os.getenv('TAP_POSTGRES_PASSWORD')}
 
-    def get_properties(self):
-        return {'host' : os.getenv('TAP_POSTGRES_HOST'),
-                'dbname' : os.getenv('TAP_POSTGRES_DBNAME'),
-                'port' : os.getenv('TAP_POSTGRES_PORT'),
-                'user' : os.getenv('TAP_POSTGRES_USER'),
-                'default_replication_method' : self.FULL_TABLE,  # 'LOG_BASED',
-                'filter_dbs' : 'discovery0'
-                # 'logical_poll_total_seconds': '10',
-                # 'wal2json_message_format': '1'
+    def get_properties(self, original_properties=True):
+        return_value = {
+            'host' : os.getenv('TAP_POSTGRES_HOST'),
+            'dbname' : os.getenv('TAP_POSTGRES_DBNAME'),
+            'port' : os.getenv('TAP_POSTGRES_PORT'),
+            'user' : os.getenv('TAP_POSTGRES_USER'),
+            'default_replication_method' : self.FULL_TABLE,
+            'filter_dbs' : 'discovery1'
+            # 'logical_poll_total_seconds': '10',
+            # 'wal2json_message_format': '1'
         }
+        if not original_properties:
+            return_value['default_replication_method'] = self.default_replication_method
+
+        return return_value
 
     def test_run(self):
+        # self.INCREMENTAL
+        # self.FULL_TABLE
+        # self.LOG_BASED
+        self.default_replication_method = self.FULL_TABLE
+        full_table_conn_id = connections.ensure_connection(self, original_properties=False)
+        self.discovery_test(full_table_conn_id)
+
+        self.default_replication_method = self.INCREMENTAL
+        incremental_conn_id = connections.ensure_connection(self, original_properties=False)
+        self.discovery_test(incremental_conn_id)
+
+        self.default_replication_method = self.LOG_BASED
+        log_based_conn_id = connections.ensure_connection(self, original_properties=False)
+        self.discovery_test(log_based_conn_id)
+
+    def discovery_test(self, conn_id):
         ##########################################################################
         ### TODO
         ###   [x] Cleanup the setUp by moving reusable sections into db_utils
@@ -299,8 +321,6 @@ CREATE TABLE {} (
         ###   [] Cleanup assertions from mongodb
         ###   [] Add appropriate assertions from standard saas test
         ##########################################################################
-
-        conn_id = connections.ensure_connection(self)
 
         # run discovery (check mode)
         check_job_name = runner.run_check_mode(self, conn_id)
