@@ -1,14 +1,14 @@
+import os
+import unittest
+
+import psycopg2.extras
+from psycopg2.extensions import quote_ident
 from tap_tester.scenario import SCENARIOS
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
-import os
-import unittest
-import psycopg2
-import psycopg2.extras
-from psycopg2.extensions import quote_ident
+
 import db_utils
-from singer import metadata
 
 test_schema_name = "public"
 test_table_name = "postgres_drop_table_test"
@@ -17,10 +17,13 @@ def canonicalized_table_name(schema, table, cur):
     return "{}.{}".format(quote_ident(schema, cur), quote_ident(table, cur))
 
 class PostgresDropTable(unittest.TestCase):
-    def name(self):
+
+    @staticmethod
+    def name():
         return "tap_tester_postgres_drop_table_field_selection"
 
-    def get_properties(self):
+    @staticmethod
+    def get_properties():
         return {'host' :   os.getenv('TAP_POSTGRES_HOST'),
                 'dbname' : os.getenv('TAP_POSTGRES_DBNAME'),
                 'port' : os.getenv('TAP_POSTGRES_PORT'),
@@ -29,27 +32,31 @@ class PostgresDropTable(unittest.TestCase):
                 'filter_dbs' : 'discovery0'
         }
 
-    def get_credentials(self):
+    @staticmethod
+    def get_credentials():
         return {'password': os.getenv('TAP_POSTGRES_PASSWORD')}
 
-    def get_type(self):
+    @staticmethod
+    def get_type():
         return "platform.postgres"
 
-    def tap_name(self):
+    @staticmethod
+    def tap_name():
         return "tap-postgres"
 
-    def expected_check_streams(self):
+    @staticmethod
+    def expected_check_streams():
         return { 'discovery0-public-postgres_drop_table_test'}
 
 
     def setUp(self):
         db_utils.ensure_db('discovery0')
-        creds = {}
+
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
                                     os.getenv('TAP_POSTGRES_USER'),
                                     os.getenv('TAP_POSTGRES_PASSWORD'),
                                     os.getenv('TAP_POSTGRES_PORT'),
-                                    os.getenv('TAP_POSTGRES_DBNAME')] if x == None]
+                                    os.getenv('TAP_POSTGRES_DBNAME')] if x is None]
         if len(missing_envs) != 0:
             #pylint: disable=line-too-long
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")

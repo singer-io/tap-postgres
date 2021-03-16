@@ -1,24 +1,15 @@
+import os
+import unittest
+
+import psycopg2.extras
+from psycopg2.extensions import quote_ident
 from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
-import os
-import datetime
-import unittest
-import datetime
-import pprint
-import psycopg2
-import psycopg2.extras
-from psycopg2.extensions import quote_ident
-import pdb
-import pytz
-import uuid
-import json
-from functools import reduce
-import db_utils
-from singer import utils, metadata
 
-import decimal
+import db_utils
+
 
 expected_schemas = {'postgres_logical_replication_test_cows':
                     {'type': 'object',
@@ -38,8 +29,7 @@ expected_schemas = {'postgres_logical_replication_test_cows':
 def insert_record(cursor, table_name, data):
     our_keys = list(data.keys())
     our_keys.sort()
-    our_values = list(map( lambda k: data.get(k), our_keys))
-
+    our_values = [data.get(key) for key in our_keys]
 
     columns_sql = ", \n ".join(our_keys)
     value_sql = ",".join(["%s" for i in range(len(our_keys))])
@@ -67,12 +57,12 @@ class PostgresLogicalRepMultipleTables(unittest.TestCase):
     def setUp(self):
         db_utils.ensure_db("dev")
         self.maxDiff = None
-        creds = {}
+
         missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
                                     os.getenv('TAP_POSTGRES_USER'),
                                     os.getenv('TAP_POSTGRES_PASSWORD'),
                                     os.getenv('TAP_POSTGRES_PORT'),
-                                    os.getenv('TAP_POSTGRES_DBNAME')] if x == None]
+                                    os.getenv('TAP_POSTGRES_DBNAME')] if x is None]
         if len(missing_envs) != 0:
             #pylint: disable=line-too-long
             raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
@@ -126,31 +116,39 @@ class PostgresLogicalRepMultipleTables(unittest.TestCase):
                 self.chickens_rec_1 = {'chicken_name' : "alfred_chicken", 'chicken_age' : 4}
                 insert_record(cur, test_table_name_chickens, self.chickens_rec_1)
 
-    def expected_check_streams(self):
+    @staticmethod
+    def expected_check_streams():
         return { 'dev-public-postgres_logical_replication_test_cows', 'dev-public-postgres_logical_replication_test_chickens'}
 
-    def expected_sync_streams(self):
+    @staticmethod
+    def expected_sync_streams():
         return { 'postgres_logical_replication_test_cows', 'postgres_logical_replication_test_chickens' }
 
-    def expected_pks(self):
+    @staticmethod
+    def expected_pks():
         return {
             'postgres_logical_replication_test_cows' : {'id'},
             'postgres_logical_replication_test_chickens' : {'id'}
         }
 
-    def tap_name(self):
+    @staticmethod
+    def tap_name():
         return "tap-postgres"
 
-    def name(self):
+    @staticmethod
+    def name():
         return "tap_tester_postgres_logical_multiple_tables"
 
-    def get_type(self):
+    @staticmethod
+    def get_type():
         return "platform.postgres"
 
-    def get_credentials(self):
+    @staticmethod
+    def get_credentials():
         return {'password': os.getenv('TAP_POSTGRES_PASSWORD')}
 
-    def get_properties(self):
+    @staticmethod
+    def get_properties():
         return {'host' : os.getenv('TAP_POSTGRES_HOST'),
                 'dbname' : os.getenv('TAP_POSTGRES_DBNAME'),
                 'port' : os.getenv('TAP_POSTGRES_PORT'),

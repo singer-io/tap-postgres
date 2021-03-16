@@ -7,7 +7,7 @@ def ensure_environment_variables_set():
                                 os.getenv('TAP_POSTGRES_USER'),
                                 os.getenv('TAP_POSTGRES_PASSWORD'),
                                 os.getenv('TAP_POSTGRES_PORT'),
-                                os.getenv('TAP_POSTGRES_DBNAME')] if x == None]
+                                os.getenv('TAP_POSTGRES_DBNAME')] if x is None]
     if len(missing_envs) != 0:
         #pylint: disable=line-too-long
         raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
@@ -79,8 +79,7 @@ def ensure_table(conn, conn_cursor, schema_name, table_name):
 def insert_record(conn_cursor, table_name, data):
     our_keys = list(data.keys())
     our_keys.sort()
-    our_values = list(map( lambda k: data.get(k), our_keys))
-
+    our_values = [data.get(key) for key in our_keys]
 
     columns_sql = ", \n ".join(our_keys)
     value_sql = ",".join(["%s" for i in range(len(our_keys))])

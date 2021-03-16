@@ -1,23 +1,19 @@
+import os
+import datetime
+import unittest
+import decimal
+import uuid
+import json
+
+from psycopg2.extensions import quote_ident
+import psycopg2.extras
+import pytz
 from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
-import os
-import datetime
-import unittest
-import datetime
-import pprint
-import psycopg2
-from psycopg2.extensions import quote_ident
-import psycopg2.extras
-import pytz
-import uuid
-import json
-from functools import reduce
-import db_utils
-from singer import utils, metadata
 
-import decimal
+import db_utils
 
 
 test_schema_name = "public"
@@ -70,7 +66,6 @@ class PostgresDiscovery(unittest.TestCase):
 
         db_utils.ensure_db(test_db)
         self.maxDiff = None
-        creds = {}
 
         with db_utils.get_test_connection(test_db) as conn:
             conn.autocommit = True
@@ -185,7 +180,8 @@ CREATE TABLE {} (
 
                 cur.execute("""ANALYZE {}""".format(canonicalized_table_name))
 
-    def expected_check_streams(self):
+    @staticmethod
+    def expected_check_streams():
         return { 'postgres_discovery_test'}
 
     def expected_check_stream_ids(self):
@@ -193,11 +189,14 @@ CREATE TABLE {} (
         check_streams = self.expected_check_streams()
         return {"{}-{}-{}".format(test_db, test_schema_name, stream) for stream in check_streams}
 
-    def expected_primary_keys(self):
+    @staticmethod
+    def expected_primary_keys():
         return {
             'postgres_discovery_test' : {'id'}
         }
-    def expected_unsupported_fields(self):
+
+    @staticmethod
+    def expected_unsupported_fields():
         return {
             'invalid_bigserial',
             'invalid_bit_varying',
@@ -218,8 +217,8 @@ CREATE TABLE {} (
             'invalid_txid_snapshot',
             'invalid_xml',
         }
-
-    def expected_schema_types(self):
+    @staticmethod
+    def expected_schema_types():
         return {  # TODO Are these 'conversions' correct??
             'id': 'integer',  # 'serial primary key',
             'our_varchar': 'character varying',  # 'varchar'
@@ -269,16 +268,20 @@ CREATE TABLE {} (
             'invalid_xml': 'xml',
         }
 
-    def tap_name(self):
+    @staticmethod
+    def tap_name():
         return "tap-postgres"
 
-    def name(self):
+    @staticmethod
+    def name():
         return "tap_tester_postgres_discovery"
 
-    def get_type(self):
+    @staticmethod
+    def get_type():
         return "platform.postgres"
 
-    def get_credentials(self):
+    @staticmethod
+    def get_credentials():
         return {'password': os.getenv('TAP_POSTGRES_PASSWORD')}
 
     def get_properties(self, original_properties=True):
@@ -331,7 +334,6 @@ CREATE TABLE {} (
 
         # Verify discovery generated a catalog
         found_catalogs = menagerie.get_catalogs(conn_id)
-        weird_catalog = menagerie.get_catalog(conn_id)
         self.assertGreater(len(found_catalogs), 0)
 
         # Verify discovery generated the expected catalogs by name
@@ -354,31 +356,29 @@ CREATE TABLE {} (
                 # collecting expected values
                 expected_primary_keys = self.expected_primary_keys()[stream]
                 expected_replication_keys = set()
-                expected_replication_method = None
-                expected_automatic_fields = expected_primary_keys
                 expected_unsupported_fields = self.expected_unsupported_fields()
                 expected_fields_to_datatypes = self.expected_schema_types()
                 expected_row_count = len(self.recs)
 
                 # collecting actual values...
                 schema_and_metadata = menagerie.get_annotated_schema(conn_id, catalog['stream_id'])
-                metadata = schema_and_metadata["metadata"]
-                top_level_metadata = [item for item in metadata if item.get("breadcrumb") == []]
+                stream_metadata = schema_and_metadata["metadata"]
+                top_level_metadata = [item for item in stream_metadata if item.get("breadcrumb") == []]
                 stream_properties = top_level_metadata[0]['metadata']
                 actual_primary_keys = set(stream_properties.get(self.PRIMARY_KEYS, []))
                 actual_replication_keys = set(stream_properties.get(self.REPLICATION_KEYS, []))
                 actual_replication_method = stream_properties.get(self.REPLICATION_METHOD)
                 actual_automatic_fields = set(
-                    item.get("breadcrumb", ["properties", None])[1] for item in metadata
+                    item.get("breadcrumb", ["properties", None])[1] for item in stream_metadata
                     if item.get("metadata").get("inclusion") == "automatic"
                 )
                 actual_unsupported_fields = set(
-                    item.get("breadcrumb", ["properties", None])[1] for item in metadata
+                    item.get("breadcrumb", ["properties", None])[1] for item in stream_metadata
                     if item.get("metadata").get("inclusion") == "unsupported"
                 )
                 actual_fields_to_datatypes = {
                     item['breadcrumb'][1]: item['metadata'].get('sql-datatype')
-                    for item in metadata[1:]
+                    for item in stream_metadata[1:]
                 }
 
                 # Verify there is only 1 top level breadcrumb in metadata
@@ -416,7 +416,7 @@ CREATE TABLE {} (
                 # This assumes there are no unsupported fields for SaaS sources
                 self.assertTrue(
                     all({item.get("metadata").get("inclusion") == "available"
-                         for item in metadata
+                         for item in stream_metadata
                          if item.get("breadcrumb", []) != []
                          and item.get("breadcrumb", ["properties", None])[1]
                          not in actual_automatic_fields
