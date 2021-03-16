@@ -8,7 +8,7 @@ import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
 
-import db_utils
+import db_utils  # pylint: disable=import-error
 
 test_schema_name = "public"
 test_table_name = "postgres_drop_table_test"

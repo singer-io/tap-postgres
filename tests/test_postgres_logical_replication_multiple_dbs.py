@@ -8,7 +8,7 @@ import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
 
-import db_utils
+import db_utils  # pylint: disable=import-error
 
 
 def insert_record(cursor, table_name, data):

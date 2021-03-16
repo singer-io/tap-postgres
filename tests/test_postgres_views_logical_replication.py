@@ -9,7 +9,7 @@ import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
 
-import db_utils
+import db_utils  # pylint: disable=import-error
 
 expected_schemas = {'chicken_view': {'properties':
                                      {'fk_id': {'maximum': 9223372036854775807, 'type': ['null', 'integer'],
