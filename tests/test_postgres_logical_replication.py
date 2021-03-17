@@ -1,24 +1,20 @@
+import os
+import decimal
+import unittest
+import datetime
+import uuid
+import json
+
+import pytz
+import psycopg2.extras
+from psycopg2.extensions import quote_ident
 from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
-import os
-import datetime
-import unittest
-import datetime
-import pprint
-import psycopg2
-import psycopg2.extras
-from psycopg2.extensions import quote_ident
-import pdb
-import pytz
-import uuid
-import json
-from functools import reduce
-import db_utils
-from singer import utils, metadata
 
-import decimal
+import db_utils  # pylint: disable=import-error
+
 
 expected_schemas = {'postgres_logical_replication_test':
                     {'definitions' : {
@@ -65,8 +61,7 @@ expected_schemas = {'postgres_logical_replication_test':
 def insert_record(cursor, table_name, data):
     our_keys = list(data.keys())
     our_keys.sort()
-    our_values = list(map( lambda k: data.get(k), our_keys))
-
+    our_values = [data.get(key) for key in our_keys]
 
     columns_sql = ", \n ".join(our_keys)
     value_sql = ",".join(["%s" for i in range(len(our_keys))])
@@ -92,17 +87,11 @@ class PostgresLogicalRep(unittest.TestCase):
                 cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
 
     def setUp(self):
+        db_utils.ensure_environment_variables_set()
+
         db_utils.ensure_db('dev')
+
         self.maxDiff = None
-        creds = {}
-        missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
-                                    os.getenv('TAP_POSTGRES_USER'),
-                                    os.getenv('TAP_POSTGRES_PASSWORD'),
-                                    os.getenv('TAP_POSTGRES_PORT'),
-                                    os.getenv('TAP_POSTGRES_DBNAME')] if x == None]
-        if len(missing_envs) != 0:
-            #pylint: disable=line-too-long
-            raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
         with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
@@ -325,30 +314,39 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
                 insert_record(cur, test_table_name, self.rec_4)
 
-    def expected_check_streams(self):
+
+    @staticmethod
+    def expected_check_streams():
         return { 'dev-public-postgres_logical_replication_test'}
 
-    def expected_sync_streams(self):
+    @staticmethod
+    def expected_sync_streams():
         return { 'postgres_logical_replication_test' }
 
-    def expected_pks(self):
+    @staticmethod
+    def expected_pks():
         return {
             'postgres_logical_replication_test' : {'id'}
         }
 
-    def tap_name(self):
+    @staticmethod
+    def tap_name():
         return "tap-postgres"
 
-    def name(self):
+    @staticmethod
+    def name():
         return "tap_tester_postgres_logical_replication"
 
-    def get_type(self):
+    @staticmethod
+    def get_type():
         return "platform.postgres"
 
-    def get_credentials(self):
+    @staticmethod
+    def get_credentials():
         return {'password': os.getenv('TAP_POSTGRES_PASSWORD')}
 
-    def get_properties(self):
+    @staticmethod
+    def get_properties():
         return {'host' : os.getenv('TAP_POSTGRES_HOST'),
                 'dbname' : os.getenv('TAP_POSTGRES_DBNAME'),
                 'port' : os.getenv('TAP_POSTGRES_PORT'),
@@ -392,10 +390,10 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         additional_md = [{ "breadcrumb" : [], "metadata" : {'replication-method' : 'LOG_BASED'}}]
         #don't selcted our_text_2
-        selected_metadata = connections.select_catalog_and_fields_via_metadata(conn_id, test_catalog,
-                                                                               menagerie.get_annotated_schema(conn_id, test_catalog['stream_id']),
-                                                                               additional_md,
-                                                                               ['our_text_2'])
+        _ = connections.select_catalog_and_fields_via_metadata(conn_id, test_catalog,
+                                                               menagerie.get_annotated_schema(conn_id, test_catalog['stream_id']),
+                                                               additional_md,
+                                                               ['our_text_2'])
 
         # clear state
         menagerie.set_state(conn_id, {})
@@ -884,6 +882,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    self.expected_pks())
         #we will get the previous update record again
         self.assertEqual(record_count_by_stream, {'postgres_logical_replication_test': 1})
+        # TODO the next line is not grabing the record from the latest sync, opening potential for false negatives
         update_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
         self.assertEqual(update_message['action'], 'upsert')
 

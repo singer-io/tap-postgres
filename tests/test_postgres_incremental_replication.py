@@ -1,24 +1,21 @@
+import os
+import decimal
+import unittest
+import datetime
+import uuid
+import json
+
+import pytz
+import psycopg2.extras
+from psycopg2.extensions import quote_ident
+from singer import metadata
 from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
-import os
-import datetime
-import unittest
-import datetime
-import pprint
-import psycopg2
-import psycopg2.extras
-from psycopg2.extensions import quote_ident
-import pdb
-import pytz
-import uuid
-import json
-from functools import reduce
-import db_utils
-from singer import utils, metadata
 
-import decimal
+import db_utils  # pylint: disable=import-error
+
 
 test_schema_name = "public"
 test_table_name = "postgres_incremental_replication_test"
@@ -67,8 +64,7 @@ def canonicalized_table_name(schema, table, cur):
 def insert_record(cursor, table_name, data):
     our_keys = list(data.keys())
     our_keys.sort()
-    our_values = list(map( lambda k: data.get(k), our_keys))
-
+    our_values = [data.get(key) for key in our_keys]
 
     columns_sql = ", \n ".join(our_keys)
     value_sql = ",".join(["%s" for i in range(len(our_keys))])
@@ -81,17 +77,11 @@ def insert_record(cursor, table_name, data):
 class PostgresIncrementalTable(unittest.TestCase):
 
     def setUp(self):
+        db_utils.ensure_environment_variables_set()
+
         db_utils.ensure_db('dev')
+
         self.maxDiff = None
-        creds = {}
-        missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
-                                    os.getenv('TAP_POSTGRES_USER'),
-                                    os.getenv('TAP_POSTGRES_PASSWORD'),
-                                    os.getenv('TAP_POSTGRES_PORT'),
-                                    os.getenv('TAP_POSTGRES_DBNAME')] if x == None]
-        if len(missing_envs) != 0:
-            #pylint: disable=line-too-long
-            raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
         with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
@@ -217,31 +207,38 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 insert_record(cur, test_table_name, self.rec_2)
 
 
-
-    def expected_check_streams(self):
+    @staticmethod
+    def expected_check_streams():
         return { 'dev-public-postgres_incremental_replication_test'}
 
-    def expected_sync_streams(self):
+    @staticmethod
+    def expected_sync_streams():
         return { 'postgres_incremental_replication_test' }
 
-    def expected_pks(self):
+    @staticmethod
+    def expected_pks():
         return {
             'postgres_incremental_replication_test' : {'id'}
         }
 
-    def tap_name(self):
+    @staticmethod
+    def tap_name():
         return "tap-postgres"
 
-    def name(self):
+    @staticmethod
+    def name():
         return "tap_tester_postgres_incremental_replication"
 
-    def get_type(self):
+    @staticmethod
+    def get_type():
         return "platform.postgres"
 
-    def get_credentials(self):
+    @staticmethod
+    def get_credentials():
         return {'password': os.getenv('TAP_POSTGRES_PASSWORD')}
 
-    def get_properties(self):
+    @staticmethod
+    def get_properties():
         return {'host' :   os.getenv('TAP_POSTGRES_HOST'),
                 'dbname' : os.getenv('TAP_POSTGRES_DBNAME'),
                 'port' : os.getenv('TAP_POSTGRES_PORT'),
@@ -312,9 +309,9 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
             metadata.to_map(md))
 
         additional_md = [{ "breadcrumb" : [], "metadata" : {'replication-method' : 'INCREMENTAL', 'replication-key' : 'OUR TS TZ'}}]
-        selected_metadata = connections.select_catalog_and_fields_via_metadata(conn_id, test_catalog,
-                                                                               menagerie.get_annotated_schema(conn_id, test_catalog['stream_id']),
-                                                                               additional_md)
+        _ = connections.select_catalog_and_fields_via_metadata(conn_id, test_catalog,
+                                                               menagerie.get_annotated_schema(conn_id, test_catalog['stream_id']),
+                                                               additional_md)
 
         # clear state
         menagerie.set_state(conn_id, {})
@@ -409,14 +406,14 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertEqual(set(actual_record_1['data'].keys()), set(expected_record_1.keys()),
                          msg="keys for expected_record_1 are wrong: {}".format(set(actual_record_1.keys()).symmetric_difference(set(expected_record_1.keys()))))
 
-        for k,v in actual_record_1['data'].items():
+        for k in actual_record_1['data'].keys():
             self.assertEqual(actual_record_1['data'][k], expected_record_1[k], msg="{} != {} for key {}".format(actual_record_1['data'][k], expected_record_1[k], k))
 
         actual_record_2 = records_by_stream[test_table_name]['messages'][2]
         self.assertEqual(set(actual_record_1['data'].keys()), set(expected_record_2.keys()),
                          msg="keys for expected_record_2 are wrong: {}".format(set(actual_record_2.keys()).symmetric_difference(set(expected_record_2.keys()))))
 
-        for k,v in actual_record_2['data'].items():
+        for k in actual_record_2['data'].keys():
             self.assertEqual(actual_record_2['data'][k], expected_record_2[k], msg="{} != {} for key {}".format(actual_record_2['data'][k], expected_record_2[k], k))
 
         print("records are correct")
@@ -472,7 +469,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                          msg="keys for expected_record_1 are wrong: {}".format(set(actual_record_3.keys()).symmetric_difference(set(expected_record_2.keys()))))
 
         expected_record_3 = expected_record_2
-        for k,v in actual_record_3['data'].items():
+        for k in actual_record_3['data'].keys():
             self.assertEqual(actual_record_3['data'][k], expected_record_3[k], msg="{} != {} for key {}".format(actual_record_3['data'][k], expected_record_3[k], k))
         print("records are correct")
 
@@ -564,7 +561,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         expected_record_4 = expected_record_2
         self.assertEqual(set(actual_record_4['data'].keys()), set(expected_record_1.keys()),
                          msg="keys for expected_record_4 are wrong: {}".format(set(actual_record_4.keys()).symmetric_difference(set(expected_record_1.keys()))))
-        for k,v in actual_record_4['data'].items():
+        for k in actual_record_4['data'].keys():
             self.assertEqual(actual_record_4['data'][k], expected_record_4[k], msg="{} != {} for key {}".format(actual_record_4['data'][k], expected_record_4[k], k))
 
 
@@ -600,7 +597,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         self.assertEqual(set(actual_record_5['data'].keys()), set(expected_record_5.keys()),
                          msg="keys for expected_record_5 are wrong: {}".format(set(actual_record_5.keys()).symmetric_difference(set(expected_record_5.keys()))))
-        for k,v in actual_record_5['data'].items():
+        for k in actual_record_5['data'].keys():
             self.assertEqual(actual_record_5['data'][k], expected_record_5[k], msg="{} != {} for key {}".format(actual_record_5['data'][k], expected_record_5[k], k))
         print("records are correct")
 
