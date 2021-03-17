@@ -292,10 +292,12 @@ CREATE TABLE {} (
             'user' : os.getenv('TAP_POSTGRES_USER'),
             'default_replication_method' : self.FULL_TABLE,
             'filter_dbs' : 'discovery1'
-            # 'logical_poll_total_seconds': '10',
-            # 'wal2json_message_format': '1'
         }
         if not original_properties:
+            if self.default_replication_method is self.LOG_BASED:
+                return_value['logical_poll_total_seconds'] = '10'
+                return_value['wal2json_message_format'] = '1'
+
             return_value['default_replication_method'] = self.default_replication_method
 
         return return_value
