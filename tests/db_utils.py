@@ -9,8 +9,7 @@ def ensure_environment_variables_set():
                                 os.getenv('TAP_POSTGRES_PORT'),
                                 os.getenv('TAP_POSTGRES_DBNAME')] if x is None]
     if len(missing_envs) != 0:
-        #pylint: disable=line-too-long
-        raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
+        raise Exception("Missing environment variables: {}".format(missing_envs))
 
 def ensure_db(dbname=os.getenv('TAP_POSTGRES_DBNAME')):
     # Create database dev if not exists

@@ -50,16 +50,9 @@ class PostgresDropTable(unittest.TestCase):
 
 
     def setUp(self):
-        db_utils.ensure_db('discovery0')
+        db_utils.ensure_environment_variables_set()
 
-        missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
-                                    os.getenv('TAP_POSTGRES_USER'),
-                                    os.getenv('TAP_POSTGRES_PASSWORD'),
-                                    os.getenv('TAP_POSTGRES_PORT'),
-                                    os.getenv('TAP_POSTGRES_DBNAME')] if x is None]
-        if len(missing_envs) != 0:
-            #pylint: disable=line-too-long
-            raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
+        db_utils.ensure_db('discovery0')
 
         with db_utils.get_test_connection('discovery0') as conn:
             conn.autocommit = True

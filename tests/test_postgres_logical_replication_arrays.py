@@ -105,17 +105,10 @@ class PostgresLogicalRepArrays(unittest.TestCase):
 
 
     def setUp(self):
+        db_utils.ensure_environment_variables_set()
+
         db_utils.ensure_db('dev')
         self.maxDiff = None
-
-        missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
-                                    os.getenv('TAP_POSTGRES_USER'),
-                                    os.getenv('TAP_POSTGRES_PASSWORD'),
-                                    os.getenv('TAP_POSTGRES_PORT'),
-                                    os.getenv('TAP_POSTGRES_DBNAME')] if x is None]
-        if len(missing_envs) != 0:
-            #pylint: disable=line-too-long
-            raise Exception("set TAP_POSTGRES_HOST, TAP_POSTGRES_DBNAME, TAP_POSTGRES_USER, TAP_POSTGRES_PASSWORD, TAP_POSTGRES_PORT")
 
         with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
