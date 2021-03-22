@@ -344,138 +344,104 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
     def test_run(self):
         conn_id = connections.ensure_connection(self)
 
-        # run in check mode
+        # run in check mode and verify exit codes
         check_job_name = runner.run_check_mode(self, conn_id)
-
-        # verify check  exit codes
         exit_status = menagerie.get_exit_status(conn_id, check_job_name)
         menagerie.verify_check_exit_status(self, exit_status, check_job_name)
 
-        # verify the tap discovered the right streams
-        found_catalogs = [fc for fc
-                          in menagerie.get_catalogs(conn_id)
-                          if fc['tap_stream_id'] in self.expected_check_streams()]
+        # verify basics of discovery are consistent with expectations...
 
+        # verify discovery produced (at least) 1 expected catalog
+        found_catalogs = [found_catalog for found_catalog in menagerie.get_catalogs(conn_id)
+                          if found_catalog['tap_stream_id'] in self.expected_check_streams()]
+        self.assertGreaterEqual(len(found_catalogs), 1)
 
-        self.assertGreaterEqual(len(found_catalogs),
-                                1,
-                                msg="unable to locate schemas for connection {}".format(conn_id))
-
-        found_catalog_names = set(map(lambda c: c['tap_stream_id'], found_catalogs))
-        diff = self.expected_check_streams().symmetric_difference(found_catalog_names)
-        self.assertEqual(len(diff), 0, msg="discovered schemas do not match: {}".format(diff))
+        # verify the tap discovered the expected streams
+        found_catalog_names = {catalog['tap_stream_id'] for catalog in found_catalogs}
+        self.assertSetEqual(self.expected_check_streams(), found_catalog_names)
 
         # verify that persisted streams have the correct properties
         test_catalog = found_catalogs[0]
         self.assertEqual(test_table_name, test_catalog['stream_name'])
-
         print("discovered streams are correct")
 
-        print('checking discoverd metadata for public-postgres_full_table_test...')
-        md = menagerie.get_annotated_schema(conn_id, test_catalog['stream_id'])['metadata']
-
-        self.assertEqual(
-            {('properties', 'our_varchar'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'character varying'},
-             ('properties', 'our_boolean'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'boolean'},
-             ('properties', 'our_real'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'real'},
-             ('properties', 'our_uuid'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'uuid'},
-             ('properties', 'our_bit'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'bit'},
-             ('properties', 'OUR TS TZ'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'timestamp with time zone'},
-             ('properties', 'our_varchar_10'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'character varying'},
-             ('properties', 'our_store'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'hstore'},
-             ('properties', 'OUR TIME'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'time without time zone'},
-             ('properties', 'our_decimal'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'numeric'},
-             ('properties', 'OUR TS'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'timestamp without time zone'},
-             ('properties', 'our_jsonb'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'jsonb'},
-             ('properties', 'OUR TIME TZ'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'time with time zone'},
-             ('properties', 'our_text'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'text'},
-             ('properties', 'OUR DATE'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'date'},
-             ('properties', 'our_double'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'double precision'},
-             (): {'is-view': False, 'schema-name': 'public', 'table-key-properties': ['id'], 'database-name': 'dev', 'row-count': 0},
-             ('properties', 'our_bigint'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'bigint'},
-             ('properties', 'id'): {'inclusion': 'automatic', 'selected-by-default': True, 'sql-datatype': 'integer'},
-             ('properties', 'our_json'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'json'},
-             ('properties', 'our_smallint'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'smallint'},
-             ('properties', 'our_integer'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'integer'},
-             ('properties', 'our_cidr'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'cidr'},
-             ('properties', 'our_citext'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'citext'},
-             ('properties', 'our_inet'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'inet'},
-             ('properties', 'our_mac'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'macaddr'},
-             ('properties', 'our_money'): {'inclusion': 'available', 'selected-by-default': True, 'sql-datatype': 'money'}},
-            metadata.to_map(md))
-
+        # perform table selection
+        print('selecting {} and all fields within the table'.format(test_table_name))
+        schema_and_metadata = menagerie.get_annotated_schema(conn_id, test_catalog['stream_id'])
+        md = schema_and_metadata['metadata']
         additional_md = [{ "breadcrumb" : [], "metadata" : {'replication-method' : 'INCREMENTAL', 'replication-key' : 'OUR TS TZ'}}]
-        _ = connections.select_catalog_and_fields_via_metadata(conn_id, test_catalog,
-                                                               menagerie.get_annotated_schema(conn_id, test_catalog['stream_id']),
-                                                               additional_md)
+        _ = connections.select_catalog_and_fields_via_metadata(conn_id, test_catalog, schema_and_metadata, additional_md)
 
         # clear state
         menagerie.set_state(conn_id, {})
 
-        # Sync Job 1
+        # run sync job 1 and verify exit codes
         sync_job_name = runner.run_sync_mode(self, conn_id)
-
-        # verify tap and target exit codes
         exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
         menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
 
-        record_count_by_stream = runner.examine_target_output_file(self,
-                                                                   conn_id,
-                                                                   self.expected_sync_streams(),
-                                                                   self.expected_primary_keys())
-
-        self.assertEqual(record_count_by_stream, { test_table_name: 3})
+        # get records
+        record_count_by_stream = runner.examine_target_output_file(
+            self, conn_id, self.expected_sync_streams(), self.expected_primary_keys()
+        )
         records_by_stream = runner.get_records_from_target_output()
         table_version = records_by_stream[test_table_name]['table_version']
         messages = records_by_stream[test_table_name]['messages']
 
+        # verify the execpted number of records were replicated
+        self.assertEqual(3, record_count_by_stream[test_table_name])
+
         # verify the message actions match expectations
         self.assertEqual(4, len(messages))
-        self.assertEqual(messages[0]['action'], 'activate_version')
-        self.assertEqual(messages[1]['action'], 'upsert')
-        self.assertEqual(messages[2]['action'], 'upsert')
-        self.assertEqual(messages[3]['action'], 'upsert')
+        self.assertEqual('activate_version', messages[0]['action'])
+        self.assertEqual('upsert', messages[1]['action'])
+        self.assertEqual('upsert', messages[2]['action'])
+        self.assertEqual('upsert', messages[3]['action'])
 
-        # # verifications about individual records # TODO Do we need this if checking keys and values of records?
-        # for table_name, recs in records_by_stream.items():
-        #     # verify the persisted schema was correct
-        #     self.assertEqual(recs['schema'],
-        #                      expected_schemas[table_name],
-        #                      msg="Persisted schema did not match expected schema for table `{}`.".format(table_name))
+        # verify the persisted schema matches expectations
+        self.assertEqual(expected_schemas[test_table_name], records_by_stream[test_table_name]['schema'])
 
+        # verify replicated records match expectations
         self.assertDictEqual(self.expected_records[0], messages[1]['data'])
         self.assertDictEqual(self.expected_records[1], messages[2]['data'])
         self.assertDictEqual(self.expected_records[2], messages[3]['data'])
+
         print("records are correct")
 
-        # verify state and bookmarks
+        # grab bookmarked state
         state = menagerie.get_state(conn_id)
         bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
-        self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
-        self.assertIsNone(bookmark.get('lsn'),
-                          msg="expected bookmark for stream ROOT-CHICKEN to have NO lsn because we are using incremental replication")
-        self.assertEqual(bookmark['version'], table_version,
-                         msg="expected bookmark for stream ROOT-CHICKEN to match version")
+        expected_replication_key = list(self.expected_replication_keys()[test_table_name])[0]
+
+        # verify state and bookmarks meet expectations
+        self.assertIsNone(state['currently_syncing'])
+        self.assertIsNone(bookmark.get('lsn'))
+        self.assertEqual(table_version, bookmark['version'])
+        self.assertEqual(expected_replication_key, bookmark['replication_key'])
+        self.assertEqual(self.expected_records[2][expected_replication_key], bookmark['replication_key_value'])
 
         #----------------------------------------------------------------------
         # invoke the sync job AGAIN following various manipulations to the data
         #----------------------------------------------------------------------
 
-        # make changes to the database between syncs
         with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
-                # TODO DO all changes at once
-                # [x] Insert a record with a lower replication-key value (it shouldn't replicate)
-                # [x] Insert a record with a higher replication-key value
-                # [x] Insert a record with a higher replication-key value that we will delete
-                # [x] Update a record with a higher replication-key value
-                # [] Update a record with a lower replication-key value
-                # [x] Delete a newly inserted record
-                # [] Delete a pre-existing record
+                # NB | We will perform the following actions prior to the next sync:
+                #      [Action (EXPECTED RESULT)]
 
-                # insert more fixture data ...
+                #      Insert a record with a lower replication-key value (NOT REPLICATED)
+                #      Insert a record with a higher replication-key value (REPLICATED)
+
+                #      Insert a record with a higher replication-key value and...
+                #      Delete it (NOT REPLICATED)
+
+                #      Update a record with a higher replication-key value (REPLICATED)
+                #      Update a record with a lower replication-key value (NOT REPLICATED)
+
+
+                # inserting...
                 # a record with a replication-key value that is lower than the previous bookmark
                 nyc_tz = pytz.timezone('America/New_York')
                 our_time_offset = "-04:00"
@@ -667,9 +633,9 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_money' : None
                 })
 
-                db_utils.insert_record(cur, test_table_name, self.inserted_records[-3])
-                db_utils.insert_record(cur, test_table_name, self.inserted_records[-2])
-                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[3])
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[4])
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[5])
 
                 # update a record with a replication-key value that is higher than the previous bookmark
                 canon_table_name = db_utils.canonicalized_table_name(cur, test_schema_name, test_table_name)
@@ -696,19 +662,17 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     "our_double": decimal.Decimal("6.6"),
                     "our_money": "$0.00"
                 }
-                self.expected_records[0]["OUR TS TZ"] = '2021-04-04T08:04:04.733184+00:00'
-                self.expected_records[0]["our_double"] = decimal.Decimal("6.6")
-                self.expected_records[0]["our_money"] = "$0.00"
+                self.expected_records[1]["OUR TS TZ"] = '2021-04-04T08:04:04.733184+00:00'
+                self.expected_records[1]["our_double"] = decimal.Decimal("6.6")
+                self.expected_records[1]["our_money"] = "$0.00"
                 db_utils.update_record(cur, canon_table_name, record_pk, updated_data)
 
-                # delete some records
+                # delete a newly inserted record with a higher replication key than the previous bookmark
                 record_pk = 5
                 db_utils.delete_record(cur, canon_table_name, record_pk)
 
-        # Sync Job 2
+        # run sync job 2 and verify exit codes
         sync_job_name = runner.run_sync_mode(self, conn_id)
-
-        # verify tap and target exit codes
         exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
         menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
 
@@ -723,14 +687,18 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertEqual(3, record_count_by_stream[test_table_name])
 
         # verify the message actions match expectations
-        self.assertEqual(messages[0]['action'], 'activate_version')
-        self.assertEqual(messages[1]['action'], 'upsert')
-        self.assertEqual(messages[2]['action'], 'upsert')
-        self.assertEqual(messages[3]['action'], 'upsert')
+        self.assertEqual('activate_version', messages[0]['action'])
+        self.assertEqual('upsert', messages[1]['action'])
+        self.assertEqual('upsert', messages[2]['action'])
+        self.assertEqual('upsert', messages[3]['action'])
+
+        # verify the persisted schema matches expectations
+        self.assertEqual(expected_schemas[test_table_name], records_by_stream[test_table_name]['schema'])
+
+        # verify replicated records meet our expectations...
 
         # verify the first record was the bookmarked record from the previous sync
         self.assertDictEqual(self.expected_records[2], messages[1]['data'])
-
 
         # verify the expected updated record with a higher replication-key value was replicated
         self.assertDictEqual(self.expected_records[0], messages[2]['data'])
@@ -751,17 +719,34 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # verify the expected inserted record with a higher replication-key value was replicated
         self.assertDictEqual(self.expected_records[5], messages[3]['data'])
 
-        #table version did NOT change
-        self.assertEqual(records_by_stream[test_table_name]['table_version'], table_version)
+        print("records are correct")
 
-        #----------------------------------------------------------------------
-        # invoke the sync job AGAIN and get 1 record(the one matching the bookmark)
+        # get bookmarked state
+        state = menagerie.get_state(conn_id)
+        bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
+        expected_replication_key = list(self.expected_replication_keys()[test_table_name])[0]
+
+        # verify the bookmarked state matches our expectations
+        self.assertIsNone(bookmark.get('lsn'))
+        self.assertEqual(bookmark['version'], table_version)
+        self.assertEqual(bookmark['replication_key'], expected_replication_key)
+        self.assertEqual(bookmark['replication_key_value'], self.expected_records[5][expected_replication_key])
+
+        #---------------------------------------------------------------------
+        # run sync AGAIN after deleting a record and get 1 record (prev bookmark)
         #----------------------------------------------------------------------
 
-        #Sync Job 2
+        # Delete a pre-existing record from the database
+        with db_utils.get_test_connection('dev') as conn:
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+
+                # delete a record with a lower replication key than the previous sync
+                record_pk = 1
+                db_utils.delete_record(cur, canon_table_name, record_pk)
+
+        # run sync job 3 and verify exit codes
         sync_job_name = runner.run_sync_mode(self, conn_id)
-
-        # verify tap and target exit codes
         exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
         menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
 
@@ -781,10 +766,19 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertEqual(messages[1]['action'], 'upsert')
         self.assertEqual(records_by_stream[test_table_name]['table_version'], table_version)
 
+        # verify replicated records meet our expectations...
+
+        # verify we did not re-replicate the deleted record
+        actual_record_ids = [message['data']['id'] for message in messages[1:]]
+        expected_record_id = self.expected_records[0]['id']
+        self.assertNotIn(expected_record_id, actual_record_ids)
+
         # verify only the previously bookmarked record was synced
         self.assertDictEqual(self.expected_records[5], messages[1]['data'])
 
-        # get bookmark
+        print("records are correct")
+
+        # get bookmarked state
         state = menagerie.get_state(conn_id)
         bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
         expected_replication_key = list(self.expected_replication_keys()[test_table_name])[0]

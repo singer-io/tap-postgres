@@ -126,7 +126,7 @@ CREATE TABLE {} (
                 )
                 """.format(canonicalized_table_name)
 
-                cur = db_utils.ensure_table(conn, cur, test_schema_name, test_table_name)
+                cur = db_utils.ensure_fresh_table(conn, cur, test_schema_name, test_table_name)
                 cur.execute(self.create_table_sql)
 
                 #insert fixture data 1
