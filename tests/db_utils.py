@@ -50,7 +50,11 @@ def ensure_replication_slot(conn_cursor, db_name=os.getenv('TAP_POSTGRES_DBNAME'
                 conn_2_cursor.drop_replication_slot(slot_name)
             conn_2_cursor.create_replication_slot(slot_name, output_plugin='wal2json')
 
-def ensure_table(conn, conn_cursor, schema_name, table_name):
+def ensure_fresh_table(conn, conn_cursor, schema_name, table_name):
+    """
+    If a table of the specified name and schema already exists, it was left over
+    from a previous test run. Drop this table.
+    """
     ctable_name = canonicalized_table_name(conn_cursor, schema_name, table_name)
 
     old_table = conn_cursor.execute("""SELECT EXISTS (
@@ -69,11 +73,13 @@ def ensure_table(conn, conn_cursor, schema_name, table_name):
     if conn_cursor2.fetchone()[0] is None:
         conn_cursor2.execute(""" CREATE EXTENSION hstore; """)
 
-    conn_cursor2.execute(""" CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;""")
-    conn_cursor2.execute(""" DROP TYPE IF EXISTS ALIGNMENT CASCADE """)
-    conn_cursor2.execute(""" CREATE TYPE ALIGNMENT AS ENUM ('good', 'bad', 'ugly') """)
+    # TODO might need this if calling this method and log-based replication was used
+    # conn_cursor2.execute(""" CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;""")
+    # conn_cursor2.execute(""" DROP TYPE IF EXISTS ALIGNMENT CASCADE """)
+    # conn_cursor2.execute(""" CREATE TYPE ALIGNMENT AS ENUM ('good', 'bad', 'ugly') """)
 
     return conn_cursor2
+
 
 def insert_record(conn_cursor, table_name, data):
     our_keys = list(data.keys())
@@ -87,3 +93,33 @@ def insert_record(conn_cursor, table_name, data):
                             ( {} )
                      VALUES ( {} )""".format(quote_ident(table_name, conn_cursor), columns_sql, value_sql)
     conn_cursor.execute(insert_sql, our_values)
+
+
+def update_record(conn_cursor, ctable_name, primary_key, data):
+    """
+    Update an existing record as specified using the following params.
+    :param conn_cursor:    A pyschopg2 connection object.
+    :param ctable_name:    The canonicalized talbe name.
+    :param primary_key:    The value of the primary key
+                           of the record you want to update.
+    :param data:           A dictionary of fields to values to
+                           update in the record.
+    """
+    fields_to_update = ""
+    for field, value in data.items():
+        if ' ' in field:
+            field = quote_ident(field, conn_cursor)
+        fields_to_update += " {} = '{}',".format(field, value)
+
+    update_sql = "UPDATE {} SET{} WHERE id = {}".format(ctable_name,
+                                                        fields_to_update[:-1],
+                                                        primary_key)
+    conn_cursor.execute(update_sql)
+
+def delete_record(conn_cursor, ctable_name, primary_key):
+    # print("delete row from source db")
+    # with db_utils.get_test_connection('dev') as conn:
+    #     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+    #         cur.execute("DELETE FROM {} WHERE id = 3".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
+
+    conn_cursor.execute("DELETE FROM {} WHERE id = {}".format(ctable_name, primary_key))

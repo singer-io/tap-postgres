@@ -295,7 +295,6 @@ CREATE TABLE {} (
         }
         if not original_properties:
             if self.default_replication_method is self.LOG_BASED:
-                return_value['logical_poll_total_seconds'] = '10'
                 return_value['wal2json_message_format'] = '1'
 
             return_value['default_replication_method'] = self.default_replication_method
@@ -313,6 +312,10 @@ CREATE TABLE {} (
         incremental_conn_id = connections.ensure_connection(self, original_properties=False)
         self.discovery_test(incremental_conn_id)
 
+        # NB | We are able to generate a connection and run discovery with a default replication
+        #      method of logical replication WITHOUT selecting a replication slot. This is not
+        #      ideal behavior. This BUG should not be carried over into hp-postgres, but will not
+        #      be fixed for this tap.
         self.default_replication_method = self.LOG_BASED
         log_based_conn_id = connections.ensure_connection(self, original_properties=False)
         self.discovery_test(log_based_conn_id)

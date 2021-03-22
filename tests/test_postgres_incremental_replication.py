@@ -58,22 +58,6 @@ expected_schemas = {test_table_name:
                                     'our_money': {'type': ['null', 'string']}
                      }}}
 
-def canonicalized_table_name(schema, table, cur):
-    return "{}.{}".format(quote_ident(schema, cur), quote_ident(table, cur))
-
-def insert_record(cursor, table_name, data):
-    our_keys = list(data.keys())
-    our_keys.sort()
-    our_values = [data.get(key) for key in our_keys]
-
-    columns_sql = ", \n ".join(our_keys)
-    value_sql = ",".join(["%s" for i in range(len(our_keys))])
-
-    insert_sql = """ INSERT INTO {}
-                            ( {} )
-                     VALUES ( {} )""".format(quote_ident(table_name, cursor), columns_sql, value_sql)
-    cursor.execute(insert_sql, our_values)
-
 class PostgresIncrementalTable(unittest.TestCase):
 
     def setUp(self):
@@ -87,20 +71,7 @@ class PostgresIncrementalTable(unittest.TestCase):
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
-                old_table = cur.execute("""SELECT EXISTS (
-                                          SELECT 1
-                                          FROM  information_schema.tables
-                                          WHERE  table_schema = %s
-                                          AND  table_name =   %s);""",
-                                        [test_schema_name, test_table_name])
-                old_table = cur.fetchone()[0]
-                if old_table:
-                    cur.execute("DROP TABLE {}".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
-
-                cur = conn.cursor()
-                cur.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
-                if cur.fetchone()[0] is None:
-                    cur.execute(""" CREATE EXTENSION hstore; """)
+                cur = db_utils.ensure_fresh_table(conn, cur, test_schema_name, test_table_name)
 
                 create_table_sql = """
 CREATE TABLE {} (id            SERIAL PRIMARY KEY,
@@ -128,84 +99,203 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 our_inet       inet,
                 our_cidr       cidr,
                 our_mac        macaddr,
-                our_money        money)
-                """.format(canonicalized_table_name(test_schema_name, test_table_name, cur))
+                our_money      money)
+                """.format(db_utils.canonicalized_table_name(cur, test_schema_name, test_table_name))
 
                 cur.execute(create_table_sql)
 
-                #insert fixture data 1
-                our_ts = datetime.datetime(1997, 2, 2, 2, 2, 2, 722184)
+                # insert fixture data and track expected records
+                self.inserted_records = []
+                self.expected_records = []
+
                 nyc_tz = pytz.timezone('America/New_York')
-                our_ts_tz = nyc_tz.localize(our_ts)
-                our_time  = datetime.time(12,11,10)
-                our_time_tz = our_time.isoformat() + "-04:00"
-                our_date = datetime.date(1998, 3, 4)
-                my_uuid =  str(uuid.uuid1())
-                self.rec_1 = {'our_varchar' : "our_varchar",
-                              'our_varchar_10' : "varchar_10", 'our_text' :
-                              "some text", 'our_integer' : 44100,
-                              'our_smallint' : 1, 'our_bigint' : 1000000,
-                              'our_decimal' : decimal.Decimal('1234567890.01'),
-                              quote_ident('OUR TS', cur) : our_ts,
-                              quote_ident('OUR TS TZ', cur) :  our_ts_tz,
-                              quote_ident('OUR TIME', cur) : our_time,
-                              quote_ident('OUR TIME TZ', cur) : our_time_tz,
-                              quote_ident('OUR DATE', cur) : our_date,
-                              'our_double' : decimal.Decimal('1.1'),
-                              'our_real' : decimal.Decimal('1.2'),
-                              'our_boolean' : True,
-                              'our_bit' : '0',
-                              'our_json' : json.dumps({'secret' : 55}),
-                              'our_jsonb' : json.dumps(6777777),
-                              'our_uuid' : my_uuid,
-                              'our_store' : 'size=>"small",name=>"betty"',
-                              'our_citext': 'cyclops 1',
-                              'our_cidr' : '192.168.100.128/25',
-                              'our_inet': '192.168.100.128/24',
-                              'our_mac' : '08:00:2b:01:02:03',
-                              'our_money'     : '$1,445.5678'
-                }
+                our_time_offset = "-04:00"
 
-                insert_record(cur, test_table_name, self.rec_1)
-
-
-                #insert fixture data 2
-                our_ts = datetime.datetime(1987, 3, 3, 3, 3, 3, 733184)
-                nyc_tz = pytz.timezone('America/New_York')
+                # record 1
+                our_ts = datetime.datetime(1977, 3, 3, 3, 3, 3, 733184)
                 our_ts_tz = nyc_tz.localize(our_ts)
                 our_time  = datetime.time(10,9,8)
-                our_time_tz = our_time.isoformat() + "-04:00"
+                our_time_tz = our_time.isoformat() + our_time_offset
                 our_date = datetime.date(1964, 7, 1)
                 my_uuid =  str(uuid.uuid1())
+                self.inserted_records.append({
+                    'our_varchar' : "our_varchar 2",
+                    'our_varchar_10' : "varchar_10",
+                    'our_text' : "some text 2",
+                    'our_integer' : 44101,
+                    'our_smallint' : 2,
+                    'our_bigint' : 1000001,
+                    'our_decimal' : decimal.Decimal('9876543210.02'),
+                    quote_ident('OUR TS', cur) : our_ts,
+                    quote_ident('OUR TS TZ', cur) : our_ts_tz,
+                    quote_ident('OUR TIME', cur) : our_time,
+                    quote_ident('OUR TIME TZ', cur) : our_time_tz,
+                    quote_ident('OUR DATE', cur) : our_date,
+                    'our_double' : decimal.Decimal('1.1'),
+                    'our_real' : decimal.Decimal('1.2'),
+                    'our_boolean' : True,
+                    'our_bit' : '1',
+                    'our_json' : json.dumps({'nymn' : 77}),
+                    'our_jsonb' : json.dumps({'burgers' : 'good++'}),
+                    'our_uuid' : my_uuid,
+                    'our_citext' : 'cyclops 2',
+                    'our_store' : 'dances=>"floor",name=>"betty"',
+                    'our_cidr' : '192.168.101.128/25',
+                    'our_inet': '192.168.101.128/24',
+                    'our_mac' : '08:00:2b:01:02:04',
+                })
+                self.expected_records.append({
+                    'our_decimal': decimal.Decimal('9876543210.02'),
+                    'OUR TIME': '10:09:08',
+                    'our_text': 'some text 2',
+                    'our_bit': True,
+                    'our_integer': 44101,
+                    'our_double': decimal.Decimal('1.1'),
+                    'id': 1,
+                    'our_json': '{"nymn": 77}',
+                    'our_boolean': True,
+                    'our_jsonb': '{"burgers": "good++"}',
+                    'our_bigint': 1000001,
+                    'OUR TIME TZ': '10:09:08-04:00',
+                    'our_store': {"name" : "betty", "dances" :"floor"},
+                    'OUR TS TZ': '1977-03-03T08:03:03.733184+00:00',
+                    'our_smallint': 2,
+                    'OUR DATE':     '1964-07-01T00:00:00+00:00',
+                    'our_varchar':  'our_varchar 2',
+                    'OUR TS':       '1977-03-03T03:03:03.733184+00:00',
+                    'our_uuid':     self.inserted_records[0]['our_uuid'],
+                    'our_real':     decimal.Decimal('1.2'),
+                    'our_varchar_10': 'varchar_10',
+                    'our_citext'  : self.inserted_records[0]['our_citext'],
+                    'our_inet'    : self.inserted_records[0]['our_inet'],
+                    'our_cidr'    : self.inserted_records[0]['our_cidr'],
+                    'our_mac'     : self.inserted_records[0]['our_mac'],
+                    'our_money'      : None
+                })
 
-                self.rec_2 = {'our_varchar' : "our_varchar 2",
-                              'our_varchar_10' : "varchar_10",
-                              'our_text' : "some text 2",
-                              'our_integer' : 44101,
-                              'our_smallint' : 2,
-                              'our_bigint' : 1000001,
-                              'our_decimal' : decimal.Decimal('9876543210.02'),
-                              quote_ident('OUR TS', cur) : our_ts,
-                              quote_ident('OUR TS TZ', cur) : our_ts_tz,
-                              quote_ident('OUR TIME', cur) : our_time,
-                              quote_ident('OUR TIME TZ', cur) : our_time_tz,
-                              quote_ident('OUR DATE', cur) : our_date,
-                              'our_double' : decimal.Decimal('1.1'),
-                              'our_real' : decimal.Decimal('1.2'),
-                              'our_boolean' : True,
-                              'our_bit' : '1',
-                              'our_json' : json.dumps({'nymn' : 77}),
-                              'our_jsonb' : json.dumps({'burgers' : 'good++'}),
-                              'our_uuid' : my_uuid,
-                              'our_citext' : 'cyclops 2',
-                              'our_store' : 'dances=>"floor",name=>"betty"',
-                              'our_cidr' : '192.168.101.128/25',
-                              'our_inet': '192.168.101.128/24',
-                              'our_mac' : '08:00:2b:01:02:04',
-                }
+                # record 2
+                our_ts = datetime.datetime(1987, 2, 2, 2, 2, 2, 722184)
+                our_ts_tz = nyc_tz.localize(our_ts)
+                our_time  = datetime.time(12,11,10)
+                our_time_tz = our_time.isoformat() + our_time_offset
+                our_date = datetime.date(1998, 3, 4)
+                my_uuid =  str(uuid.uuid1())
+                self.inserted_records.append({
+                    'our_varchar' : "our_varchar",
+                    'our_varchar_10' : "varchar_10", 'our_text' :
+                    "some text", 'our_integer' : 44100,
+                    'our_smallint' : 1, 'our_bigint' : 1000000,
+                    'our_decimal' : decimal.Decimal('1234567890.01'),
+                    quote_ident('OUR TS', cur) : our_ts,
+                    quote_ident('OUR TS TZ', cur) :  our_ts_tz,
+                    quote_ident('OUR TIME', cur) : our_time,
+                    quote_ident('OUR TIME TZ', cur) : our_time_tz,
+                    quote_ident('OUR DATE', cur) : our_date,
+                    'our_double' : decimal.Decimal('1.1'),
+                    'our_real' : decimal.Decimal('1.2'),
+                    'our_boolean' : True,
+                    'our_bit' : '0',
+                    'our_json' : json.dumps({'secret' : 55}),
+                    'our_jsonb' : json.dumps(6777777),
+                    'our_uuid' : my_uuid,
+                    'our_store' : 'size=>"small",name=>"betty"',
+                    'our_citext': 'cyclops 1',
+                    'our_cidr' : '192.168.100.128/25',
+                    'our_inet': '192.168.100.128/24',
+                    'our_mac' : '08:00:2b:01:02:03',
+                    'our_money'     : '$1,445.5678'
+                })
+                self.expected_records.append({
+                    'our_decimal': decimal.Decimal('1234567890.01'),
+                    'our_text': 'some text',
+                    'our_bit': False,
+                    'our_integer': 44100,
+                    'our_double': decimal.Decimal('1.1'),
+                    'id': 2,
+                    'our_json': '{"secret": 55}',
+                    'our_boolean': True,
+                    'our_jsonb':  self.inserted_records[1]['our_jsonb'],
+                    'our_bigint': 1000000,
+                    'OUR TS': '1987-02-02T02:02:02.722184+00:00',
+                    'OUR TS TZ': '1987-02-02T07:02:02.722184+00:00',
+                    'OUR TIME': '12:11:10',
+                    'OUR TIME TZ': '12:11:10-04:00',
+                    'our_store': {"name" : "betty", "size" :"small"},
+                    'our_smallint': 1,
+                    'OUR DATE': '1998-03-04T00:00:00+00:00',
+                    'our_varchar': 'our_varchar',
+                    'our_uuid': self.inserted_records[1]['our_uuid'],
+                    'our_real': decimal.Decimal('1.2'),
+                    'our_varchar_10': 'varchar_10',
+                    'our_citext': self.inserted_records[1]['our_citext'],
+                    'our_inet'    : self.inserted_records[1]['our_inet'],
+                    'our_cidr'    : self.inserted_records[1]['our_cidr'],
+                    'our_mac'    : self.inserted_records[1]['our_mac'],
+                    'our_money'      : '$1,445.57'
+                })
+                # record 3
+                our_ts = datetime.datetime(1997, 2, 2, 2, 2, 2, 722184)
+                our_ts_tz = nyc_tz.localize(our_ts)
+                our_time  = datetime.time(12,11,10)
+                our_time_tz = our_time.isoformat() + our_time_offset
+                our_date = datetime.date(1998, 3, 4)
+                my_uuid =  str(uuid.uuid1())
+                self.inserted_records.append({
+                    'our_varchar' : "our_varchar",
+                    'our_varchar_10' : "varchar_10", 'our_text' :
+                    "some text", 'our_integer' : 44100,
+                    'our_smallint' : 1, 'our_bigint' : 1000000,
+                    'our_decimal' : decimal.Decimal('1234567890.01'),
+                    quote_ident('OUR TS', cur) : our_ts,
+                    quote_ident('OUR TS TZ', cur) :  our_ts_tz,
+                    quote_ident('OUR TIME', cur) : our_time,
+                    quote_ident('OUR TIME TZ', cur) : our_time_tz,
+                    quote_ident('OUR DATE', cur) : our_date,
+                    'our_double' : decimal.Decimal('1.1'),
+                    'our_real' : decimal.Decimal('1.2'),
+                    'our_boolean' : True,
+                    'our_bit' : '0',
+                    'our_json' : json.dumps({'secret' : 55}),
+                    'our_jsonb' : json.dumps(6777777),
+                    'our_uuid' : my_uuid,
+                    'our_store' : 'size=>"small",name=>"betty"',
+                    'our_citext': 'cyclops 1',
+                    'our_cidr' : '192.168.100.128/25',
+                    'our_inet': '192.168.100.128/24',
+                    'our_mac' : '08:00:2b:01:02:03',
+                    'our_money'     : '$1,445.5678'
+                })
+                self.expected_records.append({
+                    'our_decimal': decimal.Decimal('1234567890.01'),
+                    'our_text': 'some text',
+                    'our_bit': False,
+                    'our_integer': 44100,
+                    'our_double': decimal.Decimal('1.1'),
+                    'id': 3,
+                    'our_json': '{"secret": 55}',
+                    'our_boolean': True,
+                    'our_jsonb':  self.inserted_records[1]['our_jsonb'],
+                    'our_bigint': 1000000,
+                    'OUR TS': '1997-02-02T02:02:02.722184+00:00',
+                    'OUR TS TZ': '1997-02-02T07:02:02.722184+00:00',
+                    'OUR TIME': '12:11:10',
+                    'OUR TIME TZ': '12:11:10-04:00',
+                    'our_store': {"name" : "betty", "size" :"small"},
+                    'our_smallint': 1,
+                    'OUR DATE': '1998-03-04T00:00:00+00:00',
+                    'our_varchar': 'our_varchar',
+                    'our_uuid': self.inserted_records[2]['our_uuid'],
+                    'our_real': decimal.Decimal('1.2'),
+                    'our_varchar_10': 'varchar_10',
+                    'our_citext': self.inserted_records[2]['our_citext'],
+                    'our_inet'    : self.inserted_records[2]['our_inet'],
+                    'our_cidr'    : self.inserted_records[2]['our_cidr'],
+                    'our_mac'    : self.inserted_records[2]['our_mac'],
+                    'our_money'      : '$1,445.57'
+                })
 
-                insert_record(cur, test_table_name, self.rec_2)
-
+                for rec in self.inserted_records:
+                    db_utils.insert_record(cur, test_table_name, rec)
 
     @staticmethod
     def expected_check_streams():
@@ -216,7 +306,12 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         return { 'postgres_incremental_replication_test' }
 
     @staticmethod
-    def expected_pks():
+    def expected_replication_keys():
+        return {
+            'postgres_incremental_replication_test' : {'OUR TS TZ'}
+        }
+    @staticmethod
+    def expected_primary_keys():
         return {
             'postgres_incremental_replication_test' : {'id'}
         }
@@ -251,6 +346,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         # run in check mode
         check_job_name = runner.run_check_mode(self, conn_id)
+
         # verify check  exit codes
         exit_status = menagerie.get_exit_status(conn_id, check_job_name)
         menagerie.verify_check_exit_status(self, exit_status, check_job_name)
@@ -326,109 +422,337 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         record_count_by_stream = runner.examine_target_output_file(self,
                                                                    conn_id,
                                                                    self.expected_sync_streams(),
-                                                                   self.expected_pks())
+                                                                   self.expected_primary_keys())
 
-        self.assertEqual(record_count_by_stream, { test_table_name: 2})
+        self.assertEqual(record_count_by_stream, { test_table_name: 3})
         records_by_stream = runner.get_records_from_target_output()
-
         table_version = records_by_stream[test_table_name]['table_version']
-        self.assertEqual(3, len(records_by_stream[test_table_name]['messages']))
-        self.assertEqual(records_by_stream[test_table_name]['messages'][0]['action'], 'activate_version')
-        self.assertEqual(records_by_stream[test_table_name]['messages'][1]['action'], 'upsert')
-        self.assertEqual(records_by_stream[test_table_name]['messages'][2]['action'], 'upsert')
+        messages = records_by_stream[test_table_name]['messages']
 
-        # verifications about individual records
-        for table_name, recs in records_by_stream.items():
-            # verify the persisted schema was correct
-            self.assertEqual(recs['schema'],
-                             expected_schemas[table_name],
-                             msg="Persisted schema did not match expected schema for table `{}`.".format(table_name))
+        # verify the message actions match expectations
+        self.assertEqual(4, len(messages))
+        self.assertEqual(messages[0]['action'], 'activate_version')
+        self.assertEqual(messages[1]['action'], 'upsert')
+        self.assertEqual(messages[2]['action'], 'upsert')
+        self.assertEqual(messages[3]['action'], 'upsert')
 
-        expected_record_2 = {'our_decimal': decimal.Decimal('1234567890.01'),
-                             'our_text': 'some text',
-                             'our_bit': False,
-                             'our_integer': 44100,
-                             'our_double': decimal.Decimal('1.1'),
-                             'id': 1,
-                             'our_json': '{"secret": 55}',
-                             'our_boolean': True,
-                             'our_jsonb':  self.rec_1['our_jsonb'],
-                             'our_bigint': 1000000,
-                             'OUR TS': '1997-02-02T02:02:02.722184+00:00',
-                             'OUR TS TZ': '1997-02-02T07:02:02.722184+00:00',
-                             'OUR TIME': '12:11:10',
-                             'OUR TIME TZ': '12:11:10-04:00',
-                             'our_store': {"name" : "betty", "size" :"small"},
-                             'our_smallint': 1,
-                             'OUR DATE': '1998-03-04T00:00:00+00:00',
-                             'our_varchar': 'our_varchar',
-                             'our_uuid': self.rec_1['our_uuid'],
-                             'our_real': decimal.Decimal('1.2'),
-                             'our_varchar_10': 'varchar_10',
-                             'our_citext': self.rec_1['our_citext'],
-                             'our_inet'    : self.rec_1['our_inet'],
-                             'our_cidr'    : self.rec_1['our_cidr'],
-                             'our_mac'    : self.rec_1['our_mac'],
-                             'our_money'      : '$1,445.57'
+        # # verifications about individual records # TODO Do we need this if checking keys and values of records?
+        # for table_name, recs in records_by_stream.items():
+        #     # verify the persisted schema was correct
+        #     self.assertEqual(recs['schema'],
+        #                      expected_schemas[table_name],
+        #                      msg="Persisted schema did not match expected schema for table `{}`.".format(table_name))
 
-        }
-
-        expected_record_1 = {'our_decimal': decimal.Decimal('9876543210.02'),
-                             'OUR TIME': '10:09:08',
-                             'our_text': 'some text 2',
-                             'our_bit': True,
-                             'our_integer': 44101,
-                             'our_double': decimal.Decimal('1.1'),
-                             'id': 2,
-                             'our_json': '{"nymn": 77}',
-                             'our_boolean': True,
-                             'our_jsonb': '{"burgers": "good++"}',
-                             'our_bigint': 1000001,
-                             'OUR TIME TZ': '10:09:08-04:00',
-                             'our_store': {"name" : "betty", "dances" :"floor"},
-                             'OUR TS TZ': '1987-03-03T08:03:03.733184+00:00',
-                             'our_smallint': 2,
-                             'OUR DATE':     '1964-07-01T00:00:00+00:00',
-                             'our_varchar':  'our_varchar 2',
-                             'OUR TS':       '1987-03-03T03:03:03.733184+00:00',
-                             'our_uuid':     self.rec_2['our_uuid'],
-                             'our_real':     decimal.Decimal('1.2'),
-                             'our_varchar_10': 'varchar_10',
-                             'our_citext'  : self.rec_2['our_citext'],
-                             'our_inet'    : self.rec_2['our_inet'],
-                             'our_cidr'    : self.rec_2['our_cidr'],
-                             'our_mac'     : self.rec_2['our_mac'],
-                             'our_money'      : None}
-
-
-
-        actual_record_1 = records_by_stream[test_table_name]['messages'][1]
-        self.assertEqual(set(actual_record_1['data'].keys()), set(expected_record_1.keys()),
-                         msg="keys for expected_record_1 are wrong: {}".format(set(actual_record_1.keys()).symmetric_difference(set(expected_record_1.keys()))))
-
-        for k in actual_record_1['data'].keys():
-            self.assertEqual(actual_record_1['data'][k], expected_record_1[k], msg="{} != {} for key {}".format(actual_record_1['data'][k], expected_record_1[k], k))
-
-        actual_record_2 = records_by_stream[test_table_name]['messages'][2]
-        self.assertEqual(set(actual_record_1['data'].keys()), set(expected_record_2.keys()),
-                         msg="keys for expected_record_2 are wrong: {}".format(set(actual_record_2.keys()).symmetric_difference(set(expected_record_2.keys()))))
-
-        for k in actual_record_2['data'].keys():
-            self.assertEqual(actual_record_2['data'][k], expected_record_2[k], msg="{} != {} for key {}".format(actual_record_2['data'][k], expected_record_2[k], k))
-
+        self.assertDictEqual(self.expected_records[0], messages[1]['data'])
+        self.assertDictEqual(self.expected_records[1], messages[2]['data'])
+        self.assertDictEqual(self.expected_records[2], messages[3]['data'])
         print("records are correct")
 
         # verify state and bookmarks
         state = menagerie.get_state(conn_id)
         bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
-
-
         self.assertIsNone(bookmark.get('lsn'),
                           msg="expected bookmark for stream ROOT-CHICKEN to have NO lsn because we are using incremental replication")
         self.assertEqual(bookmark['version'], table_version,
                          msg="expected bookmark for stream ROOT-CHICKEN to match version")
 
+        #----------------------------------------------------------------------
+        # invoke the sync job AGAIN following various manipulations to the data
+        #----------------------------------------------------------------------
+
+        # make changes to the database between syncs
+        with db_utils.get_test_connection('dev') as conn:
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+
+                # TODO DO all changes at once
+                # [x] Insert a record with a lower replication-key value (it shouldn't replicate)
+                # [x] Insert a record with a higher replication-key value
+                # [x] Insert a record with a higher replication-key value that we will delete
+                # [x] Update a record with a higher replication-key value
+                # [] Update a record with a lower replication-key value
+                # [x] Delete a newly inserted record
+                # [] Delete a pre-existing record
+
+                # insert more fixture data ...
+                # a record with a replication-key value that is lower than the previous bookmark
+                nyc_tz = pytz.timezone('America/New_York')
+                our_time_offset = "-04:00"
+                our_ts = datetime.datetime(1996, 4, 4, 4, 4, 4, 733184)
+                our_ts_tz = nyc_tz.localize(our_ts)
+                our_time  = datetime.time(6,6,6)
+                our_time_tz = our_time.isoformat() + our_time_offset
+                our_date = datetime.date(1970, 7, 1)
+                my_uuid =  str(uuid.uuid1())
+                self.inserted_records.append({
+                    'our_varchar' : "our_varchar 2",
+                    'our_varchar_10' : "varchar_10",
+                    'our_text' : "some text 2",
+                    'our_integer' : 44101,
+                    'our_smallint' : 2,
+                    'our_bigint' : 1000001,
+                    'our_decimal' : decimal.Decimal('9876543210.02'),
+                    quote_ident('OUR TS', cur) : our_ts,
+                    quote_ident('OUR TS TZ', cur) : our_ts_tz,
+                    quote_ident('OUR TIME', cur) : our_time,
+                    quote_ident('OUR TIME TZ', cur) : our_time_tz,
+                    quote_ident('OUR DATE', cur) : our_date,
+                    'our_double' : decimal.Decimal('1.1'),
+                    'our_real' : decimal.Decimal('1.2'),
+                    'our_boolean' : True,
+                    'our_bit' : '1',
+                    'our_json' : json.dumps({'nymn' : 77}),
+                    'our_jsonb' : json.dumps({'burgers' : 'good++'}),
+                    'our_uuid' : my_uuid,
+                    'our_citext' : 'cyclops 2',
+                    'our_store' : 'dances=>"floor",name=>"betty"',
+                    'our_cidr' : '192.168.101.128/25',
+                    'our_inet': '192.168.101.128/24',
+                    'our_mac' : '08:00:2b:01:02:04',
+                    'our_money': '$0.98789'
+                })
+                self.expected_records.append({
+                    'id': 4,
+                    'our_varchar' : "our_varchar 2",
+                    'our_varchar_10' : "varchar_10",
+                    'our_text' : "some text 2",
+                    'our_integer' : 44101,
+                    'our_smallint' : 2,
+                    'our_bigint' : 1000001,
+                    'our_decimal' : decimal.Decimal('9876543210.02'),
+                    'OUR TS' : '1996-04-04T04:04:04.733184+00:00',
+                    'OUR TS TZ' : '1996-04-04T08:04:04.733184+00:00',
+                    'OUR TIME' : '06:06:06',
+                    'OUR TIME TZ' : '06:06:06-04:00',
+                    'OUR DATE' : '1970-07-01T00:00:00+00:00',
+                    'our_double' : decimal.Decimal('1.1'),
+                    'our_real' : decimal.Decimal('1.2'),
+                    'our_boolean' : True,
+                    'our_bit' : True,
+                    'our_json': '{"nymn": 77}',
+                    'our_jsonb': '{"burgers": "good++"}',
+                    'our_uuid': self.inserted_records[-1]['our_uuid'],
+                    'our_citext': self.inserted_records[-1]['our_citext'],
+                    'our_store': {"name" : "betty", "dances" :"floor"},
+                    'our_cidr': self.inserted_records[-1]['our_cidr'],
+                    'our_inet': self.inserted_records[-1]['our_inet'],
+                    'our_mac': self.inserted_records[-1]['our_mac'],
+                    'our_money': '$0.99'
+                })
+                # a record with a replication-key value that is higher than the previous bookmark
+                our_ts = datetime.datetime(2007, 1, 1, 12, 12, 12, 222111)
+                nyc_tz = pytz.timezone('America/New_York')
+                our_ts_tz = nyc_tz.localize(our_ts)
+                our_time  = datetime.time(12,11,10)
+                our_time_tz = our_time.isoformat() + "-04:00"
+                our_date = datetime.date(1999, 9, 9)
+                my_uuid =  str(uuid.uuid1())
+                self.inserted_records.append({
+                    'our_varchar' : "our_varchar 4",
+                    'our_varchar_10' : "varchar_3",
+                    'our_text' : "some text 4",
+                    'our_integer' : 55200,
+                    'our_smallint' : 1,
+                    'our_bigint' : 100000,
+                    'our_decimal' : decimal.Decimal('1234567899.99'),
+                    quote_ident('OUR TS', cur) : our_ts,
+                    quote_ident('OUR TS TZ', cur) :  our_ts_tz,
+                    quote_ident('OUR TIME', cur) : our_time,
+                    quote_ident('OUR TIME TZ', cur) : our_time_tz,
+                    quote_ident('OUR DATE', cur) : our_date,
+                    'our_double' : decimal.Decimal('1.1'),
+                    'our_real' : decimal.Decimal('1.2'),
+                    'our_boolean' : True,
+                    'our_bit' : '0',
+                    'our_json' : json.dumps('some string'),
+                    'our_jsonb' : json.dumps(['burgers are good']),
+                    'our_uuid' : my_uuid,
+                    'our_store' : 'size=>"small",name=>"betty"',
+                    'our_citext' : 'cyclops 3',
+                    'our_cidr' : '192.168.101.128/25',
+                    'our_inet': '192.168.101.128/24',
+                    'our_mac' : '08:00:2b:01:02:04',
+                    'our_money':  None,
+                })
+                self.expected_records.append({
+                    'our_decimal': decimal.Decimal('1234567899.99'),
+                    'our_text': 'some text 4',
+                    'our_bit': False,
+                    'our_integer': 55200,
+                    'our_double': decimal.Decimal('1.1'),
+                    'id': 5,
+                    'our_json': self.inserted_records[-1]['our_json'],
+                    'our_boolean': True,
+                    'our_jsonb': self.inserted_records[-1]['our_jsonb'],
+                    'our_bigint': 100000,
+                    'OUR TS': '2007-01-01T12:12:12.222111+00:00',
+                    'OUR TS TZ': '2007-01-01T17:12:12.222111+00:00',
+                    'OUR TIME': '12:11:10',
+                    'OUR TIME TZ': '12:11:10-04:00',
+                    'our_store': {"name" : "betty", "size" :"small"},
+                    'our_smallint': 1,
+                    'OUR DATE': '1999-09-09T00:00:00+00:00',
+                    'our_varchar': 'our_varchar 4',
+                    'our_uuid': self.inserted_records[-1]['our_uuid'],
+                    'our_real': decimal.Decimal('1.2'),
+                    'our_varchar_10': 'varchar_3',
+                    'our_citext' : 'cyclops 3',
+                    'our_cidr' : '192.168.101.128/25',
+                    'our_inet': '192.168.101.128/24',
+                    'our_mac' : '08:00:2b:01:02:04',
+                    'our_money' : None
+                })
+                # a record with a replication-key value that is higher than the previous bookmark (to be deleted)
+                our_ts = datetime.datetime(2111, 1, 1, 12, 12, 12, 222111)
+                nyc_tz = pytz.timezone('America/New_York')
+                our_ts_tz = nyc_tz.localize(our_ts)
+                our_time  = datetime.time(12,11,10)
+                our_time_tz = our_time.isoformat() + "-04:00"
+                our_date = datetime.date(1999, 9, 9)
+                my_uuid =  str(uuid.uuid1())
+                self.inserted_records.append({
+                    'our_varchar' : "our_varchar 4",
+                    'our_varchar_10' : "varchar_3",
+                    'our_text' : "some text 4",
+                    'our_integer' : 55200,
+                    'our_smallint' : 1,
+                    'our_bigint' : 100000,
+                    'our_decimal' : decimal.Decimal('1234567899.99'),
+                    quote_ident('OUR TS', cur) : our_ts,
+                    quote_ident('OUR TS TZ', cur) :  our_ts_tz,
+                    quote_ident('OUR TIME', cur) : our_time,
+                    quote_ident('OUR TIME TZ', cur) : our_time_tz,
+                    quote_ident('OUR DATE', cur) : our_date,
+                    'our_double' : decimal.Decimal('1.1'),
+                    'our_real' : decimal.Decimal('1.2'),
+                    'our_boolean' : True,
+                    'our_bit' : '0',
+                    'our_json' : json.dumps('some string'),
+                    'our_jsonb' : json.dumps(['burgers are good']),
+                    'our_uuid' : my_uuid,
+                    'our_store' : 'size=>"small",name=>"betty"',
+                    'our_citext' : 'cyclops 3',
+                    'our_cidr' : '192.168.101.128/25',
+                    'our_inet': '192.168.101.128/24',
+                    'our_mac' : '08:00:2b:01:02:04',
+                    'our_money':  None,
+                })
+                self.expected_records.append({
+                    'our_decimal': decimal.Decimal('1234567899.99'),
+                    'our_text': 'some text 4',
+                    'our_bit': False,
+                    'our_integer': 55200,
+                    'our_double': decimal.Decimal('1.1'),
+                    'id': 6,
+                    'our_json': self.inserted_records[-1]['our_json'],
+                    'our_boolean': True,
+                    'our_jsonb': self.inserted_records[-1]['our_jsonb'],
+                    'our_bigint': 100000,
+                    'OUR TS': '2111-01-01T12:12:12.222111+00:00',
+                    'OUR TS TZ': '2111-01-01T17:12:12.222111+00:00',
+                    'OUR TIME': '12:11:10',
+                    'OUR TIME TZ': '12:11:10-04:00',
+                    'our_store': {"name" : "betty", "size" :"small"},
+                    'our_smallint': 1,
+                    'OUR DATE': '1999-09-09T00:00:00+00:00',
+                    'our_varchar': 'our_varchar 4',
+                    'our_uuid': self.inserted_records[-1]['our_uuid'],
+                    'our_real': decimal.Decimal('1.2'),
+                    'our_varchar_10': 'varchar_3',
+                    'our_citext' : 'cyclops 3',
+                    'our_cidr' : '192.168.101.128/25',
+                    'our_inet': '192.168.101.128/24',
+                    'our_mac' : '08:00:2b:01:02:04',
+                    'our_money' : None
+                })
+
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-3])
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-2])
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+                # update a record with a replication-key value that is higher than the previous bookmark
+                canon_table_name = db_utils.canonicalized_table_name(cur, test_schema_name, test_table_name)
+                record_pk = 1
+                our_ts = datetime.datetime(2021, 4, 4, 4, 4, 4, 733184)
+                our_ts_tz = nyc_tz.localize(our_ts)
+                updated_data = {
+                    "OUR TS TZ": our_ts_tz,
+                    "our_double": decimal.Decimal("6.6"),
+                    "our_money": "$0.00"
+                }
+                self.expected_records[0]["OUR TS TZ"] = '2021-04-04T08:04:04.733184+00:00'
+                self.expected_records[0]["our_double"] = decimal.Decimal("6.6")
+                self.expected_records[0]["our_money"] = "$0.00"
+                db_utils.update_record(cur, canon_table_name, record_pk, updated_data)
+
+                # update a record with a replication-key value that is lower than the previous bookmark
+                canon_table_name = db_utils.canonicalized_table_name(cur, test_schema_name, test_table_name)
+                record_pk = 2
+                our_ts = datetime.datetime(1990, 4, 4, 4, 4, 4, 733184)
+                our_ts_tz = nyc_tz.localize(our_ts)
+                updated_data = {
+                    "OUR TS TZ": our_ts_tz,
+                    "our_double": decimal.Decimal("6.6"),
+                    "our_money": "$0.00"
+                }
+                self.expected_records[0]["OUR TS TZ"] = '2021-04-04T08:04:04.733184+00:00'
+                self.expected_records[0]["our_double"] = decimal.Decimal("6.6")
+                self.expected_records[0]["our_money"] = "$0.00"
+                db_utils.update_record(cur, canon_table_name, record_pk, updated_data)
+
+                # delete some records
+                record_pk = 5
+                db_utils.delete_record(cur, canon_table_name, record_pk)
+
+        # Sync Job 2
+        sync_job_name = runner.run_sync_mode(self, conn_id)
+
+        # verify tap and target exit codes
+        exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
+        menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
+
+        # grab records
+        record_count_by_stream = runner.examine_target_output_file(
+            self, conn_id, self.expected_sync_streams(), self.expected_primary_keys()
+        )
+        records_by_stream = runner.get_records_from_target_output()
+        messages = records_by_stream[test_table_name]['messages']
+
+        # verify the expected number of records were synced
+        self.assertEqual(3, record_count_by_stream[test_table_name])
+
+        # verify the message actions match expectations
+        self.assertEqual(messages[0]['action'], 'activate_version')
+        self.assertEqual(messages[1]['action'], 'upsert')
+        self.assertEqual(messages[2]['action'], 'upsert')
+        self.assertEqual(messages[3]['action'], 'upsert')
+
+        # verify the first record was the bookmarked record from the previous sync
+        self.assertDictEqual(self.expected_records[2], messages[1]['data'])
+
+
+        # verify the expected updated record with a higher replication-key value was replicated
+        self.assertDictEqual(self.expected_records[0], messages[2]['data'])
+
+        # verify the expected inserted record with a lower replication-key value was NOT replicated
+        actual_record_ids = [message['data']['id'] for message in messages[1:]]
+        expected_record_id = self.expected_records[3]['id']
+        self.assertNotIn(expected_record_id, actual_record_ids)
+
+        # verify the deleted  record with a lower replication-key value was NOT replicated
+        expected_record_id = self.expected_records[4]['id']
+        self.assertNotIn(expected_record_id, actual_record_ids)
+
+        # verify the expected updated record with a lower replication-key value was NOT replicated
+        expected_record_id = self.expected_records[1]['id']
+        self.assertNotIn(expected_record_id, actual_record_ids)
+
+        # verify the expected inserted record with a higher replication-key value was replicated
+        self.assertDictEqual(self.expected_records[5], messages[3]['data'])
+
+        #table version did NOT change
+        self.assertEqual(records_by_stream[test_table_name]['table_version'], table_version)
 
         #----------------------------------------------------------------------
         # invoke the sync job AGAIN and get 1 record(the one matching the bookmark)
@@ -441,177 +765,35 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
         menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
 
-
-        record_count_by_stream = runner.examine_target_output_file(self,
-                                                                   conn_id,
-                                                                   self.expected_sync_streams(),
-                                                                   self.expected_pks())
-
-
-        self.assertEqual(record_count_by_stream, { test_table_name: 1})
+        # get records
+        record_count_by_stream = runner.examine_target_output_file(
+            self, conn_id,self.expected_sync_streams(), self.expected_primary_keys()
+        )
         records_by_stream = runner.get_records_from_target_output()
+        messages = records_by_stream[test_table_name]['messages']
 
-        self.assertEqual(2, len(records_by_stream[test_table_name]['messages']))
-        self.assertEqual(records_by_stream[test_table_name]['messages'][0]['action'], 'activate_version')
-        self.assertEqual(records_by_stream[test_table_name]['messages'][1]['action'], 'upsert')
-        #table version did NOT change
+        # verify the expected number of records were replicated
+        self.assertEqual(1, record_count_by_stream[test_table_name])
+
+        # verify messages match our expectations
+        self.assertEqual(2, len(messages))
+        self.assertEqual(messages[0]['action'], 'activate_version')
+        self.assertEqual(messages[1]['action'], 'upsert')
         self.assertEqual(records_by_stream[test_table_name]['table_version'], table_version)
 
-        # verifications about individual records
-        for stream, recs in records_by_stream.items():
-            # verify the persisted schema was correct
-            self.assertEqual(recs['schema'],
-                             expected_schemas[stream],
-                             msg="Persisted schema did not match expected schema for stream `{}`.".format(stream))
+        # verify only the previously bookmarked record was synced
+        self.assertDictEqual(self.expected_records[5], messages[1]['data'])
 
-        actual_record_3 = records_by_stream[test_table_name]['messages'][1]
-        self.assertEqual(set(actual_record_3['data'].keys()), set(expected_record_2.keys()),
-                         msg="keys for expected_record_1 are wrong: {}".format(set(actual_record_3.keys()).symmetric_difference(set(expected_record_2.keys()))))
-
-        expected_record_3 = expected_record_2
-        for k in actual_record_3['data'].keys():
-            self.assertEqual(actual_record_3['data'][k], expected_record_3[k], msg="{} != {} for key {}".format(actual_record_3['data'][k], expected_record_3[k], k))
-        print("records are correct")
-
+        # get bookmark
         state = menagerie.get_state(conn_id)
         bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
+        expected_replication_key = list(self.expected_replication_keys()[test_table_name])[0]
 
-        self.assertIsNone(bookmark.get('lsn'),
-                          msg="expected bookmark for stream ROOT-CHICKEN to have NO lsn because we are using incremental replication")
-        self.assertEqual(bookmark['version'], table_version,
-                         msg="expected bookmark for stream ROOT-CHICKEN to match version")
-
-
-        self.assertEqual(bookmark['replication_key'], 'OUR TS TZ')
-        self.assertEqual(bookmark['replication_key_value'], '1997-02-02T07:02:02.722184+00:00')
-
-        #----------------------------------------------------------------------
-        # insert new record with higher replication_key value and invoke the sync job AGAIN and get new record
-        #----------------------------------------------------------------------
-        our_ts = datetime.datetime(2111, 1, 1, 12, 12, 12, 222111)
-        nyc_tz = pytz.timezone('America/New_York')
-        our_ts_tz = nyc_tz.localize(our_ts)
-        our_time  = datetime.time(12,11,10)
-        our_time_tz = our_time.isoformat() + "-04:00"
-        our_date = datetime.date(1999, 9, 9)
-        my_uuid =  str(uuid.uuid1())
-        with db_utils.get_test_connection('dev') as conn:
-            conn.autocommit = True
-            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-
-                self.rec_3 = {'our_varchar' : "our_varchar 4",
-                              'our_varchar_10' : "varchar_3",
-                              'our_text' : "some text 4",
-                              'our_integer' : 55200,
-                              'our_smallint' : 1,
-                              'our_bigint' : 100000,
-                              'our_decimal' : decimal.Decimal('1234567899.99'),
-                              quote_ident('OUR TS', cur) : our_ts,
-                              quote_ident('OUR TS TZ', cur) :  our_ts_tz,
-                              quote_ident('OUR TIME', cur) : our_time,
-                              quote_ident('OUR TIME TZ', cur) : our_time_tz,
-                              quote_ident('OUR DATE', cur) : our_date,
-                              'our_double' : decimal.Decimal('1.1'),
-                              'our_real' : decimal.Decimal('1.2'),
-                              'our_boolean' : True,
-                              'our_bit' : '0',
-                              'our_json' : json.dumps('some string'),
-                              'our_jsonb' : json.dumps(['burgers are good']),
-                              'our_uuid' : my_uuid,
-                              'our_store' : 'size=>"small",name=>"betty"',
-                              'our_citext' : 'cyclops 3',
-                              'our_cidr' : '192.168.101.128/25',
-                              'our_inet': '192.168.101.128/24',
-                              'our_mac' : '08:00:2b:01:02:04',
-                              'our_money':  None,
-
-                }
-                insert_record(cur, test_table_name, self.rec_3)
-
-        #Sync Job 3
-        sync_job_name = runner.run_sync_mode(self, conn_id)
-        exit_status = menagerie.get_exit_status(conn_id, sync_job_name)
-        menagerie.verify_sync_exit_status(self, exit_status, sync_job_name)
-
-        record_count_by_stream = runner.examine_target_output_file(self,
-                                                                   conn_id,
-                                                                   self.expected_sync_streams(),
-                                                                   self.expected_pks())
-
-
-        self.assertEqual(record_count_by_stream, { test_table_name: 2})
-        records_by_stream = runner.get_records_from_target_output()
-
-
-        self.assertEqual(3, len(records_by_stream[test_table_name]['messages']))
-        #table version did NOT change
-        self.assertEqual(records_by_stream[test_table_name]['table_version'], table_version)
-        self.assertEqual(records_by_stream[test_table_name]['messages'][1]['action'], 'upsert')
-        self.assertEqual(records_by_stream[test_table_name]['messages'][2]['action'], 'upsert')
-
-        # verificationsg about individual records
-        for table_name, recs in records_by_stream.items():
-            # verify the persisted schema was correct
-            self.assertEqual(recs['schema'],
-                             expected_schemas[table_name],
-                             msg="Persisted schema did not match expected schema for table `{}`.".format(table_name))
-
-        #check 1st record
-        actual_record_4 = records_by_stream[test_table_name]['messages'][1]
-        expected_record_4 = expected_record_2
-        self.assertEqual(set(actual_record_4['data'].keys()), set(expected_record_1.keys()),
-                         msg="keys for expected_record_4 are wrong: {}".format(set(actual_record_4.keys()).symmetric_difference(set(expected_record_1.keys()))))
-        for k in actual_record_4['data'].keys():
-            self.assertEqual(actual_record_4['data'][k], expected_record_4[k], msg="{} != {} for key {}".format(actual_record_4['data'][k], expected_record_4[k], k))
-
-
-        #check 2nd record
-        actual_record_5 = records_by_stream[test_table_name]['messages'][2]
-        expected_record_5 = {'our_decimal': decimal.Decimal('1234567899.99'),
-                             'our_text': 'some text 4',
-                             'our_bit': False,
-                             'our_integer': 55200,
-                             'our_double': decimal.Decimal('1.1'),
-                             'id': 3,
-                             'our_json': self.rec_3['our_json'],
-                             'our_boolean': True,
-                             'our_jsonb': self.rec_3['our_jsonb'],
-                             'our_bigint': 100000,
-                             'OUR TS': '2111-01-01T12:12:12.222111+00:00',
-                             'OUR TS TZ': '2111-01-01T17:12:12.222111+00:00',
-                             'OUR TIME': '12:11:10',
-                             'OUR TIME TZ': '12:11:10-04:00',
-                             'our_store': {"name" : "betty", "size" :"small"},
-                             'our_smallint': 1,
-                             'OUR DATE': '1999-09-09T00:00:00+00:00',
-                             'our_varchar': 'our_varchar 4',
-                             'our_uuid': self.rec_3['our_uuid'],
-                             'our_real': decimal.Decimal('1.2'),
-                             'our_varchar_10': 'varchar_3',
-                             'our_citext' : 'cyclops 3',
-                             'our_cidr' : '192.168.101.128/25',
-                             'our_inet': '192.168.101.128/24',
-                             'our_mac' : '08:00:2b:01:02:04',
-                             'our_money' : None
-        }
-
-        self.assertEqual(set(actual_record_5['data'].keys()), set(expected_record_5.keys()),
-                         msg="keys for expected_record_5 are wrong: {}".format(set(actual_record_5.keys()).symmetric_difference(set(expected_record_5.keys()))))
-        for k in actual_record_5['data'].keys():
-            self.assertEqual(actual_record_5['data'][k], expected_record_5[k], msg="{} != {} for key {}".format(actual_record_5['data'][k], expected_record_5[k], k))
-        print("records are correct")
-
-        state = menagerie.get_state(conn_id)
-        bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
-        self.assertIsNone(bookmark.get('lsn'),
-                          msg="expected bookmark for stream ROOT-CHICKEN to have NO lsn because we are using incremental replication")
-        self.assertEqual(bookmark['version'], table_version,
-                         msg="expected bookmark for stream ROOT-CHICKEN to match version")
-
-        self.assertEqual(bookmark['replication_key'], 'OUR TS TZ')
-        self.assertEqual(bookmark['replication_key_value'],'2111-01-01T17:12:12.222111+00:00')
-
-
+        # verify the bookmarked state matches our expectations
+        self.assertIsNone(bookmark.get('lsn'))
+        self.assertEqual(bookmark['version'], table_version)
+        self.assertEqual(bookmark['replication_key'], expected_replication_key)
+        self.assertEqual(bookmark['replication_key_value'], self.expected_records[5][expected_replication_key])
 
 
 SCENARIOS.add(PostgresIncrementalTable)
