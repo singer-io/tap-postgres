@@ -53,13 +53,13 @@ class PostgresDiscovery(unittest.TestCase):
         "XML",
     }
     default_replication_method = ""
-    create_table_sql = """"""
 
     def tearDown(self):
-        with db_utils.get_test_connection(test_db) as conn:
-            conn.autocommit = True
-            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
+        pass
+        # with db_utils.get_test_connection(test_db) as conn:
+        #     conn.autocommit = True
+        #     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        #         cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
 
     def setUp(self):
         db_utils.ensure_environment_variables_set()
@@ -71,63 +71,61 @@ class PostgresDiscovery(unittest.TestCase):
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
-                db_utils.ensure_replication_slot(cur, test_db)
+                # db_utils.ensure_replication_slot(cur, test_db)
 
                 canonicalized_table_name = db_utils.canonicalized_table_name(cur, test_schema_name, test_table_name)
 
-                self.create_table_sql = """
-CREATE TABLE {} (
-                id            SERIAL PRIMARY KEY,
-                our_varchar    VARCHAR,
-                our_varchar_10 VARCHAR(10),
-                our_text       TEXT,
-                our_text_2     TEXT,
-                our_integer    INTEGER,
-                our_smallint   SMALLINT,
-                our_bigint     BIGINT,
-                our_decimal    NUMERIC(12,2),
-                "OUR TS"       TIMESTAMP WITHOUT TIME ZONE,
-                "OUR TS TZ"    TIMESTAMP WITH TIME ZONE,
-                "OUR TIME"     TIME WITHOUT TIME ZONE,
-                "OUR TIME TZ"  TIME WITH TIME ZONE,
-                "OUR DATE"     DATE,
-                our_double     DOUBLE PRECISION,
-                our_real       REAL,
-                our_boolean    BOOLEAN,
-                our_bit        BIT(1),
-                our_json       JSON,
-                our_jsonb      JSONB,
-                our_uuid       UUID,
-                our_store      HSTORE,
-                our_citext     CITEXT,
-                our_cidr       cidr,
-                our_inet       inet,
-                our_mac            macaddr,
-                our_alignment_enum ALIGNMENT,
-                our_money          money,
-                invalid_bigserial  BIGSERIAL,
-                invalid_bit_varying BIT VARYING,
-                invalid_box         BOX,
-                invalid_bytea       BYTEA,
-                invalid_circle      CIRCLE,
-                invalid_interval    INTERVAL,
-                invalid_line        LINE,
-                invalid_lseg        LSEG,
-                invalid_path        PATH,
-                invalid_pg_lsn      PG_LSN,
-                invalid_point       POINT,
-                invalid_polygon     POLYGON,
-                invalid_serial      SERIAL,
-                invalid_smallserial SMALLSERIAL,
-                invalid_tsquery     TSQUERY,
-                invalid_tsvector    TSVECTOR,
+                create_table_sql = """
+CREATE TABLE {} (id                   SERIAL PRIMARY KEY,
+                our_varchar           VARCHAR,
+                our_varchar_10        VARCHAR(10),
+                our_text              TEXT,
+                our_text_2            TEXT,
+                our_integer           INTEGER,
+                our_smallint          SMALLINT,
+                our_bigint            BIGINT,
+                our_decimal           NUMERIC(12,2),
+                "OUR TS"              TIMESTAMP WITHOUT TIME ZONE,
+                "OUR TS TZ"           TIMESTAMP WITH TIME ZONE,
+                "OUR TIME"            TIME WITHOUT TIME ZONE,
+                "OUR TIME TZ"         TIME WITH TIME ZONE,
+                "OUR DATE"            DATE,
+                our_double            DOUBLE PRECISION,
+                our_real              REAL,
+                our_boolean           BOOLEAN,
+                our_bit               BIT(1),
+                our_json              JSON,
+                our_jsonb             JSONB,
+                our_uuid              UUID,
+                our_store             HSTORE,
+                our_citext            CITEXT,
+                our_cidr              cidr,
+                our_inet              inet,
+                our_mac               macaddr,
+                our_alignment_enum    ALIGNMENT,
+                our_money             money,
+                invalid_bigserial     BIGSERIAL,
+                invalid_bit_varying   BIT VARYING,
+                invalid_box           BOX,
+                invalid_bytea         BYTEA,
+                invalid_circle        CIRCLE,
+                invalid_interval      INTERVAL,
+                invalid_line          LINE,
+                invalid_lseg          LSEG,
+                invalid_path          PATH,
+                invalid_pg_lsn        PG_LSN,
+                invalid_point         POINT,
+                invalid_polygon       POLYGON,
+                invalid_serial        SERIAL,
+                invalid_smallserial   SMALLSERIAL,
+                invalid_tsquery       TSQUERY,
+                invalid_tsvector      TSVECTOR,
                 invalid_txid_snapshot TXID_SNAPSHOT,
-                invalid_xml           XML
-                )
+                invalid_xml           XML)
                 """.format(canonicalized_table_name)
 
-                cur = db_utils.ensure_table(conn, cur, test_schema_name, test_table_name)
-                cur.execute(self.create_table_sql)
+                cur = db_utils.ensure_fresh_table(conn, cur, test_schema_name, test_table_name)
+                cur.execute(create_table_sql)
 
                 #insert fixture data 1
                 our_ts = datetime.datetime(1997, 2, 2, 2, 2, 2, 722184)
@@ -295,7 +293,6 @@ CREATE TABLE {} (
         }
         if not original_properties:
             if self.default_replication_method is self.LOG_BASED:
-                return_value['logical_poll_total_seconds'] = '10'
                 return_value['wal2json_message_format'] = '1'
 
             return_value['default_replication_method'] = self.default_replication_method
@@ -313,6 +310,10 @@ CREATE TABLE {} (
         incremental_conn_id = connections.ensure_connection(self, original_properties=False)
         self.discovery_test(incremental_conn_id)
 
+        # NB | We are able to generate a connection and run discovery with a default replication
+        #      method of logical replication WITHOUT selecting a replication slot. This is not
+        #      ideal behavior. This BUG should not be carried over into hp-postgres, but will not
+        #      be fixed for this tap.
         self.default_replication_method = self.LOG_BASED
         log_based_conn_id = connections.ensure_connection(self, original_properties=False)
         self.discovery_test(log_based_conn_id)
