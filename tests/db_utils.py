@@ -72,11 +72,9 @@ def ensure_fresh_table(conn, conn_cursor, schema_name, table_name):
     conn_cursor2.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
     if conn_cursor2.fetchone()[0] is None:
         conn_cursor2.execute(""" CREATE EXTENSION hstore; """)
-
-    # TODO might need this if calling this method and log-based replication was used
-    # conn_cursor2.execute(""" CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;""")
-    # conn_cursor2.execute(""" DROP TYPE IF EXISTS ALIGNMENT CASCADE """)
-    # conn_cursor2.execute(""" CREATE TYPE ALIGNMENT AS ENUM ('good', 'bad', 'ugly') """)
+        conn_cursor2.execute(""" CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;""")
+        conn_cursor2.execute(""" DROP TYPE IF EXISTS ALIGNMENT CASCADE """)
+        conn_cursor2.execute(""" CREATE TYPE ALIGNMENT AS ENUM ('good', 'bad', 'ugly') """)
 
     return conn_cursor2
 

@@ -8,7 +8,6 @@ import json
 import pytz
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
-from singer import metadata
 from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
@@ -368,7 +367,6 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # perform table selection
         print('selecting {} and all fields within the table'.format(test_table_name))
         schema_and_metadata = menagerie.get_annotated_schema(conn_id, test_catalog['stream_id'])
-        md = schema_and_metadata['metadata']
         additional_md = [{ "breadcrumb" : [], "metadata" : {'replication-method' : 'INCREMENTAL', 'replication-key' : 'OUR TS TZ'}}]
         _ = connections.select_catalog_and_fields_via_metadata(conn_id, test_catalog, schema_and_metadata, additional_md)
 
