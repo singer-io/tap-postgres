@@ -339,13 +339,15 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 'default_replication_method' : 'LOG_BASED'
         }
 
-    def expected_ts_tz(self, our_ts_tz):
+    @staticmethod
+    def expected_ts_tz(our_ts_tz):
         our_ts_tz_utc = our_ts_tz.astimezone(pytz.utc)
         expected_value = datetime.datetime.strftime(our_ts_tz_utc, "%Y-%m-%dT%H:%M:%S.%f+00:00")
 
         return expected_value
 
-    def expected_ts(self, our_ts):
+    @staticmethod
+    def expected_ts(our_ts):
         expected_value = datetime.datetime.strftime(our_ts, "%Y-%m-%dT%H:%M:%S.%f+00:00")
 
         return expected_value

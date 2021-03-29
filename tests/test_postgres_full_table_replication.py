@@ -8,7 +8,6 @@ import json
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
 import pytz
-from singer import metadata
 from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
@@ -340,13 +339,15 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 'itersize' : '10'
         }
 
-    def expected_ts_tz(self, our_ts_tz):
+    @staticmethod
+    def expected_ts_tz(our_ts_tz):
         our_ts_tz_utc = our_ts_tz.astimezone(pytz.utc)
         expected_value = datetime.datetime.strftime(our_ts_tz_utc, "%Y-%m-%dT%H:%M:%S.%f+00:00")
 
         return expected_value
 
-    def expected_ts(self, our_ts):
+    @staticmethod
+    def expected_ts(our_ts):
         expected_value = datetime.datetime.strftime(our_ts, "%Y-%m-%dT%H:%M:%S.%f+00:00")
 
         return expected_value
