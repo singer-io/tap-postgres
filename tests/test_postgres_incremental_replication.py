@@ -145,7 +145,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 })
                 self.expected_records.append({
                     'our_decimal': decimal.Decimal('9876543210.02'),
-                    'OUR TIME': '10:09:08',
+                    'OUR TIME': str(our_time),
                     'our_text': 'some text 2',
                     'our_bit': True,
                     'our_integer': 44101,
@@ -155,13 +155,13 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_boolean': True,
                     'our_jsonb': '{"burgers": "good++"}',
                     'our_bigint': 1000001,
-                    'OUR TIME TZ': '10:09:08-04:00',
+                    'OUR TIME TZ': str(our_time_tz),
                     'our_store': {"name" : "betty", "dances" :"floor"},
-                    'OUR TS TZ': '1977-03-03T08:03:03.733184+00:00',
+                    'OUR TS TZ': self.expected_ts_tz(our_ts_tz),
                     'our_smallint': 2,
                     'OUR DATE':     '1964-07-01T00:00:00+00:00',
                     'our_varchar':  'our_varchar 2',
-                    'OUR TS':       '1977-03-03T03:03:03.733184+00:00',
+                    'OUR TS':       self.expected_ts(our_ts),
                     'our_uuid':     self.inserted_records[0]['our_uuid'],
                     'our_real':     decimal.Decimal('1.2'),
                     'our_varchar_10': 'varchar_10',
@@ -171,7 +171,6 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_mac'     : self.inserted_records[0]['our_mac'],
                     'our_money'      : None
                 })
-
                 # record 2
                 our_ts = datetime.datetime(1987, 2, 2, 2, 2, 2, 722184)
                 our_ts_tz = nyc_tz.localize(our_ts)
@@ -215,10 +214,10 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_boolean': True,
                     'our_jsonb':  self.inserted_records[1]['our_jsonb'],
                     'our_bigint': 1000000,
-                    'OUR TS': '1987-02-02T02:02:02.722184+00:00',
-                    'OUR TS TZ': '1987-02-02T07:02:02.722184+00:00',
-                    'OUR TIME': '12:11:10',
-                    'OUR TIME TZ': '12:11:10-04:00',
+                    'OUR TS': self.expected_ts(our_ts),
+                    'OUR TS TZ': self.expected_ts_tz(our_ts_tz),
+                    'OUR TIME': str(our_time),
+                    'OUR TIME TZ': str(our_time_tz),
                     'our_store': {"name" : "betty", "size" :"small"},
                     'our_smallint': 1,
                     'OUR DATE': '1998-03-04T00:00:00+00:00',
@@ -250,7 +249,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     quote_ident('OUR TIME', cur) : our_time,
                     quote_ident('OUR TIME TZ', cur) : our_time_tz,
                     quote_ident('OUR DATE', cur) : our_date,
-                    'our_double' : decimal.Decimal('1.1'),
+                    'our_double' : '1.1',
                     'our_real' : decimal.Decimal('1.2'),
                     'our_boolean' : True,
                     'our_bit' : '0',
@@ -275,10 +274,10 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_boolean': True,
                     'our_jsonb':  self.inserted_records[1]['our_jsonb'],
                     'our_bigint': 1000000,
-                    'OUR TS': '1997-02-02T02:02:02.722184+00:00',
-                    'OUR TS TZ': '1997-02-02T07:02:02.722184+00:00',
-                    'OUR TIME': '12:11:10',
-                    'OUR TIME TZ': '12:11:10-04:00',
+                    'OUR TS': self.expected_ts(our_ts),
+                    'OUR TS TZ': self.expected_ts_tz(our_ts_tz),
+                    'OUR TIME': str(our_time),
+                    'OUR TIME TZ': str(our_time_tz),
                     'our_store': {"name" : "betty", "size" :"small"},
                     'our_smallint': 1,
                     'OUR DATE': '1998-03-04T00:00:00+00:00',
@@ -339,6 +338,18 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 'user' : os.getenv('TAP_POSTGRES_USER'),
                 'default_replication_method' : 'LOG_BASED'
         }
+
+    def expected_ts_tz(self, our_ts_tz):
+        our_ts_tz_utc = our_ts_tz.astimezone(pytz.utc)
+        expected_value = datetime.datetime.strftime(our_ts_tz_utc, "%Y-%m-%dT%H:%M:%S.%f+00:00")
+
+        return expected_value
+
+    def expected_ts(self, our_ts):
+        expected_value = datetime.datetime.strftime(our_ts, "%Y-%m-%dT%H:%M:%S.%f+00:00")
+
+        return expected_value
+
 
     def test_run(self):
         conn_id = connections.ensure_connection(self)
@@ -404,12 +415,16 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertDictEqual(self.expected_records[1], messages[2]['data'])
         self.assertDictEqual(self.expected_records[2], messages[3]['data'])
 
+        # verify records are in ascending order by replication-key value
+        expected_replication_key = list(self.expected_replication_keys()[test_table_name])[0]
+        self.assertLess(messages[1]['data'][expected_replication_key], messages[2]['data'][expected_replication_key])
+        self.assertLess(messages[2]['data'][expected_replication_key], messages[3]['data'][expected_replication_key])
+
         print("records are correct")
 
         # grab bookmarked state
         state = menagerie.get_state(conn_id)
         bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
-        expected_replication_key = list(self.expected_replication_keys()[test_table_name])[0]
 
         # verify state and bookmarks meet expectations
         self.assertIsNone(state['currently_syncing'])
@@ -485,10 +500,10 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_smallint' : 2,
                     'our_bigint' : 1000001,
                     'our_decimal' : decimal.Decimal('9876543210.02'),
-                    'OUR TS' : '1996-04-04T04:04:04.733184+00:00',
-                    'OUR TS TZ' : '1996-04-04T08:04:04.733184+00:00',
-                    'OUR TIME' : '06:06:06',
-                    'OUR TIME TZ' : '06:06:06-04:00',
+                    'OUR TS' : self.expected_ts(our_ts),
+                    'OUR TS TZ' : self.expected_ts_tz(our_ts_tz),
+                    'OUR TIME' : str(our_time),
+                    'OUR TIME TZ' : str(our_time_tz),
                     'OUR DATE' : '1970-07-01T00:00:00+00:00',
                     'our_double' : decimal.Decimal('1.1'),
                     'our_real' : decimal.Decimal('1.2'),
@@ -550,10 +565,10 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_boolean': True,
                     'our_jsonb': self.inserted_records[-1]['our_jsonb'],
                     'our_bigint': 100000,
-                    'OUR TS': '2007-01-01T12:12:12.222111+00:00',
-                    'OUR TS TZ': '2007-01-01T17:12:12.222111+00:00',
-                    'OUR TIME': '12:11:10',
-                    'OUR TIME TZ': '12:11:10-04:00',
+                    'OUR TS': self.expected_ts(our_ts),
+                    'OUR TS TZ': self.expected_ts_tz(our_ts_tz),
+                    'OUR TIME': str(our_time),
+                    'OUR TIME TZ': str(our_time_tz),
                     'our_store': {"name" : "betty", "size" :"small"},
                     'our_smallint': 1,
                     'OUR DATE': '1999-09-09T00:00:00+00:00',
@@ -613,10 +628,10 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_boolean': True,
                     'our_jsonb': self.inserted_records[-1]['our_jsonb'],
                     'our_bigint': 100000,
-                    'OUR TS': '2111-01-01T12:12:12.222111+00:00',
-                    'OUR TS TZ': '2111-01-01T17:12:12.222111+00:00',
-                    'OUR TIME': '12:11:10',
-                    'OUR TIME TZ': '12:11:10-04:00',
+                    'OUR TS': self.expected_ts(our_ts),
+                    'OUR TS TZ': self.expected_ts_tz(our_ts_tz),
+                    'OUR TIME': str(our_time),
+                    'OUR TIME TZ': str(our_time_tz),
                     'our_store': {"name" : "betty", "size" :"small"},
                     'our_smallint': 1,
                     'OUR DATE': '1999-09-09T00:00:00+00:00',
@@ -645,7 +660,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     "our_double": decimal.Decimal("6.6"),
                     "our_money": "$0.00"
                 }
-                self.expected_records[0]["OUR TS TZ"] = '2021-04-04T08:04:04.733184+00:00'
+                self.expected_records[0]["OUR TS TZ"] = self.expected_ts_tz(our_ts_tz)
                 self.expected_records[0]["our_double"] = decimal.Decimal("6.6")
                 self.expected_records[0]["our_money"] = "$0.00"
                 db_utils.update_record(cur, canon_table_name, record_pk, updated_data)
@@ -660,7 +675,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     "our_double": decimal.Decimal("6.6"),
                     "our_money": "$0.00"
                 }
-                self.expected_records[1]["OUR TS TZ"] = '2021-04-04T08:04:04.733184+00:00'
+                self.expected_records[1]["OUR TS TZ"] = self.expected_ts_tz(our_ts_tz)
                 self.expected_records[1]["our_double"] = decimal.Decimal("6.6")
                 self.expected_records[1]["our_money"] = "$0.00"
                 db_utils.update_record(cur, canon_table_name, record_pk, updated_data)
@@ -706,7 +721,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         expected_record_id = self.expected_records[3]['id']
         self.assertNotIn(expected_record_id, actual_record_ids)
 
-        # verify the deleted  record with a lower replication-key value was NOT replicated
+        # verify the deleted record with a lower replication-key value was NOT replicated
         expected_record_id = self.expected_records[4]['id']
         self.assertNotIn(expected_record_id, actual_record_ids)
 
@@ -717,12 +732,15 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # verify the expected inserted record with a higher replication-key value was replicated
         self.assertDictEqual(self.expected_records[5], messages[3]['data'])
 
+        # verify records are in ascending order by replication-key value
+        self.assertLess(messages[1]['data'][expected_replication_key], messages[2]['data'][expected_replication_key])
+        self.assertLess(messages[2]['data'][expected_replication_key], messages[3]['data'][expected_replication_key])
+
         print("records are correct")
 
         # get bookmarked state
         state = menagerie.get_state(conn_id)
         bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
-        expected_replication_key = list(self.expected_replication_keys()[test_table_name])[0]
 
         # verify the bookmarked state matches our expectations
         self.assertIsNone(bookmark.get('lsn'))
@@ -779,7 +797,6 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # get bookmarked state
         state = menagerie.get_state(conn_id)
         bookmark = state['bookmarks']['dev-public-postgres_incremental_replication_test']
-        expected_replication_key = list(self.expected_replication_keys()[test_table_name])[0]
 
         # verify the bookmarked state matches our expectations
         self.assertIsNone(bookmark.get('lsn'))
