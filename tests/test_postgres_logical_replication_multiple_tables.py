@@ -51,8 +51,8 @@ class PostgresLogicalRepMultipleTables(unittest.TestCase):
     def tearDown(self):
         with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
-            # with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            #     cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
 
     def setUp(self):
         db_utils.ensure_environment_variables_set()
@@ -245,19 +245,32 @@ class PostgresLogicalRepMultipleTables(unittest.TestCase):
         with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
             with conn.cursor() as cur:
-                #insert another cow
+                # insert another cow
                 self.cows_rec_2 = {'cow_name' : "betty cow", 'cow_age' : 21}
                 insert_record(cur, test_table_name_cows, self.cows_rec_2)
+                # update that cow's expected values
+                self.cows_rec_2['id'] = 2
+                self.cows_rec_2['_sdc_deleted_at'] = None
 
-                #insert another chicken
+                # insert another chicken
                 self.chicken_rec_2 = {'chicken_name' : "burt chicken", 'chicken_age' : 14}
                 insert_record(cur, test_table_name_chickens, self.chicken_rec_2)
+                # update that cow's expected values
+                self.chicken_rec_2['id'] = 2
+                self.chicken_rec_2['_sdc_deleted_at'] = None
+
+                # and repeat...
 
                 self.cows_rec_3 = {'cow_name' : "cindy cow", 'cow_age' : 10}
                 insert_record(cur, test_table_name_cows, self.cows_rec_3)
+                self.cows_rec_3['id'] = 3
+                self.cows_rec_3['_sdc_deleted_at'] = None
+
 
                 self.chicken_rec_3 = {'chicken_name' : "carl chicken", 'chicken_age' : 4}
                 insert_record(cur, test_table_name_chickens, self.chicken_rec_3)
+                self.chicken_rec_3['id'] = 3
+                self.chicken_rec_3['_sdc_deleted_at'] = None
 
 
         sync_job_name = runner.run_sync_mode(self, conn_id)
@@ -271,14 +284,14 @@ class PostgresLogicalRepMultipleTables(unittest.TestCase):
                                                                    self.expected_sync_streams(),
                                                                    self.expected_pks())
         self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test_cows': 2, 'postgres_logical_replication_test_chickens': 2})
+        records_by_stream = runner.get_records_from_target_output()
+        chicken_messages = records_by_stream["postgres_logical_replication_test_chickens"]['messages']
+        cow_messages = records_by_stream["postgres_logical_replication_test_cows"]['messages']
 
-        upserts = runner.get_upserts_from_target_output()
-
-        self.assertEqual([{'_sdc_deleted_at': None, 'cow_age': 21, 'id': 2, 'cow_name': 'betty cow'},
-                          {'chicken_name': 'burt chicken', '_sdc_deleted_at': None, 'chicken_age': 14, 'id': 2},
-                          {'_sdc_deleted_at': None, 'cow_age': 10, 'id': 3, 'cow_name': 'cindy cow'},
-                          {'chicken_name': 'carl chicken', '_sdc_deleted_at': None, 'chicken_age': 4, 'id': 3}],
-                         upserts)
+        self.assertDictEqual(self.cows_rec_2, cow_messages[0]['data'])
+        self.assertDictEqual(self.chicken_rec_2, chicken_messages[0]['data'])
+        self.assertDictEqual(self.cows_rec_3, cow_messages[1]['data'])
+        self.assertDictEqual(self.chicken_rec_3, chicken_messages[1]['data'])
 
         print("inserted record is correct")
 
