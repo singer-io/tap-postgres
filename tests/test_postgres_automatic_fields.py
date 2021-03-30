@@ -281,13 +281,9 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         }
 
         if self.default_replication_method == self.INCREMENTAL:
-            return replication_keys 
+            return replication_keys
         else:
             return {'postgres_automatic_fields_test' : set()}
-
-    @staticmethod
-    def expected_sync_streams():
-        return { 'postgres_automatic_fields_test' }
 
     @staticmethod
     def tap_name():
@@ -432,7 +428,6 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
             self, conn_id, self.expected_sync_streams(), self.expected_primary_keys()
         )
         records_by_stream = runner.get_records_from_target_output()
-        table_version = records_by_stream[test_table_name]['table_version']
         messages = records_by_stream[test_table_name]['messages']
 
         # expected values
