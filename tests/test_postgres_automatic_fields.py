@@ -62,7 +62,7 @@ expected_schemas = {'postgres_automatic_fields_test':
 
 test_schema_name = "public"
 test_table_name = "postgres_automatic_fields_test"
-
+test_db = "dev"
 
 class PostgresAutomaticFields(unittest.TestCase):
     INCREMENTAL = "INCREMENTAL"
@@ -70,6 +70,12 @@ class PostgresAutomaticFields(unittest.TestCase):
     LOG_BASED = "LOG_BASED"
 
     default_replication_method = ""
+
+    def tearDown(self):
+        with db_utils.get_test_connection(test_db) as conn:
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
 
     def setUp(self):
         db_utils.ensure_environment_variables_set()
@@ -134,7 +140,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_varchar' : "our_varchar",
                     'our_varchar_10' : "varchar_10",
                     'our_text' : "some text",
-                    'our_integer' : 44100,
+                    'our_integer' : 19972,
                     'our_smallint' : 1,
                     'our_bigint' : 1000000,
                     'our_decimal' : decimal.Decimal('.01'),
@@ -162,7 +168,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_decimal': decimal.Decimal('.01'),
                     'our_text': 'some text',
                     'our_bit': False,
-                    'our_integer': 44100,
+                    'our_integer': 19972,
                     'our_double': decimal.Decimal('1.1'),
                     'id': 1,
                     'our_json': '{"secret": 55}',
@@ -199,7 +205,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_varchar' : "our_varchar 2",
                     'our_varchar_10' : "varchar_10",
                     'our_text' : "some text 2",
-                    'our_integer' : 44101,
+                    'our_integer' : 19873,
                     'our_smallint' : 2,
                     'our_bigint' : 1000001,
                     'our_decimal' : decimal.Decimal('.02'),
@@ -227,7 +233,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'OUR TIME': str(our_time),
                     'our_text': 'some text 2',
                     'our_bit': True,
-                    'our_integer': 44101,
+                    'our_integer': 19873,
                     'our_double': decimal.Decimal('1.1'),
                     'id': 2,
                     'our_json': '["nymn 77"]',
@@ -251,44 +257,6 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                     'our_alignment_enum' : None,
                     'our_money':    None
                 })
-                # record 3
-                self.inserted_records.append({
-                    'our_decimal' : decimal.Decimal('NaN'),
-                    'our_double' : float('nan'),
-                    'our_real' : float('-inf')
-                })
-                self.expected_records.append({
-                    'id': 3,
-                    # We cast NaN's, +Inf, -Inf to NULL as wal2json does not support
-                    # them and now we are at least consistent(ly wrong).
-                    'our_decimal' : None,
-                    'our_double' : None,
-                    'our_real' : None,
-                    # any field without a set value will be set to NULL
-                    'OUR TIME': None,
-                    'our_text': None,
-                    'our_bit': None,
-                    'our_integer': None,
-                    'our_json': None,
-                    'our_boolean': None,
-                    'our_jsonb': None,
-                    'our_bigint': None,
-                    'OUR TIME TZ': None,
-                    'our_store': None,
-                    'OUR TS TZ': None,
-                    'our_smallint': None,
-                    'OUR DATE': None,
-                    'our_varchar': None,
-                    'OUR TS': None,
-                    'our_uuid': None,
-                    'our_varchar_10': None,
-                    'our_citext': None,
-                    'our_inet': None,
-                    'our_cidr': None,
-                    'our_mac': None,
-                    'our_alignment_enum': None,
-                    'our_money': None
-                })
 
                 for record in self.inserted_records:
                     db_utils.insert_record(cur, test_table_name, record)
@@ -309,7 +277,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
     def expected_replication_keys(self):
         replication_keys = {
-            'postgres_automatic_fields_test' : {'OUR TS TZ'}
+            'postgres_automatic_fields_test' : {'our_integer'}
         }
 
         if self.default_replication_method == self.INCREMENTAL:
@@ -370,12 +338,27 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         return expected_value
 
-    @staticmethod
-    def select_streams_and_fields(conn_id, catalog, select_all_fields: bool = False):
+    def select_streams_and_fields(self, conn_id, catalog, select_all_fields: bool = False):
         """Select all streams and all fields within streams or all streams and no fields."""
 
         schema = menagerie.get_annotated_schema(conn_id, catalog['stream_id'])
-        additional_md = [{ "breadcrumb" : [], "metadata" : {'replication-method' : 'FULL_TABLE'}}]
+
+        if self.default_replication_method is self.FULL_TABLE:
+            additional_md = [{
+                "breadcrumb": [], "metadata": {"replication-method": self.FULL_TABLE}
+            }]
+
+        elif self.default_replication_method is self.INCREMENTAL:
+            additional_md = [{
+                "breadcrumb": [], "metadata": {
+                    "replication-method": self.INCREMENTAL, "replication-key": "our_integer"
+                }
+            }]
+
+        else:
+            additional_md = [{
+                "breadcrumb": [], "metadata": {"replication-method": self.LOG_BASED}
+            }]
 
         non_selected_properties = []
         if not select_all_fields:
@@ -391,16 +374,22 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         """Parametrized automatic fields test running against each replication method."""
 
         self.default_replication_method = self.FULL_TABLE
-        full_table_conn_id = connections.ensure_connection(self, original_properties=False)
+        full_table_conn_id = connections.ensure_connection(self)
         self.automatic_fields_test(full_table_conn_id)
 
+        # BUG? | We can't run a sync because replication-key isn't automatic
         # self.default_replication_method = self.INCREMENTAL
         # incremental_conn_id = connections.ensure_connection(self, original_properties=False)
         # self.automatic_fields_test(incremental_conn_id)
 
-        # self.default_replication_method = self.LOG_BASED
-        # log_based_conn_id = connections.ensure_connection(self, original_properties=False)
-        # self.automatic_fields_test(log_based_conn_id)
+        self.default_replication_method = self.LOG_BASED
+        with db_utils.get_test_connection('dev') as conn:
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                db_utils.ensure_replication_slot(cur, test_db)
+        log_based_conn_id = connections.ensure_connection(self, original_properties=False)
+        self.automatic_fields_test(log_based_conn_id)
+
 
     def automatic_fields_test(self, conn_id):
         """Just testing we can sync with no fields selected. And that automatic fields still get synced."""
@@ -455,17 +444,11 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         record_messages_keys = [set(message['data'].keys()) for message in messages[1:-1]]
 
         # verify the message actions match expectations for all replication methods
+        self.assertEqual(4, len(messages))
         self.assertEqual('activate_version', messages[0]['action'])
         self.assertEqual('upsert', messages[1]['action'])
         self.assertEqual('upsert', messages[2]['action'])
-        self.assertEqual('upsert', messages[3]['action'])
-
-        # verify messages match expectations specific to full table replication
-        if self.default_replication_method is self.FULL_TABLE:
-            self.assertEqual('activate_version', messages[4]['action'])
-            self.assertEqual(5, len(messages))
-        else:
-            self.assertEqual(4, len(messages))
+        self.assertEqual('activate_version', messages[3]['action'])
 
         # Verify that you get some records for each stream
         self.assertGreater(record_count_by_stream[test_table_name], 0)
