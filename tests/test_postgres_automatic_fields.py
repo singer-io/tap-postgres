@@ -369,15 +369,22 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
     def test_run(self):
         """Parametrized automatic fields test running against each replication method."""
 
+        # Test running a sync with no fields selected using full-table replication
         self.default_replication_method = self.FULL_TABLE
         full_table_conn_id = connections.ensure_connection(self)
         self.automatic_fields_test(full_table_conn_id)
 
-        # BUG? | We can't run a sync because replication-key isn't automatic
+        # NB | We expect primary keys and replication keys to have inclusion automatic for
+        #      key-based incremental replication. But that is only true for primary keys.
+        #      As a result we cannot run a sync with no fields selected. This BUG should not
+        #      be carried over into hp-postgres, but will not be fixed for this tap.
+
+        # Test running a sync with no fields selected using key-based incremental replication
         # self.default_replication_method = self.INCREMENTAL
         # incremental_conn_id = connections.ensure_connection(self, original_properties=False)
         # self.automatic_fields_test(incremental_conn_id)
 
+        # Test running a sync with no fields selected using logical replication
         self.default_replication_method = self.LOG_BASED
         with db_utils.get_test_connection('dev') as conn:
             conn.autocommit = True
