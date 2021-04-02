@@ -21,6 +21,7 @@ test_schema_name = "public"
 test_table_name = "postgres_datatypes_test"
 test_db = "dev"
 
+# TODO manually verify this schema meets our expectations
 expected_schema = {'OUR DATE': {'format': 'date-time', 'type': ['null', 'string']},
                    'OUR TIME': {'type': ['null', 'string']},
                    'OUR TIME TZ': {'type': ['null', 'string']},
@@ -126,10 +127,12 @@ class PostgresDatatypes(unittest.TestCase):
     Numeric | exact	up to 131072 digits before the decimal point; up to 16383 digits after the decimal point
               when precision is explicitly stated, maximum is 1000 digits
     TODOs
-      - Generate 3 different fields with NUMERIC,  NUMERIC(precision, scale),  NUMERIC(precision).
-      - Cover Maximum precision and scale
-      - Cover Minimum precision and scale
-      - Cover NaN
+      [x] Generate 3 different fields with NUMERIC,
+      []                                  NUMERIC(precision, scale),
+      [x]                                  NUMERIC(precision).
+      [x] Cover Maximum precision and scale
+      [x] Cover Minimum precision and scale
+      [x] Cover NaN
 
 
     Floating-Point Types
@@ -138,67 +141,39 @@ class PostgresDatatypes(unittest.TestCase):
       - double precision type typically has a range of around 1E-307 to 1E+308 with a precision of at least 15 digits
       - numbers too close to zero that are not representable as distinct from zero will cause an underflow error.
     TODOs
-      - Cover NaN, -Inf, Inf
-      -
+      [x] Cover NaN, -Inf, Inf
+      [x] Zero
 
 
     Character
-      -
     TODOS
-      - Generate different fields with VARCHAR,  VARCHAR(n),  CHAR,  CHAR(n)
-      - VARCHAR(10485760)
-      - Generate a 1 GB string??
-      - Cover the following character sets:
-             LATIN1	ISO 8859-1, ECMA 94	Western European	Yes	1	ISO88591
-             LATIN2	ISO 8859-2, ECMA 94	Central European	Yes	1	ISO88592
-             LATIN3	ISO 8859-3, ECMA 94	South European	Yes	1	ISO88593
-             LATIN4	ISO 8859-4, ECMA 94	North European	Yes	1	ISO88594
-             LATIN5	ISO 8859-9, ECMA 128	Turkish	Yes	1	ISO88599
-             LATIN6	ISO 8859-10, ECMA 144	Nordic	Yes	1	ISO885910
-             LATIN7	ISO 8859-13	Baltic	Yes	1	ISO885913
-             LATIN8	ISO 8859-14	Celtic	Yes	1	ISO885914
-             LATIN9	ISO 8859-15	LATIN1 with Euro and accents	Yes	1	ISO885915
-             LATIN10	ISO 8859-16, ASRO SR 14111	Romanian	Yes	1	ISO885916
-             UTF8	Unicode, 8-bit	all	Yes	1-4	Unicode
-
-
-    Binary Types
-    Bytea | binary string, sequence of octets can be written in hex or escape
-    TODOs
-      - Generate different fields for hex and escape
+      [x] Generate different fields with VARCHAR,  VARCHAR(n),  CHAR,  CHAR(n)
+      [x] VARCHAR(10485760)
+      [] Generate a 1 GB string?? -- Not Possbile, but we can approach 20 MB
+      [] text - cover one of every character that is allowed
+            [] UTF8	Unicode, 8-bit	all	Yes	1-4	Unicode
+            [] LATIN1	ISO 8859-1, ECMA 94	Western European	Yes	1	ISO88591
+            [] LATIN2	ISO 8859-2, ECMA 94	Central European	Yes	1	ISO88592
+            [] LATIN3	ISO 8859-3, ECMA 94	South European	Yes	1	ISO88593
+            [] LATIN4	ISO 8859-4, ECMA 94	North European	Yes	1	ISO88594
+            [] LATIN5	ISO 8859-9, ECMA 128	Turkish	Yes	1	ISO88599
+            [] LATIN6	ISO 8859-10, ECMA 144	Nordic	Yes	1	ISO885910
+            [] LATIN7	ISO 8859-13	Baltic	Yes	1	ISO885913
+            [] LATIN8	ISO 8859-14	Celtic	Yes	1	ISO885914
+            [] LATIN9	ISO 8859-15	LATIN1 with Euro and accents	Yes	1	ISO885915
+            [] LATIN10	ISO 8859-16, ASRO SR 14111	Romanian	Yes	1	ISO885916
+     [] investigate if we need to change COLLATION in order to accomplish ALL POSSIBLE CHARACTERS
 
 
     Network Address Types
     TODOs
-      - Do with and without 'y' where input is number of bits in the netmask: input looks like 'address/y'
-      - For inet/cidr 'y' will default ot 32 for ipv4 and 128 for ipv6
-      - For mac do all the input formats
-         [] '08:00:2b:01:02:03'
-         [] '08-00-2b-01-02-03'
-         [] '08002b:010203'
-         [] '08002b-010203'
-         [] '0800.2b01.0203'
-         [] '08002b010203'
+      [x] min and max for cider/inet 000's fff's
+      [x] ipv6 and ipv4
 
 
-    Datestimes
+    Datetimes
     TODOs
-      - Test values with second, millisecond and micrsecond precision
-      - Test all precisions 0..6
-
-    UUID
-    TODOs
-      - uuid.uuid1(node=None, clock_seq=None)
-      Generate a UUID from a host ID, sequence number, and the current time. If node is not given, getnode() is used to obtain the hardware address. If clock_seq is given, it is used as the sequence number; otherwise a random 14-bit sequence number is chosen.
-
-      - uuid.uuid3(namespace, name)
-      Generate a UUID based on the MD5 hash of a namespace identifier (which is a UUID) and a name (which is a string).
-
-      - uuid.uuid4()
-      Generate a random UUID.
-
-      - uuid.uuid5(namespace, name)
-      Generate a UUID based on the SHA-1 hash of a namespace identifier (which is a UUID) and a name (which is a string).
+      [x] Test all precisions 0..6 fractional seconds
 
     """
 
@@ -292,6 +267,8 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 our_alignment_enum        ALIGNMENT,
                 our_money                 money,
                 our_bigserial             BIGSERIAL,
+                our_serial                SERIAL,
+                our_smallserial           SMALLSERIAL,
                 unsupported_bit           BIT(80),
                 unsupported_bit_varying   BIT VARYING(80),
                 unsupported_box           BOX,
@@ -304,8 +281,6 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 unsupported_pg_lsn        PG_LSN,
                 unsupported_point         POINT,
                 unsupported_polygon       POLYGON,
-                our_serial                SERIAL,
-                our_smallserial           SMALLSERIAL,
                 unsupported_tsquery       TSQUERY,
                 unsupported_tsvector      TSVECTOR,
                 unsupported_txid_snapshot TXID_SNAPSHOT,
@@ -320,8 +295,10 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.inserted_records = []
                 self.expected_records = dict()
 
-                
+                # TODO test out of bounds precision for DECIMAL
+
                 # insert a record wtih minimum values
+                test_case = 'minimum_boundary_general'
                 our_tz = pytz.timezone('Singapore')  # GMT+8
                 min_date = datetime.date(1, 1, 1)
                 my_absurdly_small_decimal = decimal.Decimal('-' + '9' * 38 + '.' + '9' * 38) # THIS IS OUR LIMIT IN THE TARGET}
@@ -339,7 +316,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     'our_varchar_big': "",  #   VARCHAR(10485760),
                     'our_char_big': "a",  #   CHAR(10485760),
                     'our_text': "",  #   TEXT
-                    'our_text_2': "",  #   TEXT, TODO move our_ascii into it's own record
+                    'our_text_2': "",  #   TEXT,
                     'our_integer': -2147483648,  #    INTEGER,
                     'our_smallint': -32768,  #   SMALLINT,
                     'our_bigint': -9223372036854775808,  #       BIGINT,
@@ -352,7 +329,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     quote_ident('OUR TIME', cur): '00:00:00.000001',  #   TIME WITHOUT TIME ZONE,
                     quote_ident('OUR TIME TZ', cur): '00:00:00.000001-15:59',  #    TIME WITH TIME ZONE,
                     quote_ident('OUR DATE', cur): min_date,# '4713-01-01 BC',  #   DATE,
-                    'our_double': -1.79769313486231e+308, # DOUBLE PRECISION
+                    'our_double':  decimal.Decimal('-1.79769313486231e+308'), # DOUBLE PRECISION
                     'our_real': decimal.Decimal('-3.40282e+38'), #   REAL,
                     'our_boolean': False,  #    BOOLEAN,
                     'our_bit': '0',  #    BIT(1),
@@ -361,19 +338,18 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     'our_uuid': '00000000-0000-0000-0000-000000000000', # str(uuid.uuid1())
                     'our_hstore': None,  # HSTORE,
                     'our_citext': "",  # CITEXT,
-                    'our_cidr': '12.244.233.165/32',  # cidr,
-                    'our_inet': '12.244.233.165/32',  # inet,
-                    'our_mac': '08:00:2b:01:02:04',#'12.244.233.165/32',  # macaddr,
+                    'our_cidr': '00.000.000.000/32',  # cidr,
+                    'our_inet': '00.000.000.000',  # inet,
+                    'our_mac': '00:00:00:00:00:00',  ## macaddr
                     'our_alignment_enum': None,  # ALIGNMENT,
-                    'our_money': '-$92,233,720,368,547,758.08',  # money, TODO THis throws pyscopg error
+                    'our_money': '-$92,233,720,368,547,758.08',  # money,
                     'our_bigserial': 1,  # BIGSERIAL,
                     'our_serial': 1,  # SERIAL,
                     'our_smallserial': 1,  #  SMALLSERIAL,
                 })
-                self.expected_records['minimum_boundary_general'] = copy.deepcopy(self.inserted_records[-1])
-                self.expected_records['minimum_boundary_general'].update({
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update({
                     'our_char_big': "a" + (10485760 - 1) * " ", # padded
-                    'our_double':  decimal.Decimal('-1.79769313486231e+308'),
                     'OUR TS': '0001-01-01T00:00:00.000001+00:00',
                     'OUR TS TZ': '0001-01-01T15:59:00.000001+00:00',
                     'OUR TIME': '00:00:00.000001',
@@ -381,27 +357,23 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     'OUR DATE': '0001-01-01T00:00:00+00:00',
                     'our_bit': False,
                     'our_jsonb': json.loads(self.inserted_records[-1]['our_jsonb']),
-                    'our_inet': '12.244.233.165',
+                    'our_cidr': '0.0.0.0/32',
+                    'our_inet': '0.0.0.0',
+                    'our_mac': '00:00:00:00:00:00',
                 })
-                my_keys = set(self.expected_records['minimum_boundary_general'].keys())
+                my_keys = set(self.expected_records[test_case].keys())
                 for key in my_keys:
                     if key.startswith('"'):
-                        del self.expected_records['minimum_boundary_general'][key]
-
+                        del self.expected_records[test_case][key]
                 db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
 
 
                 # insert a record wtih maximum values
+                test_case = 'maximum_boundary_general'
                 max_ts = datetime.datetime(9999, 12, 31, 23, 59, 59, 999999)
-                # our_ts = datetime.datetime(1997, 2, 2, 2, 2, 2, 722184)
-                # nyc_tz = pytz.timezone('America/New_York')
-                # our_ts_tz = nyc_tz.localize(our_ts)
-                # our_time  = datetime.time(12,11,10)
-                # our_time_tz = our_time.isoformat() + "-04:00"
                 max_date = datetime.date(9999, 12, 31)
                 base_string = "Bread Sticks From Olive Garden"
                 my_absurdly_large_decimal = decimal.Decimal('9' * 38 + '.' + '9' * 38) # THIS IS OUR LIMIT IN THE TARGET}
-                # 🥖 = 1f956
                 self.inserted_records.append({
                     'id': 2147483647,  # SERIAL PRIMARY KEY,
                     'our_char': "🥖",  #    CHAR,
@@ -420,11 +392,10 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     quote_ident('OUR TS', cur): max_ts,# '9999-12-31 24:00:00.000000',# '294276-12-31 24:00:00.000000',  #   TIMESTAMP WITHOUT TIME ZONE,
                     quote_ident('OUR TS TZ', cur): '9999-12-31T08:00:59.999999-15:59', #max_ts, #'294276-12-31 24:00:00.000000',  #    TIMESTAMP WITH TIME ZONE,
                     quote_ident('OUR TIME', cur): '23:59:59.999999',# '24:00:00.000000' ->,  #   TIME WITHOUT TIME ZONE,
-                    # '24:00:00.000000'  -> 00:00:00 TODO BUG?
                     quote_ident('OUR TIME TZ', cur): '23:59:59.999999+1559',  #    TIME WITH TIME ZONE,
                     quote_ident('OUR DATE', cur): '5874897-12-31',  #   DATE,
-                    'our_double': decimal.Decimal('9.99999999999999'), # '1E308',  # DOUBLE PRECISION,
-                    'our_real':  decimal.Decimal('9.99999'), # '1E308',  #   REAL, # TODO
+                    'our_double': decimal.Decimal('1.79769313486231e+308'),  # DOUBLE PRECISION,
+                    'our_real': decimal.Decimal('3.40282e+38'), # '1E308',  #   REAL,
                     'our_boolean': True,  #    BOOLEAN
                     'our_bit': '1',  #    BIT(1),
                     'our_json': json.dumps({
@@ -438,7 +409,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                             'our_json_boolean': True,
                             'our_json_null': None,
                         },
-                        'our_json_array': ['our_json_arrary_string', 6, {'calm': 'down'}, False, None],
+                        'our_json_array': ['our_json_arrary_string', 6, {'calm': 'down'}, False, None, ['apples', 6]],
                         'our_json_boolean': True,
                         'our_json_null': None,
                     }),  #       JSON,
@@ -453,25 +424,24 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                             'our_jsonb_boolean': True,
                             'our_jsonb_null': None,
                         },
-                        'our_jsonb_array': ['our_jsonb_arrary_string', 6, {'calm': 'down'}, False, None],
+                        'our_jsonb_array': ['our_jsonb_arrary_string', 6, {'calm': 'down'}, False, None, ['apples', 6]],
                         'our_jsonb_boolean': True,
                         'our_jsonb_null': None,
                     }),  #    JSONB,
                     'our_uuid':'ffffffff-ffff-ffff-ffff-ffffffffffff', # UUID,
                     'our_hstore': '"foo"=>"bar","bar"=>"foo","dumdum"=>Null',  # HSTORE,
                     'our_citext': "aPpLeS",  # CITEXT,
-                    'our_cidr': '2001:0db8:0000:0000:0000:ff00:0042:7879/128',  # cidr,
-                    'our_inet': '12.244.233.165/24',# TODO IPV6 value is rejected by pyscopg '2001:0db8:2222:3333:ghdk:ff00:0042:7879/128',  # inet,
-                    'our_mac': '08:00:2b:01:02:03',  # macaddr
+                    'our_cidr': '199.199.199.128/32',  #  # cidr,
+                    'our_inet': '199.199.199.128',  # inet,
+                    'our_mac': 'ff:ff:ff:ff:ff:ff',  # macaddr
                     'our_alignment_enum': 'u g l y',  # ALIGNMENT,
                     'our_money': "$92,233,720,368,547,758.07",  # money,
                     'our_bigserial': 9223372036854775807,  # BIGSERIAL,
                     'our_serial': 2147483647,  # SERIAL,
                     'our_smallserial': 32767, #2147483647,  #  SMALLSERIAL,
                 })
-
-                self.expected_records['maximum_boundary_general'] = copy.deepcopy(self.inserted_records[-1])
-                self.expected_records['maximum_boundary_general'].update({
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update({
                     'OUR TS': '9999-12-31T23:59:59.999999+00:00',
                     'OUR TS TZ': '9999-12-31T23:59:59.999999+00:00',
                     'OUR TIME': '23:59:59.999999',
@@ -479,21 +449,24 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     'OUR DATE': '9999-12-31T00:00:00+00:00',
                     'our_char_big': "🥖" + " " * 10485759,
                     'our_bit': True,
-                    'our_cidr': '2001:db8::ff00:42:7879/128',
                     'our_jsonb': json.loads(self.inserted_records[-1]['our_jsonb']),
                     'our_hstore': {'foo': 'bar', 'bar': 'foo', 'dumdum': None},
                 })
-                my_keys = set(self.expected_records['maximum_boundary_general'].keys())
+                my_keys = set(self.expected_records[test_case].keys())
                 for key in my_keys:
                     if key.startswith('"'):
-                        del self.expected_records['maximum_boundary_general'][key]
-
+                        del self.expected_records[test_case][key]
                 db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
 
 
                 # insert a record with valid values for unsupported types
+                test_case = 'unsupported_types'
+                our_serial = 9999
                 self.inserted_records.append({
-                    'id': 9999,
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
                     'unsupported_bit_varying': '01110100011000010111000000101101011101000110010101110011011101000110010101110010',  # BIT VARYING(80),
                     'unsupported_bit': '01110100011000010111000000101101011101000110010101110011011101000110010101110010',  #    BIT(80),
                     'unsupported_box': '((50, 50), (0, 0))',  # BOX,
@@ -511,35 +484,487 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     'unsupported_txid_snapshot': '10:20:10,14,15',  # TXID_SNAPSHOT,
                     'unsupported_xml': '<foo>bar</foo>',  # XML)
                 })
-                self.expected_records['unsupported_types'] = {
-                    'id': 9999,
-                }
-
-                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
-
-
-                # add a record with a text value ~ 10 Megabytes
-                self.inserted_records.append({
-                    'id': 666,
-                    'our_text': dfr.read_in('text')
-                })
-                self.expected_records['maximum_boundary_text'] = {
+                self.expected_records[test_case] = {
                     'id': self.inserted_records[-1]['id'],
-                    'our_text': self.inserted_records[-1]['our_text'],
+                    'our_bigserial': self.inserted_records[-1]['our_bigserial'],
+                    'our_serial': self.inserted_records[-1]['our_serial'],
+                    'our_smallserial': self.inserted_records[-1]['our_smallserial'],
                 }
-
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
                 db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
 
-                #                 # 🥖 = 1f956
-                # self.inserted_records.append({
-                #     'id': 2147483647,  # SERIAL PRIMARY KEY,
-                #     'our_char': "🥖",  #    CHAR,
-                #     'our_varchar': "a" * 20971520  #    VARCHAR,
-                #     'our_varchar_big': "🥖" * 5242880base_string,  #   VARCHAR(10485760),
-                #     'our_char_big': "🥖",  #   CHAR(10485760),
 
-                # add a record with a text value ~ 10 Megabytes
+                # TODO investigate how large our Nulls actually are ie. varchar how big?
+                #      Don't need to be exact but we should get a rough idea of how large the record is.
+                #      There is slight overhead in the record so it would be just undwer 20 megs.
+                # add a record with a text value that approaches the Stitch linmit ~ 20 Megabytes
+                # text ~                     6.36 megabytes why can't we get any larger?
+                test_case = 'maximum_boundary_text'
+                our_serial = 6
+                single_record_limit = int((1024 * 1024 * 6.35) / 4 ) # 6.36 fails
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_text': single_record_limit * "🥖", # ~ 6 MB
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
 
+
+                # TODO | BUG_1 | We do not maintain -Infinity, Infinity, and NaN for
+                #                floating-point or arbitrary-precision values
+                # add a record with  -Inf for floating point types
+                test_case = 'negative_infinity_floats'
+                our_serial = 7
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_double': '-Inf',
+                    'our_real': '-Inf',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update({
+                    'our_double': None,  # BUG_1
+                    'our_real': None,  # BUG_1
+                })
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with Inf for floating point types
+                test_case = 'positive_infinity_floats'
+                our_serial = 8
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_double': 'Inf',
+                    'our_real': 'Inf',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update({
+                    'our_double': None,  # BUG_1
+                    'our_real': None,  # BUG_1
+                })
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with NaN for floating point types
+                test_case = 'not_a_number_floats'
+                our_serial = 9
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_double': 'NaN',
+                    'our_real': 'NaN',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update({
+                    'our_double': None,  # BUG_1
+                    'our_real': None,  # BUG_1
+                })
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with NaN for arbitrary precision types
+                test_case = 'not_a_number_numeric'
+                our_serial = 10
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_numeric': 'NaN',
+                    'our_decimal': 'NaN',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update({
+                    'our_numeric': None,  # BUG_1
+                    'our_decimal': None,  # BUG_1
+                })
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with cidr/inet having IPV6 addresses
+                test_case = 'ipv6_cidr_inet'
+                our_serial = 11
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_cidr': 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128',
+                    'our_inet': 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with datetimes having 1 second precision
+                test_case = '0_digits_of_precision_datetimes'
+                our_serial = 12
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    quote_ident('OUR TS', cur): '1996-12-23T19:05:00',
+                    quote_ident('OUR TS TZ', cur): '1996-12-23T19:05:00+00:00',
+                    quote_ident('OUR TIME', cur): '19:05:00',
+                    quote_ident('OUR TIME TZ', cur): '19:05:00+00:00',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'OUR TS': '1996-12-23T19:05:00+00:00',
+                    'OUR TS TZ': '1996-12-23T19:05:00+00:00',
+                    'OUR TIME': '19:05:00',
+                    'OUR TIME TZ': '19:05:00+00:00',
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # TODO | BUG_2 | We do not preserve datetime precision.
+                #                If a record has a decimal value it is padded to 6 digits of precision.
+                #                This is not the expected behavior.
+
+
+                # add a record with datetimes having .1 second precision
+                test_case = '1_digits_of_precision_datetimes'
+                our_serial = 13
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    quote_ident('OUR TS', cur): '1996-12-23T19:05:00.1',
+                    quote_ident('OUR TS TZ', cur): '1996-12-23T19:05:00.1+00:00',
+                    quote_ident('OUR TIME', cur): '19:05:00.1',
+                    quote_ident('OUR TIME TZ', cur): '19:05:00.1+00:00',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'OUR TS': '1996-12-23T19:05:00.100000+00:00',  # '1996-12-23T19:05:00.1+00:00',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.100000+00:00',  # '1996-12-23T19:05:00.1+00:00',  # BUG_2
+                    'OUR TIME': '19:05:00.100000',  # '19:05:00.1',  # BUG_2
+                    'OUR TIME TZ': '19:05:00.100000+00:00',  # '19:05:00.1+00:00',  # BUG_2
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with datetimes having .01 second precision
+                test_case = '2_digits_of_precision_datetimes'
+                our_serial = 14
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    quote_ident('OUR TS', cur): '1996-12-23T19:05:00.12',
+                    quote_ident('OUR TS TZ', cur): '1996-12-23T19:05:00.12+00:00',
+                    quote_ident('OUR TIME', cur): '19:05:00.12',
+                    quote_ident('OUR TIME TZ', cur): '19:05:00.12+00:00',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'OUR TS': '1996-12-23T19:05:00.120000+00:00',  # '1996-12-23T19:05:00.12+00:00',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.120000+00:00',  # '1996-12-23T19:05:00.12+00:00',  # BUG_2
+                    'OUR TIME': '19:05:00.120000',  # '19:05:00.12',  # BUG_2
+                    'OUR TIME TZ': '19:05:00.120000+00:00',  # '19:05:00.12+00:00',  # BUG_2
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with datetimes having .001 second precision
+                test_case = '3_digits_of_precision_datetimes'
+                our_serial = 15
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    quote_ident('OUR TS', cur): '1996-12-23T19:05:00.123',
+                    quote_ident('OUR TS TZ', cur): '1996-12-23T19:05:00.123+00:00',
+                    quote_ident('OUR TIME', cur): '19:05:00.123',
+                    quote_ident('OUR TIME TZ', cur): '19:05:00.123+00:00',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'OUR TS': '1996-12-23T19:05:00.123000+00:00',  # '1996-12-23T19:05:00.123+00:00',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.123000+00:00',  # '1996-12-23T19:05:00.123+00:00',  # BUG_2
+                    'OUR TIME': '19:05:00.123000',  # '19:05:00.123',  # BUG_2
+                    'OUR TIME TZ': '19:05:00.123000+00:00',  # '19:05:00.123+00:00',  # BUG_2
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with datetimes having .0001 secondprecision
+                test_case = '4_digits_of_precision_datetimes'
+                our_serial = 16
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    quote_ident('OUR TS', cur): '1996-12-23T19:05:00.1234',
+                    quote_ident('OUR TS TZ', cur): '1996-12-23T19:05:00.1234+00:00',
+                    quote_ident('OUR TIME', cur): '19:05:00.1234',
+                    quote_ident('OUR TIME TZ', cur): '19:05:00.1234+00:00',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'OUR TS': '1996-12-23T19:05:00.123400+00:00',  # '1996-12-23T19:05:00.1234+00:00',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.123400+00:00',  # '1996-12-23T19:05:00.1234+00:00',  # BUG_2
+                    'OUR TIME': '19:05:00.123400',  # '19:05:00.1234',  # BUG_2
+                    'OUR TIME TZ': '19:05:00.123400+00:00',  # '19:05:00.1234+00:00',  # BUG_2
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with datetimes having .00001 second precision
+                test_case = '5_digits_of_precision_datetimes'
+                our_serial = 17
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    quote_ident('OUR TS', cur): '1996-12-23T19:05:00.12345',
+                    quote_ident('OUR TS TZ', cur): '1996-12-23T19:05:00.12345+00:00',
+                    quote_ident('OUR TIME', cur): '19:05:00.12345',
+                    quote_ident('OUR TIME TZ', cur): '19:05:00.12345+00:00',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'OUR TS': '1996-12-23T19:05:00.123450+00:00',  # '1996-12-23T19:05:00.12345+00:00',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.123450+00:00',  # '1996-12-23T19:05:00.12345+00:00',  # BUG_2
+                    'OUR TIME': '19:05:00.123450',  # '19:05:00.12345',  # BUG_2
+                    'OUR TIME TZ': '19:05:00.123450+00:00',  # '19:05:00.12345+00:00',  # BUG_2
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with datetimes having .000001 second precision
+                test_case = '6_digits_of_precision_datetimes'
+                our_serial = 18
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    quote_ident('OUR TS', cur): '1996-12-23T19:05:00.123456',
+                    quote_ident('OUR TS TZ', cur): '1996-12-23T19:05:00.123456+00:00',
+                    quote_ident('OUR TIME', cur): '19:05:00.123456',
+                    quote_ident('OUR TIME TZ', cur): '19:05:00.123456+00:00',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'OUR TS': '1996-12-23T19:05:00.123456+00:00',
+                    'OUR TS TZ': '1996-12-23T19:05:00.123456+00:00',
+                    'OUR TIME': '19:05:00.123456',
+                    'OUR TIME TZ': '19:05:00.123456+00:00',
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # TODO | BUG_3 | floating-point precisions can't handle expected
+                #                negative value nearest zero boundary
+
+                # add a record with a negative value nearest zero for double and real
+                test_case = 'near_zero_negative_floats'
+                our_serial = 19
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_double': decimal.Decimal('-2.22507385850720e-308'),  # -2.2250738585072014e-308, # BUG_3
+                    'our_real': decimal.Decimal('-1.17549E-38'),  #-1.175494351e-38 BUG_3
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # TODO | BUG_4 | floating-point precisions can't handle expected
+                #                positive value nearest zero boundary
+
+
+                # add a record with a positive value nearest zero for double and real
+                test_case = 'near_zero_positive_floats'
+                our_serial = 20
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_double': decimal.Decimal('2.22507385850720e-308'),  # 2.2250738585072014e-308  BUG_4
+                    'our_real': decimal.Decimal('1.17549e-38'),  # 1.175494351e-38  BUG_4
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with the value 0 for double and real
+                test_case = 'zero_floats'
+                our_serial = 21
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_double': 0,
+                    'our_real': 0, #   REAL,
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with an hstore that has spaces, commas, arrows, quotes, and  escapes
+                test_case = 'special_characters_hstore'
+                our_serial = 22
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    # psycopg2  does not let us insert: ' "backslash" => "\\",  "double_quote" => "\"" '
+                    'our_hstore': ' "spaces" => " b a r ", "commas" => "f,o,o,", "arrow" => "=>", '
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'our_hstore': {
+                        "spaces": " b a r ",
+                        "commas": "f,o,o,",
+                        "arrow": "=>",
+                        # "double_quote": "\"",
+                        # "backslash": "\\"
+                    }
+                })
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with Null for every field
+                test_case = 'null_for_all_fields_possible'
+                our_serial = 23
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_char': None,
+                    'our_varchar': None,
+                    'our_varchar_big': None,
+                    'our_char_big': None,
+                    'our_text':  None,
+                    'our_text_2': None,
+                    'our_integer': None,
+                    'our_smallint': None,
+                    'our_bigint': None,
+                    'our_nospec_numeric': None,
+                    'our_numeric': None,
+                    'our_nospec_decimal': None,
+                    'our_decimal': None,
+                    quote_ident('OUR TS', cur): None,
+                    quote_ident('OUR TS TZ', cur): None,
+                    quote_ident('OUR TIME', cur): None,
+                    quote_ident('OUR TIME TZ', cur): None,
+                    quote_ident('OUR DATE', cur): None,
+                    'our_double': None,
+                    'our_real': None,
+                    'our_boolean': None,
+                    'our_bit': None,
+                    'our_json': None,
+                    'our_jsonb': None,
+                    'our_uuid': None,
+                    'our_hstore': None,
+                    'our_citext': None,
+                    'our_cidr': None,
+                    'our_inet': None,
+                    'our_mac': None,
+                    'our_alignment_enum': None,
+                    'our_money': None,
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update({
+                    'OUR TS': None,
+                    'OUR TS TZ': None,
+                    'OUR TIME': None,
+                    'OUR TIME TZ': None,
+                    'OUR DATE': None,
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+                # TODO MANUAL TESTING
+                #      EXCEED THE PYTHON LIMITATIONS FOR
+                #       [] datetimes
+                #       [] hstore
+                #           psycopg2  does not let us insert escaped characters:
+                #           try this manually: ' "backslash" => "\\",  "double_quote" => "\"" '
+
+
+    def null_out_remaining_fields(self, inserted_record):
+        all_fields = self.expected_fields()
+        unsupported_fields = self.expected_unsupported_fields()
+        set_fields = set(inserted_record.keys())
+
+        remaining_fields = all_fields.difference(set_fields).difference(unsupported_fields)
+        remaining_valid_fields_to_null = {field: None for field in remaining_fields}
+
+        return remaining_valid_fields_to_null
 
     @staticmethod
     def expected_check_streams():
@@ -560,78 +985,67 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
             'postgres_datatypes_test' : {'id'}
         }
 
-    @staticmethod
-    def expected_unsupported_fields():
-        return {
-            'unsupported_bigserial',
-            'unsupported_bit_varying',
-            'unsupported_box',
-            'unsupported_bytea',
-            'unsupported_circle',
-            'unsupported_interval',
-            'unsupported_line',
-            'unsupported_lseg',
-            'unsupported_path',
-            'unsupported_pg_lsn',
-            'unsupported_point',
-            'unsupported_polygon',
-            'unsupported_serial',
-            'unsupported_smallserial',
-            'unsupported_tsquery',
-            'unsupported_tsvector',
-            'unsupported_txid_snapshot',
-            'unsupported_xml',
-        }
+    def expected_unsupported_fields(self):
+        expected_fields = self.expected_fields()
+        return {field
+                for field in expected_fields
+                if field.startswith("unsupported")}
 
     @staticmethod
-    def expected_schema_types():
+    def expected_fields():
         return {
-            'id': 'integer',  # 'serial primary key',
-            'our_varchar': 'character varying',  # 'varchar'
-            'our_varchar_10': 'character varying',  # 'varchar(10)',
-            'our_text': 'text',
-            'our_text_2': 'text',
-            'our_integer': 'integer',
-            'our_smallint': 'smallint',
-            'our_bigint': 'bigint',
-            'our_decimal': 'numeric',
-            'OUR TS': 'timestamp without time zone',
-            'OUR TS TZ': 'timestamp with time zone',
-            'OUR TIME': 'time without time zone',
-            'OUR TIME TZ': 'time with time zone',
-            'OUR DATE': 'date',
-            'our_double': 'double precision',
-            'our_real': 'real',
-            'our_boolean': 'boolean',
-            'our_bit': 'bit',
-            'our_json': 'json',
-            'our_jsonb': 'jsonb',
-            'our_uuid': 'uuid',
-            'our_hstore': 'hstore',
-            'our_citext': 'citext',
-            'our_cidr': 'cidr',
-            'our_inet': 'inet',
-            'our_mac': 'macaddr',
-            'our_alignment_enum': 'alignment',
-            'our_money': 'money',
-            'unsupported_bigserial': 'bigint',
-            'unsupported_bit_varying': 'bit varying',
-            'unsupported_box': 'box',
-            'unsupported_bytea': 'bytea',
-            'unsupported_circle': 'circle',
-            'unsupported_interval': 'interval',
-            'unsupported_line': 'line',
-            'unsupported_lseg': 'lseg',
-            'unsupported_path': 'path',
-            'unsupported_pg_lsn': 'pg_lsn',
-            'unsupported_point': 'point',
-            'unsupported_polygon': 'polygon',
-            'unsupported_serial': 'integer',
-            'unsupported_smallserial': 'smallint',
-            'unsupported_tsquery': 'tsquery',
-            'unsupported_tsvector': 'tsvector',
-            'unsupported_txid_snapshot': 'txid_snapshot',
-            'unsupported_xml': 'xml',
+            'id',
+            'our_varchar',  #               VARCHAR,
+            'our_varchar_big',  #           VARCHAR(10485760),
+            'our_char',  #                  CHAR,
+            'our_char_big',  #              CHAR(10485760),
+            'our_text',  #                  TEXT,
+            'our_text_2',  #                TEXT,
+            'our_integer',  #               INTEGER,
+            'our_smallint',  #              SMALLINT,
+            'our_bigint',  #                BIGINT,
+            'our_nospec_numeric',  #        NUMERIC,
+            'our_numeric',  #               NUMERIC(1000, 500),
+            'our_nospec_decimal',  #        DECIMAL,
+            'our_decimal',  #               DECIMAL(1000, 500),
+            'OUR TS',  #                  TIMESTAMP WITHOUT TIME ZONE,
+            'OUR TS TZ',  #               TIMESTAMP WITH TIME ZONE,
+            'OUR TIME',  #                TIME WITHOUT TIME ZONE,
+            'OUR TIME TZ',  #             TIME WITH TIME ZONE,
+            'OUR DATE',  #                DATE,
+            'our_double',  #                DOUBLE PRECISION,
+            'our_real',  #                  REAL,
+            'our_boolean',  #               BOOLEAN,
+            'our_bit',  #                   BIT(1),
+            'our_json',  #                  JSON,
+            'our_jsonb',  #                 JSONB,
+            'our_uuid',  #                  UUID,
+            'our_hstore',  #                HSTORE,
+            'our_citext',  #                CITEXT,
+            'our_cidr',  #                  cidr,
+            'our_inet',  #                  inet,
+            'our_mac',  #                   macaddr,
+            'our_alignment_enum',  #        ALIGNMENT,
+            'our_money',  #                 money,
+            'our_bigserial',  #             BIGSERIAL,
+            'our_serial',  #                SERIAL,
+            'our_smallserial',  #           SMALLSERIAL,
+            'unsupported_bit',  #           BIT(80),
+            'unsupported_bit_varying',  #   BIT VARYING(80),
+            'unsupported_box',  #           BOX,
+            'unsupported_bytea',  #         BYTEA,
+            'unsupported_circle',  #        CIRCLE,
+            'unsupported_interval',  #      INTERVAL,
+            'unsupported_line',  #          LINE,
+            'unsupported_lseg',  #          LSEG,
+            'unsupported_path',  #          PATH,
+            'unsupported_pg_lsn',  #        PG_LSN,
+            'unsupported_point',  #         POINT,
+            'unsupported_polygon',  #       POLYGON,
+            'unsupported_tsquery',  #       TSQUERY,
+            'unsupported_tsvector',  #      TSVECTOR,
+            'unsupported_txid_snapshot',  # TXID_SNAPSHOT,
+            'unsupported_xml',  #           XML
         }
 
     @staticmethod
@@ -762,25 +1176,46 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
         for test_case, message in zip(self.expected_records.keys(), messages[1:]):
             with self.subTest(test_case=test_case):
 
+                if test_case == 'maximum_boundary_text':
+                    import pdb; pdb.set_trace()
+
                 # grab our expected record
                 expected_record = self.expected_records[test_case]
 
                 # Verify replicated records match our expectations
-                for field in expected_record.keys():
+                for field in self.expected_fields():
                     with self.subTest(field=field):
 
-                        # some data types require adjustments to actual values to make valid comparison...
-                        if field == 'our_jsonb':
-                            expected_field_value = expected_record.get(field, '{"MISSING": "FIELD"}')
-                            actual_field_value = json.loads(message['data'].get(field, '{"MISSING": "FIELD"}'))
+                        # unsupported fields should not be present in expected or actual records
+                        if field.startswith("unsupported"):
 
-                            self.assertDictEqual(expected_field_value, actual_field_value)
+                            expected_field_value = expected_record.get(field, "FIELD MISSING AS EXPECTED")
+                            actual_field_value = message['data'].get(field, "FIELD MISSING AS EXPECTED")
+
+                            self.assertEqual(expected_field_value, actual_field_value)
+
+
+                        # some data types require adjustments to actual values to make valid comparison...
+                        elif field == 'our_jsonb':
+
+                            expected_field_value = expected_record.get(field, '{"MISSING": "EXPECTED FIELD"}')
+                            actual_field_value = message['data'].get(field, '{"MISSING": "ACTUAL FIELD"}')
+
+                            if actual_field_value is None:
+
+                                self.assertIsNone(expected_field_value)
+
+                            else:
+
+                                actual_field_value = json.loads(actual_field_value)
+                                self.assertDictEqual(expected_field_value, actual_field_value)
+
 
                         # but most type do not
                         else:
 
-                            expected_field_value = expected_record.get(field, "MISSING FIELD")
-                            actual_field_value = message['data'].get(field, "MISSING FIELD")
+                            expected_field_value = expected_record.get(field, "MISSING EXPECTED FIELD")
+                            actual_field_value = message['data'].get(field, "MISSING ACTUAL FIELD")
 
                             self.assertEqual(expected_field_value, actual_field_value)
 
