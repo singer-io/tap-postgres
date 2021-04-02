@@ -72,9 +72,10 @@ def ensure_fresh_table(conn, conn_cursor, schema_name, table_name):
     conn_cursor2.execute(""" SELECT installed_version FROM pg_available_extensions WHERE name = 'hstore' """)
     if conn_cursor2.fetchone()[0] is None:
         conn_cursor2.execute(""" CREATE EXTENSION hstore; """)
-        conn_cursor2.execute(""" CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;""")
-        conn_cursor2.execute(""" DROP TYPE IF EXISTS ALIGNMENT CASCADE """)
-        conn_cursor2.execute(""" CREATE TYPE ALIGNMENT AS ENUM ('good', 'bad', 'ugly') """)
+
+    conn_cursor2.execute(""" CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;""")
+    conn_cursor2.execute(""" DROP TYPE IF EXISTS ALIGNMENT CASCADE """)
+    conn_cursor2.execute(""" CREATE TYPE ALIGNMENT AS ENUM ('good', 'GOOD', 'bad', 'ugly', 'u g l y') """)
 
     return conn_cursor2
 
@@ -121,3 +122,7 @@ def delete_record(conn_cursor, ctable_name, primary_key):
     #         cur.execute("DELETE FROM {} WHERE id = 3".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
     conn_cursor.execute("DELETE FROM {} WHERE id = {}".format(ctable_name, primary_key))
+
+def set_db_time_zone(conn_cursor, tz: str = "GMT"):
+    # set time zone 'America/New_York';
+    conn_cursor.execute("SET TIME ZONE '{}'".format(tz))
