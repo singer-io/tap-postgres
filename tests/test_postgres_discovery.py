@@ -416,6 +416,10 @@ CREATE TABLE {} (id                   SERIAL PRIMARY KEY,
                     expected_replication_keys, actual_replication_keys
                 )
 
+                # NB | We expect primary keys and replication keys to have inclusion automatic for
+                #      key-based incremental replication. But that is only true for primary keys here.
+                #      This BUG should not be carried over into hp-postgres, but will not be fixed for this tap.
+
                 # Verify primary key(s) match expectations
                 self.assertSetEqual(
                     expected_primary_keys, actual_primary_keys,
