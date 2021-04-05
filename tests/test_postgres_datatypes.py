@@ -3,6 +3,7 @@ import datetime
 import copy
 import unittest
 import decimal
+from decimal import Decimal
 import uuid
 import json
 
@@ -61,7 +62,7 @@ expected_schema = {'OUR DATE': {'format': 'date-time', 'type': ['null', 'string'
                                    'exclusiveMinimum': True,
                                    'maximum': 100000000000000000000000000000000000000000000000000000000000000,
                                    'minimum': -100000000000000000000000000000000000000000000000000000000000000,
-                                   'multipleOf': "Decimal('1E-38')",
+                                   'multipleOf': Decimal('1E-38'),
                                    'type': ['null', 'number']},
                    'our_double': {'type': ['null', 'number']},
                    'our_inet': {'type': ['null', 'string']},
@@ -76,19 +77,19 @@ expected_schema = {'OUR DATE': {'format': 'date-time', 'type': ['null', 'string'
                                           'exclusiveMinimum': True,
                                           'maximum': 100000000000000000000000000000000000000000000000000000000000000,
                                           'minimum': -100000000000000000000000000000000000000000000000000000000000000,
-                                          'multipleOf': "Decimal('1E-38')",
+                                          'multipleOf': Decimal('1E-38'),
                                           'type': ['null', 'number']},
                    'our_nospec_numeric': {'exclusiveMaximum': True,
                                           'exclusiveMinimum': True,
                                           'maximum': 100000000000000000000000000000000000000000000000000000000000000,
                                           'minimum': -100000000000000000000000000000000000000000000000000000000000000,
-                                          'multipleOf': "Decimal('1E-38')",
+                                          'multipleOf': Decimal('1E-38'),
                                           'type': ['null', 'number']},
                    'our_numeric': {'exclusiveMaximum': True,
                                    'exclusiveMinimum': True,
                                    'maximum': 100000000000000000000000000000000000000000000000000000000000000,
                                    'minimum': -100000000000000000000000000000000000000000000000000000000000000,
-                                   'multipleOf': "Decimal('1E-38')",
+                                   'multipleOf': Decimal('1E-38'),
                                    'type': ['null', 'number']},
                    'our_real': {'type': ['null', 'number']},
                    'our_serial': {'maximum': 2147483647,
@@ -295,7 +296,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.inserted_records = []
                 self.expected_records = dict()
 
-                # TODO test out of bounds precision for DECIMAL
+
 
                 # insert a record wtih minimum values
                 test_case = 'minimum_boundary_general'
@@ -497,8 +498,10 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 # TODO investigate how large our Nulls actually are ie. varchar how big?
                 #      Don't need to be exact but we should get a rough idea of how large the record is.
                 #      There is slight overhead in the record so it would be just undwer 20 megs.
-                # add a record with a text value that approaches the Stitch linmit ~ 20 Megabytes
                 # text ~                     6.36 megabytes why can't we get any larger?
+
+
+                # add a record with a text value that approaches the Stitch linmit ~ 20 Megabytes
                 test_case = 'maximum_boundary_text'
                 our_serial = 6
                 single_record_limit = int((1024 * 1024 * 6.35) / 4 ) # 6.36 fails
@@ -516,6 +519,8 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
 
                 # TODO | BUG_1 | We do not maintain -Infinity, Infinity, and NaN for
                 #                floating-point or arbitrary-precision values
+
+
                 # add a record with  -Inf for floating point types
                 test_case = 'negative_infinity_floats'
                 our_serial = 7
@@ -948,13 +953,89 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                         del self.expected_records[test_case][key]
                 db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
 
+
+                # TODO BUG_5 | The target prevents us from sending this record.
+                #              The expectation was that values with higher precision than
+                #              allowed, would be rounded and handled.
+
+
+                # add a record with out-of-bounds precision for DECIMAL/NUMERIC
+                # test_case = 'out_of_bounds_precision_decimal_and_numeric'
+                # our_serial = 24
+                # our_precision_too_high_decimal = decimal.Decimal('12345.' + '6' * 39)
+                # self.inserted_records.append({
+                #     'id': our_serial,
+                #     'our_bigserial': our_serial,
+                #     'our_serial': our_serial,
+                #     'our_smallserial': our_serial,
+                #     'our_decimal': our_precision_too_high_decimal,
+                #     'our_nospec_decimal': our_precision_too_high_decimal,
+                #     'our_numeric': our_precision_too_high_decimal,
+                #     'our_nospec_numeric': our_precision_too_high_decimal,
+                # })
+                # self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                # self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                # self.expected_records[test_case].update({
+                #     'our_decimal': decimal.Decimal('12345.' + '6' * 37 + '7'),
+                #     'our_nospec_decimal': decimal.Decimal('12345.' + '6' * 37 + '7'),
+                #     'our_numeric': decimal.Decimal('12345.' + '6' * 37 + '7'),
+                #     'our_nospec_numeric': decimal.Decimal('12345.' + '6' * 37 + '7'),
+                # })
+                # db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with all extended ascii characters
+                test_case = 'all_ascii_text'
+                our_serial = 26
+                our_ascii = ''.join(chr(x) for x in range(128) if chr(x) != '\x00')
+                our_extended_ascii = ''.join(chr(x) for x in range(256) if chr(x) != '\x00')
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_text': our_ascii,
+                    'our_text_2': our_extended_ascii,
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with all unicode characters
+                test_case = 'all_unicode_text'
+                our_serial = 27
+                our_unicode = ''
+                for x in range(1114112):
+                    if x == 0:  # skip 'null' because "ValueError: A string literal cannot contain NUL (0x00) characters."
+                        continue
+
+                    unicode_char = chr(x)
+                    try:
+                        _ = unicode_char.encode()
+                    except UnicodeEncodeError: # there are a range of unicode chars that cannot be utf-8 encoded
+                        continue
+
+                    our_unicode += unicode_char
+
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    'our_text': our_unicode,
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
                 # TODO MANUAL TESTING
                 #      EXCEED THE PYTHON LIMITATIONS FOR
                 #       [] datetimes
                 #       [] hstore
                 #           psycopg2  does not let us insert escaped characters:
                 #           try this manually: ' "backslash" => "\\",  "double_quote" => "\"" '
-
+                #       [] null text ie. '\x00', we can't input with psycopg2
 
     def null_out_remaining_fields(self, inserted_record):
         all_fields = self.expected_fields()
@@ -1155,7 +1236,8 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
         messages = records_by_stream[test_table_name]['messages']
 
         # verify the persisted schema matches expectations TODO NEED TO GO TRHOUGH SCHEMA MANUALLY STILL
-        # self.assertEqual(expected_schema, records_by_stream[test_table_name]['schema'])
+        actual_schema = records_by_stream[test_table_name]['schema']['properties']
+        self.assertEqual(expected_schema, actual_schema)
 
         # verify the number of records and number of messages match our expectations
         expected_record_count = len(self.expected_records)
@@ -1176,11 +1258,9 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
         for test_case, message in zip(self.expected_records.keys(), messages[1:]):
             with self.subTest(test_case=test_case):
 
-                if test_case == 'maximum_boundary_text':
-                    import pdb; pdb.set_trace()
-
                 # grab our expected record
                 expected_record = self.expected_records[test_case]
+
 
                 # Verify replicated records match our expectations
                 for field in self.expected_fields():

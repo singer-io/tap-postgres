@@ -9,6 +9,7 @@ potential_paths = [
 
 datatype_to_file = {
     "text": "text_datatype.txt",
+    "text": "ascii_text.txt",
 }
 
 def _go_to_tests_directory():
