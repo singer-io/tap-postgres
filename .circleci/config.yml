@@ -22,7 +22,7 @@ jobs:
             pyenv local 3.5.2
             python3 -m venv /usr/local/share/virtualenvs/tap-postgres
             source /usr/local/share/virtualenvs/tap-postgres/bin/activate
-            pip install pip setuptool
+            pip install pip setuptools
             pip install .[dev]
             source dev_env.sh
             make test
