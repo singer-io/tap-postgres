@@ -5,19 +5,16 @@ import copy
 import unittest
 import decimal
 from decimal import Decimal
-import uuid
 import json
 
 from psycopg2.extensions import quote_ident
 import psycopg2.extras
-import pytz
 from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
 
 import db_utils  # pylint: disable=import-error
-import datatype_file_reader as dfr  # pylint: disable=import-error
 
 test_schema_name = "public"
 test_table_name = "postgres_datatypes_test"
@@ -818,7 +815,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 chars = list(range(1, 55296))  # skip 0 because 'null' is not supported
                 chars.extend(range(57344, sys.maxunicode + 1))
                 for x in chars:
-                     our_unicode += chr(x)
+                    our_unicode += chr(x)
                 self.inserted_records.append({
                     'id': our_serial,
                     'our_bigserial': our_serial,
@@ -855,22 +852,22 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     'our_bigserial': our_serial,
                     'our_serial': our_serial,
                     'our_smallserial': our_serial,
-                    'unsupported_bit_varying': '01110100011000010111000000101101011101000110010101110011011101000110010101110010',  # BIT VARYING(80),
-                    'unsupported_bit': '01110100011000010111000000101101011101000110010101110011011101000110010101110010',  #    BIT(80),
-                    'unsupported_box': '((50, 50), (0, 0))',  # BOX,
-                    'unsupported_bytea': "E'\\255'",  # BYTEA,
-                    'unsupported_circle': '< (3, 1), 4 >',  # CIRCLE,
-                    'unsupported_interval': '178000000 years',  # INTERVAL,
-                    'unsupported_line': '{6, 6, 6}',  # LINE,
-                    'unsupported_lseg': '(0 , 45), (45, 90)',  # LSEG,
-                    'unsupported_path': '((0, 0), (45, 90), (2, 56))',  # PATH,
-                    'unsupported_pg_lsn': '16/B374D848',  # PG_LSN,
-                    'unsupported_point': '(1, 2)',  # POINT,
-                    'unsupported_polygon': '((0, 0), (0, 10), (10, 0), (4, 5), (6, 7))',  #  POLYGON,
-                    'unsupported_tsquery': "'fat' & 'rat'",  #  TSQUERY,
-                    'unsupported_tsvector':  "'fat':2 'rat':3",  # TSVECTOR,
-                    'unsupported_txid_snapshot': '10:20:10,14,15',  # TXID_SNAPSHOT,
-                    'unsupported_xml': '<foo>bar</foo>',  # XML)
+                    'unsupported_bit_varying': '01110100011000010111000000101101011101000110010101110011011101000110010101110010',
+                    'unsupported_bit': '01110100011000010111000000101101011101000110010101110011011101000110010101110010',
+                    'unsupported_box': '((50, 50), (0, 0))',
+                    'unsupported_bytea': "E'\\255'",
+                    'unsupported_circle': '< (3, 1), 4 >',
+                    'unsupported_interval': '178000000 years',
+                    'unsupported_line': '{6, 6, 6}',
+                    'unsupported_lseg': '(0 , 45), (45, 90)',
+                    'unsupported_path': '((0, 0), (45, 90), (2, 56))',
+                    'unsupported_pg_lsn': '16/B374D848',
+                    'unsupported_point': '(1, 2)',
+                    'unsupported_polygon': '((0, 0), (0, 10), (10, 0), (4, 5), (6, 7))',
+                    'unsupported_tsquery': "'fat' & 'rat'",
+                    'unsupported_tsvector':  "'fat':2 'rat':3",
+                    'unsupported_txid_snapshot': '10:20:10,14,15',
+                    'unsupported_xml': '<foo>bar</foo>',
                 })
                 self.expected_records[test_case] = {
                     'id': self.inserted_records[-1]['id'],
@@ -885,33 +882,32 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 # insert a record wtih maximum values
                 test_case = 'maximum_boundary_general'
                 max_ts = datetime.datetime(9999, 12, 31, 23, 59, 59, 999999)
-                max_date = datetime.date(9999, 12, 31)
                 base_string = "Bread Sticks From Olive Garden 🥖"
-                my_absurdly_large_decimal = decimal.Decimal('9' * 38 + '.' + '9' * 38) # THIS IS OUR LIMIT IN THE TARGET}
+                my_absurdly_large_decimal = decimal.Decimal('9' * 38 + '.' + '9' * 38)
                 self.inserted_records.append({
-                    'id': 2147483647,  # SERIAL PRIMARY KEY,
-                    'our_char': "🥖",  #    CHAR,
-                    'our_varchar': "a", # * 20971520,  #    VARCHAR
-                    'our_varchar_big': "🥖" + base_string,  #   VARCHAR(10485714),
-                    'our_char_big': "🥖",  #   CHAR(10485760),
-                    'our_text': "apples", #dfr.read_in("text"),  #   TEXT,
-                    'our_text_2': None,  #   TEXT,
-                    'our_integer': 2147483647,  #    INTEGER,
-                    'our_smallint': 32767,  #   SMALLINT,
-                    'our_bigint': 9223372036854775807,  #       BIGINT,
-                    'our_nospec_numeric': my_absurdly_large_decimal,  #    NUMERIC,
-                    'our_numeric': my_absurdly_large_decimal,  #           NUMERIC(1000, 500),
-                    'our_nospec_decimal': my_absurdly_large_decimal,  #    DECIMAL,
-                    'our_decimal': my_absurdly_large_decimal,  #           NUMERIC(1000, 500),
-                    quote_ident('OUR TS', cur): max_ts,# '9999-12-31 24:00:00.000000',# '294276-12-31 24:00:00.000000',  #   TIMESTAMP WITHOUT TIME ZONE,
-                    quote_ident('OUR TS TZ', cur): '9999-12-31T08:00:59.999999-15:59', #max_ts, #'294276-12-31 24:00:00.000000',  #    TIMESTAMP WITH TIME ZONE,
-                    quote_ident('OUR TIME', cur): '23:59:59.999999',# '24:00:00.000000' ->,  #   TIME WITHOUT TIME ZONE,
-                    quote_ident('OUR TIME TZ', cur): '23:59:59.999999+1559',  #    TIME WITH TIME ZONE,
-                    quote_ident('OUR DATE', cur): '5874897-12-31',  #   DATE,
-                    'our_double': decimal.Decimal('1.79769313486231e+308'),  # DOUBLE PRECISION,
-                    'our_real': decimal.Decimal('3.40282e+38'), # '1E308',  #   REAL,
-                    'our_boolean': True,  #    BOOLEAN
-                    'our_bit': '1',  #    BIT(1),
+                    'id': 2147483647,
+                    'our_char': "🥖",
+                    'our_varchar': "a",
+                    'our_varchar_big': "🥖" + base_string,
+                    'our_char_big': "🥖",
+                    'our_text': "apples",
+                    'our_text_2': None,
+                    'our_integer': 2147483647,
+                    'our_smallint': 32767,
+                    'our_bigint': 9223372036854775807,
+                    'our_nospec_numeric': my_absurdly_large_decimal,
+                    'our_numeric': my_absurdly_large_decimal,
+                    'our_nospec_decimal': my_absurdly_large_decimal,
+                    'our_decimal': my_absurdly_large_decimal,
+                    quote_ident('OUR TS', cur): max_ts,
+                    quote_ident('OUR TS TZ', cur): '9999-12-31T08:00:59.999999-15:59',
+                    quote_ident('OUR TIME', cur): '23:59:59.999999',
+                    quote_ident('OUR TIME TZ', cur): '23:59:59.999999+1559',
+                    quote_ident('OUR DATE', cur): '5874897-12-31',
+                    'our_double': decimal.Decimal('1.79769313486231e+308'),
+                    'our_real': decimal.Decimal('3.40282e+38'),
+                    'our_boolean': True,
+                    'our_bit': '1',
                     'our_json': json.dumps({
                         'our_json_string': 'This is our JSON string type.',
                         'our_json_number': 666,
@@ -926,7 +922,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                         'our_json_array': ['our_json_arrary_string', 6, {'calm': 'down'}, False, None, ['apples', 6]],
                         'our_json_boolean': True,
                         'our_json_null': None,
-                    }),  #       JSON,
+                    }),
                     'our_jsonb': json.dumps({
                         'our_jsonb_string': 'This is our JSONB string type.',
                         'our_jsonb_number': 666,
@@ -941,18 +937,18 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                         'our_jsonb_array': ['our_jsonb_arrary_string', 6, {'calm': 'down'}, False, None, ['apples', 6]],
                         'our_jsonb_boolean': True,
                         'our_jsonb_null': None,
-                    }),  #    JSONB,
-                    'our_uuid':'ffffffff-ffff-ffff-ffff-ffffffffffff', # UUID,
-                    'our_hstore': '"foo"=>"bar","bar"=>"foo","dumdum"=>Null',  # HSTORE,
-                    'our_citext': "aPpLeS",  # CITEXT,
-                    'our_cidr': '199.199.199.128/32',  #  # cidr,
-                    'our_inet': '199.199.199.128',  # inet,
-                    'our_mac': 'ff:ff:ff:ff:ff:ff',  # macaddr
-                    'our_alignment_enum': 'u g l y',  # ALIGNMENT,
-                    'our_money': "$92,233,720,368,547,758.07",  # money,
-                    'our_bigserial': 9223372036854775807,  # BIGSERIAL,
-                    'our_serial': 2147483647,  # SERIAL,
-                    'our_smallserial': 32767, #2147483647,  #  SMALLSERIAL,
+                    }),
+                    'our_uuid':'ffffffff-ffff-ffff-ffff-ffffffffffff',
+                    'our_hstore': '"foo"=>"bar","bar"=>"foo","dumdum"=>Null',
+                    'our_citext': "aPpLeS",
+                    'our_cidr': '199.199.199.128/32',
+                    'our_inet': '199.199.199.128',
+                    'our_mac': 'ff:ff:ff:ff:ff:ff',
+                    'our_alignment_enum': 'u g l y',
+                    'our_money': "$92,233,720,368,547,758.07",
+                    'our_bigserial': 9223372036854775807,
+                    'our_serial': 2147483647,
+                    'our_smallserial': 32767,
                 })
                 self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
                 self.expected_records[test_case].update({
