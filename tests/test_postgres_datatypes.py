@@ -1154,7 +1154,6 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
     def test_run(self):
         """Parametrized datatypes test running against each replication method."""
 
-        # TODO paramterize using subtest
         for replication_method in {self.FULL_TABLE, self.LOG_BASED, self.INCREMENTAL}:
             with self.subTest(replication_method=replication_method):
 
@@ -1170,35 +1169,39 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 print(f"{self.name()} passed using {replication_method} replication.")
 
 
-        # TODO Parametrize tests to also run against multiple local (db) timezones
-        # with db_utils.get_test_connection(test_db) as conn:
-        #     conn.autocommit = True
-        #     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-
-        #         db_utils.set_db_time_zone('America/New_York')
-
-
-        # self.default_replication_method = self.FULL_TABLE
-        # full_table_conn_id = connections.ensure_connection(self, original_properties=False)
-        # self.datatypes_test(full_table_conn_id)
-
-
-        # self.default_replication_method = self.INCREMENTAL
-        # incremental_conn_id = connections.ensure_connection(self, original_properties=False)
-        # self.datatypes_test(incremental_conn_id)
-
-        # self.default_replication_method = self.LOG_BASED
-        # log_based_conn_id = connections.ensure_connection(self, original_properties=False)
-        # self.datatypes_test(log_based_conn_id)
-
-
     def datatypes_test(self, conn_id):
         """
         Test Description:
-          Basic Datatypes Test for a database tap.
+          Testing boundary values for all postgres-supported datatypes. Negative testing
+          for tap-unsupported types. Partition testing for datetime precision. Testing edge
+          cases for text, numeric/decimal, and datetimes.
 
         Test Cases:
-
+          - 'minimum_boundary_general'
+          - 'maximum_boundary_text'
+          - 'negative_infinity_floats
+          - 'positive_infinity_floats'
+          - 'not_a_number_floats'
+          - 'not_a_number_numeric'
+          - 'ipv6_cidr_inet'
+          - '0_digits_of_precision_datetimes'
+          - '1_digits_of_precision_datetimes'
+          - '2_digits_of_precision_datetimes'
+          - '3_digits_of_precision_datetimes'
+          - '4_digits_of_precision_datetimes'
+          - '5_digits_of_precision_datetimes'
+          - '6_digits_of_precision_datetimes'
+          - 'near_zero_negative_floats'
+          - 'near_zero_positive_floats'
+          - 'zero_floats'
+          - 'special_characters_hstore'
+          - 'null_for_all_fields_possible'
+          - 'out_of_bounds_precision_decimal_and_numeric'
+          - 'all_ascii_text'
+          - 'all_unicode_text'
+          - 'maximum_boundary_varchar'
+          - 'unsupported_types'
+          - 'maximum_boundary_general'
         """
 
         # run discovery (check mode)
