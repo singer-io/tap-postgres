@@ -145,7 +145,6 @@ class PostgresDatatypes(unittest.TestCase):
     default_replication_method = ""
 
     def tearDown(self):
-        pass
         with db_utils.get_test_connection(test_db) as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -1133,7 +1132,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
         elif self.default_replication_method is self.INCREMENTAL:
             additional_md = [{
                 "breadcrumb": [], "metadata": {
-                    "replication-method": self.INCREMENTAL, "replication-key": "OUR TS"
+                    "replication-method": self.INCREMENTAL, "replication-key": "id"
                 }
             }]
 
@@ -1156,7 +1155,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
         """Parametrized datatypes test running against each replication method."""
 
         # TODO paramterize using subtest
-        for replication_method in {self.FULL_TABLE, self.LOG_BASED}:  # self.INCREMENTAL}:
+        for replication_method in {self.FULL_TABLE, self.LOG_BASED, self.INCREMENTAL}:
             with self.subTest(replication_method=replication_method):
 
                 # set default replication
@@ -1167,6 +1166,8 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
 
                 # run the test against the new connection
                 self.datatypes_test(conn_id)
+
+                print(f"{self.name()} passed using {replication_method} replication.")
 
 
         # TODO Parametrize tests to also run against multiple local (db) timezones
