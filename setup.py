@@ -16,7 +16,7 @@ setup(name='tap-postgres',
       extras_require={
           'dev': [
               'ipdb',
-              'pylint',
+              'pylint==2.6.0',
               'nose==1.3.7',
           ]
       },
