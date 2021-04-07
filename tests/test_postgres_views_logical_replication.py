@@ -11,16 +11,16 @@ import tap_tester.runner      as runner
 
 import db_utils  # pylint: disable=import-error
 
-expected_schemas = {'chicken_view': {'properties':
-                                     {'fk_id': {'maximum': 9223372036854775807, 'type': ['null', 'integer'],
-                                                'minimum': -9223372036854775808},
-                                      'size': {'type': ['null', 'string']},
-                                      'name': {'type': ['null', 'string']},
-                                      'id': {'maximum': 2147483647, 'type': ['null', 'integer'],
-                                             'minimum': -2147483648},
-                                      'age': {'maximum': 2147483647, 'type': ['null', 'integer'],
-                                              'minimum': -2147483648}},
-                                 'type': 'object'}}
+expected_schemas = {'invalid_chicken_view': {'properties':
+                                             {'fk_id': {'maximum': 9223372036854775807, 'type': ['null', 'integer'],
+                                                        'minimum': -9223372036854775808},
+                                              'size': {'type': ['null', 'string']},
+                                              'name': {'type': ['null', 'string']},
+                                              'id': {'maximum': 2147483647, 'type': ['null', 'integer'],
+                                                     'minimum': -2147483648},
+                                              'age': {'maximum': 2147483647, 'type': ['null', 'integer'],
+                                                      'minimum': -2147483648}},
+                                             'type': 'object'}}
 
 
 def canonicalized_table_name(schema, table, cur):
@@ -44,7 +44,7 @@ def insert_record(cursor, table_name, data):
 test_schema_name = "public"
 test_table_name_1 = "postgres_views_full_table_replication_test"
 test_table_name_2 = "postgres_views_full_table_replication_test_2"
-test_view = 'chicken_view'
+test_view = 'invalid_chicken_view'
 
 class PostgresViewsLogicalReplication(unittest.TestCase):
     def setUp(self):
@@ -101,11 +101,11 @@ class PostgresViewsLogicalReplication(unittest.TestCase):
 
     @staticmethod
     def expected_check_streams():
-        return { 'postgres-public-chicken_view'}
+        return { 'postgres-public-invalid_chicken_view'}
 
     @staticmethod
     def expected_sync_streams():
-        return { 'chicken_view' }
+        return { 'invalid_chicken_view' }
 
     @staticmethod
     def name():
@@ -114,7 +114,7 @@ class PostgresViewsLogicalReplication(unittest.TestCase):
     @staticmethod
     def expected_pks():
         return {
-            'chicken_view' : {'id'}
+            'invalid_chicken_view' : {'id'}
         }
 
     @staticmethod
@@ -164,10 +164,10 @@ class PostgresViewsLogicalReplication(unittest.TestCase):
         # verify that persisted streams have the correct properties
         chicken_catalog = found_catalogs[0]
 
-        self.assertEqual('chicken_view', chicken_catalog['stream_name'])
+        self.assertEqual('invalid_chicken_view', chicken_catalog['stream_name'])
         print("discovered streams are correct")
 
-        print('checking discoverd metadata for ROOT-CHICKEN_VIEW')
+        print('checking discoverd metadata for ROOT-INVALID_CHICKEN_VIEW')
         md = menagerie.get_annotated_schema(conn_id, chicken_catalog['stream_id'])['metadata']
 
         self.assertEqual(
