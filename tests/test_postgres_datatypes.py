@@ -146,10 +146,10 @@ class PostgresDatatypes(unittest.TestCase):
 
     def tearDown(self):
         pass
-        # with db_utils.get_test_connection(test_db) as conn:
-        #     conn.autocommit = True
-        #     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-        #         cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
+        with db_utils.get_test_connection(test_db) as conn:
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
 
     def setUp(self):
         db_utils.ensure_environment_variables_set()
@@ -161,7 +161,7 @@ class PostgresDatatypes(unittest.TestCase):
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
-                # db_utils.ensure_replication_slot(cur, test_db)
+                db_utils.ensure_replication_slot(cur, test_db)
 
                 canonicalized_table_name = db_utils.canonicalized_table_name(cur, test_schema_name, test_table_name)
 
@@ -1155,9 +1155,19 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
     def test_run(self):
         """Parametrized datatypes test running against each replication method."""
 
-        self.default_replication_method = self.FULL_TABLE
-        full_table_conn_id = connections.ensure_connection(self, original_properties=False)
-        self.datatypes_test(full_table_conn_id)
+        # TODO paramterize using subtest
+        for replication_method in {self.FULL_TABLE, self.LOG_BASED}:  # self.INCREMENTAL}:
+            with self.subTest(replication_method=replication_method):
+
+                # set default replication
+                self.default_replication_method = replication_method
+
+                # grab a new connection
+                conn_id = connections.ensure_connection(self, original_properties=False)
+
+                # run the test against the new connection
+                self.datatypes_test(conn_id)
+
 
         # TODO Parametrize tests to also run against multiple local (db) timezones
         # with db_utils.get_test_connection(test_db) as conn:
@@ -1165,6 +1175,11 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
         #     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
         #         db_utils.set_db_time_zone('America/New_York')
+
+
+        # self.default_replication_method = self.FULL_TABLE
+        # full_table_conn_id = connections.ensure_connection(self, original_properties=False)
+        # self.datatypes_test(full_table_conn_id)
 
 
         # self.default_replication_method = self.INCREMENTAL
@@ -1228,13 +1243,15 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
 
         # verify the number of records and number of messages match our expectations
         expected_record_count = len(self.expected_records)
-        expected_message_count = expected_record_count + 2 # activate versions
+        expected_activate_version_count = 1 if self.default_replication_method is self.INCREMENTAL else 2
+        expected_message_count = expected_record_count + expected_activate_version_count
         self.assertEqual(expected_record_count, record_count_by_stream[test_table_name])
         self.assertEqual(expected_message_count, len(messages))
 
         # verify we start and end syncs with an activate version message
         self.assertEqual('activate_version', messages[0]['action'])
-        self.assertEqual('activate_version', messages[-1]['action'])
+        if self.default_replication_method in {self.FULL_TABLE, self.LOG_BASED}:
+            self.assertEqual('activate_version', messages[-1]['action'])
 
         # verify the remaining messages are upserts
         actions = {message['action'] for message in messages if message['action'] != 'activate_version'}
