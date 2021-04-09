@@ -230,18 +230,19 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.expected_records = dict()
 
 
-                # TODO |  BUG_0  | The target blows up with greater than 38 digits before/after the decimal.
-                #                Is this a known/expected behavior or a BUG in the target?
-                #                It prevents us from testing what the tap claims to be able to support
-                #                (100 precision, 38 scale) without rounding AND..The postgres limits WITH rounding.
+                # BUG_5 | see ticket below
+                #         The target blows up with greater than 38 digits before/after the decimal.
+                #         Is this a known/expected behavior or a BUG in the target?
+                #         It prevents us from testing what the tap claims to be able to support
+                #         (100 precision, 38 scale) without rounding AND..The postgres limits WITH rounding.
 
 
                 # insert a record wtih minimum values
                 test_case = 'minimum_boundary_general'
                 min_date = datetime.date(1, 1, 1)
                 my_absurdly_small_decimal = decimal.Decimal('-' + '9' * 38 + '.' + '9' * 38) # CURRENT LIMIT IN TARGET
-                # my_absurdly_small_decimal = decimal.Decimal('-' + '9' * 62 + '.' + '9' * 37) # 131072 + 16383 BUG_0
-                # my_absurdly_small_spec_decimal = decimal.Decimal('-' + '9'*500 + '.' + '9'*500) # BUG_0
+                # my_absurdly_small_decimal = decimal.Decimal('-' + '9' * 62 + '.' + '9' * 37) # 131072 + 16383 BUG_5
+                # my_absurdly_small_spec_decimal = decimal.Decimal('-' + '9'*500 + '.' + '9'*500) # BUG_5
                 self.inserted_records.append({
                     'id': 1,
                     'our_char': "a",
@@ -447,6 +448,9 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                     if key.startswith('"'):
                         del self.expected_records[test_case][key]
                 db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # TODO UPDATE BUG_2 to reflect BUG_2 in HP  !
 
 
                 # TODO | BUG_2 | We do not preserve datetime precision.
@@ -758,10 +762,11 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
 
 
-                # TODO BUG_5 | The target prevents us from sending a record with numeric/decimal
-                #              values that are out of the max precision of 6 decimal digits.
-                #              The expectation is that values with higher precision than the allowed
-                #              limit, would be rounded and handled.
+                # BUG_5 | https://stitchdata.atlassian.net/browse/SRCE-5226
+                #         The target prevents us from sending a record with numeric/decimal
+                #         values that are out of the max precision of 6 decimal digits.
+                #         The expectation is that values with higher precision than the allowed
+                #         limit, would be rounded and handled.
 
 
                 # add a record with out-of-bounds precision for DECIMAL/NUMERIC
