@@ -450,12 +450,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
 
 
-                # TODO UPDATE BUG_2 to reflect BUG_2 in HP  !
-
-
-                # TODO | BUG_2 | We do not preserve datetime precision.
-                #                If a record has a decimal value it is padded to 6 digits of precision.
-                #                This is not the expected behavior.
+                # BUG_2 | We are attaching utc info onto OUR TS which is supposed to be a naive timestamp
 
 
                 # add a record with datetimes having .1 second precision
@@ -474,10 +469,10 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
                 self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
                 self.expected_records[test_case].update({
-                    'OUR TS': '1996-12-23T19:05:00.100000+00:00',  # '1996-12-23T19:05:00.1+00:00',  # BUG_2
-                    'OUR TS TZ': '1996-12-23T19:05:00.100000+00:00',  # '1996-12-23T19:05:00.1+00:00',  # BUG_2
-                    'OUR TIME': '19:05:00.100000',  # '19:05:00.1',  # BUG_2
-                    'OUR TIME TZ': '19:05:00.100000+00:00',  # '19:05:00.1+00:00',  # BUG_2
+                    'OUR TS': '1996-12-23T19:05:00.100000+00:00',  # '1996-12-23T19:05:00.100000',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.100000+00:00',
+                    'OUR TIME': '19:05:00.100000',
+                    'OUR TIME TZ': '19:05:00.100000+00:00',
                 })
                 my_keys = set(self.expected_records[test_case].keys())
                 for key in my_keys:
@@ -502,10 +497,10 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
                 self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
                 self.expected_records[test_case].update({
-                    'OUR TS': '1996-12-23T19:05:00.120000+00:00',  # '1996-12-23T19:05:00.12+00:00',  # BUG_2
-                    'OUR TS TZ': '1996-12-23T19:05:00.120000+00:00',  # '1996-12-23T19:05:00.12+00:00',  # BUG_2
-                    'OUR TIME': '19:05:00.120000',  # '19:05:00.12',  # BUG_2
-                    'OUR TIME TZ': '19:05:00.120000+00:00',  # '19:05:00.12+00:00',  # BUG_2
+                    'OUR TS': '1996-12-23T19:05:00.120000+00:00',  # '1996-12-23T19:05:00.120000',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.120000+00:00',
+                    'OUR TIME': '19:05:00.120000',
+                    'OUR TIME TZ': '19:05:00.120000+00:00',
                 })
                 my_keys = set(self.expected_records[test_case].keys())
                 for key in my_keys:
@@ -530,10 +525,10 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
                 self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
                 self.expected_records[test_case].update({
-                    'OUR TS': '1996-12-23T19:05:00.123000+00:00',  # '1996-12-23T19:05:00.123+00:00',  # BUG_2
-                    'OUR TS TZ': '1996-12-23T19:05:00.123000+00:00',  # '1996-12-23T19:05:00.123+00:00',  # BUG_2
-                    'OUR TIME': '19:05:00.123000',  # '19:05:00.123',  # BUG_2
-                    'OUR TIME TZ': '19:05:00.123000+00:00',  # '19:05:00.123+00:00',  # BUG_2
+                    'OUR TS': '1996-12-23T19:05:00.123000+00:00',  # '1996-12-23T19:05:00.123000',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.123000+00:00',
+                    'OUR TIME': '19:05:00.123000',
+                    'OUR TIME TZ': '19:05:00.123000+00:00',
                 })
                 my_keys = set(self.expected_records[test_case].keys())
                 for key in my_keys:
@@ -558,10 +553,10 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
                 self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
                 self.expected_records[test_case].update({
-                    'OUR TS': '1996-12-23T19:05:00.123400+00:00',  # '1996-12-23T19:05:00.1234+00:00',  # BUG_2
-                    'OUR TS TZ': '1996-12-23T19:05:00.123400+00:00',  # '1996-12-23T19:05:00.1234+00:00',  # BUG_2
-                    'OUR TIME': '19:05:00.123400',  # '19:05:00.1234',  # BUG_2
-                    'OUR TIME TZ': '19:05:00.123400+00:00',  # '19:05:00.1234+00:00',  # BUG_2
+                    'OUR TS': '1996-12-23T19:05:00.123400+00:00',  # '1996-12-23T19:05:00.123400',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.123400+00:00',
+                    'OUR TIME': '19:05:00.123400',
+                    'OUR TIME TZ': '19:05:00.123400+00:00',
                 })
                 my_keys = set(self.expected_records[test_case].keys())
                 for key in my_keys:
@@ -586,10 +581,10 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
                 self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
                 self.expected_records[test_case].update({
-                    'OUR TS': '1996-12-23T19:05:00.123450+00:00',  # '1996-12-23T19:05:00.12345+00:00',  # BUG_2
-                    'OUR TS TZ': '1996-12-23T19:05:00.123450+00:00',  # '1996-12-23T19:05:00.12345+00:00',  # BUG_2
-                    'OUR TIME': '19:05:00.123450',  # '19:05:00.12345',  # BUG_2
-                    'OUR TIME TZ': '19:05:00.123450+00:00',  # '19:05:00.12345+00:00',  # BUG_2
+                    'OUR TS': '1996-12-23T19:05:00.123450+00:00',  # '1996-12-23T19:05:00.123450',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.123450+00:00',
+                    'OUR TIME': '19:05:00.123450',
+                    'OUR TIME TZ': '19:05:00.123450+00:00',
                 })
                 my_keys = set(self.expected_records[test_case].keys())
                 for key in my_keys:
@@ -614,10 +609,38 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
                 self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
                 self.expected_records[test_case].update({
-                    'OUR TS': '1996-12-23T19:05:00.123456+00:00',
+                    'OUR TS': '1996-12-23T19:05:00.123456+00:00',  # '1996-12-23T19:05:00.123456',  # BUG_2
                     'OUR TS TZ': '1996-12-23T19:05:00.123456+00:00',
                     'OUR TIME': '19:05:00.123456',
                     'OUR TIME TZ': '19:05:00.123456+00:00',
+                })
+                my_keys = set(self.expected_records[test_case].keys())
+                for key in my_keys:
+                    if key.startswith('"'):
+                        del self.expected_records[test_case][key]
+                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
+
+
+                # add a record with datetimes having .000000001 second (nanosecond) precision
+                test_case = '9_digits_of_precision_datetimes'
+                our_serial += 1
+                self.inserted_records.append({
+                    'id': our_serial,
+                    'our_bigserial': our_serial,
+                    'our_serial': our_serial,
+                    'our_smallserial': our_serial,
+                    quote_ident('OUR TS', cur): '1996-12-23T19:05:00.123456789',
+                    quote_ident('OUR TS TZ', cur): '1996-12-23T19:05:00.123456789+00:00',
+                    quote_ident('OUR TIME', cur): '19:05:00.123456789',
+                    quote_ident('OUR TIME TZ', cur): '19:05:00.123456789+00:00',
+                })
+                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
+                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
+                self.expected_records[test_case].update({
+                    'OUR TS': '1996-12-23T19:05:00.123457+00:00',  # '1996-12-23T19:05:00.123456',  # BUG_2
+                    'OUR TS TZ': '1996-12-23T19:05:00.123457+00:00',
+                    'OUR TIME': '19:05:00.123457',
+                    'OUR TIME TZ': '19:05:00.123457+00:00',
                 })
                 my_keys = set(self.expected_records[test_case].keys())
                 for key in my_keys:
@@ -792,24 +815,6 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 #     'our_nospec_numeric': decimal.Decimal('12345.' + '6' * 37 + '7'),
                 # })
                 # db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
-
-
-                # add a record with all extended ascii characters
-                test_case = 'all_ascii_text'
-                our_serial += 1
-                our_ascii = ''.join(chr(x) for x in range(128) if chr(x) != '\x00')
-                our_extended_ascii = ''.join(chr(x) for x in range(256) if chr(x) != '\x00')
-                self.inserted_records.append({
-                    'id': our_serial,
-                    'our_bigserial': our_serial,
-                    'our_serial': our_serial,
-                    'our_smallserial': our_serial,
-                    'our_text': our_ascii,
-                    'our_text_2': our_extended_ascii,
-                })
-                self.expected_records[test_case] = copy.deepcopy(self.inserted_records[-1])
-                self.expected_records[test_case].update(self.null_out_remaining_fields(self.inserted_records[-1]))
-                db_utils.insert_record(cur, test_table_name, self.inserted_records[-1])
 
 
                 # add a record with all unicode characters
@@ -1196,13 +1201,13 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
           - '4_digits_of_precision_datetimes'
           - '5_digits_of_precision_datetimes'
           - '6_digits_of_precision_datetimes'
+          - '9_digits_of_precision_datetimes'
           - 'near_zero_negative_floats'
           - 'near_zero_positive_floats'
           - 'zero_floats'
           - 'special_characters_hstore'
           - 'null_for_all_fields_possible'
           - 'out_of_bounds_precision_decimal_and_numeric'
-          - 'all_ascii_text'
           - 'all_unicode_text'
           - 'maximum_boundary_varchar'
           - 'unsupported_types'
