@@ -220,6 +220,7 @@ CREATE TABLE {} (id                       SERIAL PRIMARY KEY,
                 unsupported_txid_snapshot TXID_SNAPSHOT,
                 unsupported_xml           XML)
                 """.format(canonicalized_table_name)
+                # BUG_7 | We are not testing COMPOSITE TYPE, RANGE TYPE, or OID. These should be marked as unsupported but are not.
 
                 cur = db_utils.ensure_fresh_table(conn, cur, test_schema_name, test_table_name)
                 cur.execute(create_table_sql)
