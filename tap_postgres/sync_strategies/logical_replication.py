@@ -379,6 +379,11 @@ def consume_message(streams, state, msg, time_extracted, conn_info, end_lsn, mes
     return state
 
 def locate_replication_slot(conn_info):
+    if conn_info.get('wal2json_slot_name') is not None:
+        slot_name = conn_info["wal2json_slot_name"]
+        LOGGER.info("using pg_replication_slot %s", slot_name)
+        return slot_name
+
     with post_db.open_connection(conn_info, False) as conn:
         with conn.cursor() as cur:
             db_specific_slot = "stitch_{}".format(conn_info['dbname'])
