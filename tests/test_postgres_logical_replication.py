@@ -73,6 +73,7 @@ def insert_record(cursor, table_name, data):
 
 
 test_schema_name = "public"
+test_db = "logical_1"
 test_table_name = "postgres_logical_replication_test"
 
 def canonicalized_table_name(schema, table, cur):
@@ -81,7 +82,7 @@ def canonicalized_table_name(schema, table, cur):
 
 class PostgresLogicalRep(unittest.TestCase):
     def tearDown(self):
-        with db_utils.get_test_connection('dev') as conn:
+        with db_utils.get_test_connection(test_db) as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(""" SELECT pg_drop_replication_slot('stitch') """)
@@ -89,11 +90,11 @@ class PostgresLogicalRep(unittest.TestCase):
     def setUp(self):
         db_utils.ensure_environment_variables_set()
 
-        db_utils.ensure_db('dev')
+        db_utils.ensure_db(test_db)
 
         self.maxDiff = None
 
-        with db_utils.get_test_connection('dev') as conn:
+        with db_utils.get_test_connection(test_db) as conn:
             conn.autocommit = True
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(""" SELECT EXISTS (SELECT 1
@@ -101,7 +102,7 @@ class PostgresLogicalRep(unittest.TestCase):
                                                WHERE  slot_name = 'stitch') """)
 
                 old_slot = cur.fetchone()[0]
-                with db_utils.get_test_connection('dev', True) as conn2:
+                with db_utils.get_test_connection(test_db, True) as conn2:
                     with conn2.cursor() as cur2:
                         if old_slot:
                             cur2.drop_replication_slot("stitch")
@@ -317,7 +318,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
     @staticmethod
     def expected_check_streams():
-        return { 'dev-public-postgres_logical_replication_test'}
+        return { 'logical_1-public-postgres_logical_replication_test'}
 
     @staticmethod
     def expected_sync_streams():
@@ -437,7 +438,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         state = menagerie.get_state(conn_id)
 
 
-        bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        bookmark = state['bookmarks']['logical_1-public-postgres_logical_replication_test']
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
 
         self.assertIsNotNone(bookmark['lsn'],
@@ -453,7 +454,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         #----------------------------------------------------------------------
         print("inserting a record 5")
 
-        with db_utils.get_test_connection('dev') as conn:
+        with db_utils.get_test_connection(test_db) as conn:
             conn.autocommit = True
             with conn.cursor() as cur:
                 #insert fixture data 3
@@ -564,7 +565,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         print("inserted record is correct")
 
         state = menagerie.get_state(conn_id)
-        chicken_bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        chicken_bookmark = state['bookmarks']['logical_1-public-postgres_logical_replication_test']
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
 
         self.assertIsNotNone(chicken_bookmark['lsn'],
@@ -581,7 +582,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # invoke the sync job again after deleting a record
         #----------------------------------------------------------------------
         print("delete row from source db")
-        with db_utils.get_test_connection('dev') as conn:
+        with db_utils.get_test_connection(test_db) as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("DELETE FROM {} WHERE id = 3".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
@@ -627,7 +628,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         print("deleted record is correct")
 
         state = menagerie.get_state(conn_id)
-        bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        bookmark = state['bookmarks']['logical_1-public-postgres_logical_replication_test']
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
 
         self.assertIsNotNone(bookmark['lsn'],
@@ -639,7 +640,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # invoke the sync job again after deleting a record using the 'id IN (SELECT ...)' format
         #----------------------------------------------------------------------
         print("delete row from source db")
-        with db_utils.get_test_connection('dev') as conn:
+        with db_utils.get_test_connection(test_db) as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("DELETE FROM {} WHERE id IN (SELECT id FROM {} WHERE id=2)".format(canonicalized_table_name(test_schema_name, test_table_name, cur), canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
@@ -682,7 +683,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         print("deleted record is correct")
 
         state = menagerie.get_state(conn_id)
-        bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        bookmark = state['bookmarks']['logical_1-public-postgres_logical_replication_test']
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
 
         self.assertIsNotNone(bookmark['lsn'],
@@ -699,7 +700,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # invoke the sync job again after deleting a record using the 'id IN (<id>, <id>)' format
         #----------------------------------------------------------------------
         print("delete row from source db")
-        with db_utils.get_test_connection('dev') as conn:
+        with db_utils.get_test_connection(test_db) as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("DELETE FROM {} WHERE id IN (4, 5)".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
@@ -752,7 +753,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
 
         state = menagerie.get_state(conn_id)
-        bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        bookmark = state['bookmarks']['logical_1-public-postgres_logical_replication_test']
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
 
         self.assertIsNotNone(bookmark['lsn'],
@@ -770,7 +771,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # invoke the sync job again after updating a record
         #----------------------------------------------------------------------
         print("updating row from source db")
-        with db_utils.get_test_connection('dev') as conn:
+        with db_utils.get_test_connection(test_db) as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("UPDATE {} SET our_varchar = 'THIS HAS BEEN UPDATED', our_money = '$56.811', our_decimal = 'NaN', our_real = '+Infinity', our_double = 'NaN' WHERE id = 1".format(canonicalized_table_name(test_schema_name, test_table_name, cur)))
 
@@ -856,7 +857,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         #check state again
         state = menagerie.get_state(conn_id)
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
-        chicken_bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        chicken_bookmark = state['bookmarks']['logical_1-public-postgres_logical_replication_test']
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
         self.assertIsNotNone(chicken_bookmark['lsn'],
                              msg="expected bookmark for stream public-postgres_logical_replication_test to have an scn")
@@ -896,7 +897,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         #check state again
         state = menagerie.get_state(conn_id)
-        chicken_bookmark = state['bookmarks']['dev-public-postgres_logical_replication_test']
+        chicken_bookmark = state['bookmarks']['logical_1-public-postgres_logical_replication_test']
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
         self.assertIsNotNone(chicken_bookmark['lsn'],
                              msg="expected bookmark for stream public-postgres_logical_replication_test to have an scn")
