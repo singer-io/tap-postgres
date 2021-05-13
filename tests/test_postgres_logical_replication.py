@@ -812,7 +812,6 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         #third record will be the new update
         updated_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
-        updated_sdc_lsn = int(updated_message['data']['_sdc_lsn'])
         del updated_message['data']['_sdc_lsn']
 
         self.assertEqual(updated_message['action'], 'upsert')
