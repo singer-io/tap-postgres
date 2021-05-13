@@ -613,7 +613,6 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         if expected_record_count == 2:
             # the 1st message will be the previous insert
             insert_message = records_by_stream['postgres_logical_replication_test']['messages'][0]['data']
-            inserted_sdc_lsn = int(insert_message['_sdc_lsn'])
             del insert_message['_sdc_lsn']
 
             self.assertDictEqual(insert_message, expected_inserted_record)
