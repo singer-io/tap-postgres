@@ -28,6 +28,7 @@ expected_schemas = {'postgres_logical_replication_test':
                      'type': 'object',
                      'properties': {'our_boolean': {'type': ['null', 'boolean']},
                                     '_sdc_deleted_at': {'format': 'date-time', 'type': ['null', 'string']},
+                                    '_sdc_lsn': {'type': ['null', 'string']},
                                     'OUR TS TZ': {'format' : 'date-time', 'type': ['null', 'string']},
                                     'OUR TS': {'format' : 'date-time', 'type': ['null', 'string']},
                                     'our_real': {'type': ['null', 'number']},
@@ -354,7 +355,8 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                 'user' : os.getenv('TAP_POSTGRES_USER'),
                 'default_replication_method' : 'LOG_BASED',
                 'logical_poll_total_seconds': '10',
-                'wal2json_message_format': '1'
+                'wal2json_message_format': '1',
+                'debug_lsn': 'true'
         }
 
 
@@ -519,12 +521,13 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
 
         for stream, recs in records_by_stream.items():
             # verify the persisted schema was correct
-            self.assertEqual(recs['schema'],
-                             expected_schemas[stream],
-                             msg="Persisted schema did not match expected schema for stream `{}`.".format(stream))
+            self.assertDictEqual(recs['schema'], expected_schemas[stream])
+
 
         self.assertEqual(1, len(records_by_stream['postgres_logical_replication_test']['messages']))
-        actual_record_1 = records_by_stream['postgres_logical_replication_test']['messages'][0]['data']
+        actual_record_2 = records_by_stream['postgres_logical_replication_test']['messages'][0]['data']
+        actual_sdc_lsn_2 = int(actual_record_2['_sdc_lsn'])
+        del actual_record_2['_sdc_lsn']
 
         expected_inserted_record = {'our_text': 'some text 3',
                                     'our_real': decimal.Decimal('6.6'),
@@ -555,11 +558,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                     'our_alignment_enum' : None,
                                     'our_money'          :'$412.12'
         }
-        self.assertEqual(set(actual_record_1.keys()), set(expected_inserted_record.keys()),
-                         msg="keys for expected_record_1 are wrong: {}".format(set(actual_record_1.keys()).symmetric_difference(set(expected_inserted_record.keys()))))
-
-        for k,v in actual_record_1.items():
-            self.assertEqual(actual_record_1[k], expected_inserted_record[k], msg="{} != {} for key {}".format(actual_record_1[k], expected_inserted_record[k], k))
+        self.assertDictEqual(expected_inserted_record, actual_record_2)
 
         self.assertEqual(records_by_stream['postgres_logical_replication_test']['messages'][0]['action'], 'upsert')
         print("inserted record is correct")
@@ -597,8 +596,11 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    self.expected_sync_streams(),
                                                                    self.expected_pks())
 
+        # verify the inserted record's lsn is less than or equal to the bookmarked lsn
+        self.assertGreaterEqual(lsn_2, actual_sdc_lsn_2)
+        expected_record_count = 1 if actual_sdc_lsn_2 < lsn_2 else 2
+        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': expected_record_count })
 
-        self.assertEqual(record_count_by_stream, { 'postgres_logical_replication_test': 2 })
         records_by_stream = runner.get_records_from_target_output()
 
         for stream, recs in records_by_stream.items():
@@ -607,19 +609,17 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                              expected_schemas[stream],
                              msg="Persisted schema did not match expected schema for stream `{}`.".format(stream))
 
-        # self.assertEqual(len(records_by_stream['postgres_logical_replication_test']['messages']), 1)
-        #the 1st message will be the previous insert
-        insert_message = records_by_stream['postgres_logical_replication_test']['messages'][0]['data']
+        # if there are 2 records...
+        if expected_record_count == 2:
+            # the 1st message will be the previous insert
+            insert_message = records_by_stream['postgres_logical_replication_test']['messages'][0]['data']
+            inserted_sdc_lsn = int(insert_message['_sdc_lsn'])
+            del insert_message['_sdc_lsn']
 
-        self.assertEqual(set(insert_message.keys()), set(expected_inserted_record.keys()),
-                         msg="keys for expected_record_1 are wrong: {}".format(set(insert_message.keys()).symmetric_difference(set(expected_inserted_record.keys()))))
-
-        for k,v in insert_message.items():
-            self.assertEqual(v, expected_inserted_record[k], msg="{} != {} for key {}".format(v, expected_inserted_record[k], k))
-
+            self.assertDictEqual(insert_message, expected_inserted_record)
 
         #the 2nd message will be the delete
-        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][1]
+        delete_message = records_by_stream['postgres_logical_replication_test']['messages'][expected_record_count - 1]
         self.assertEqual(delete_message['action'], 'upsert')
 
         sdc_deleted_at = delete_message['data'].get('_sdc_deleted_at')
@@ -812,8 +812,11 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertEqual(delete_message['data']['id'], 5)
 
         #third record will be the new update
-        update_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
-        self.assertEqual(update_message['action'], 'upsert')
+        updated_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
+        updated_sdc_lsn = int(updated_message['data']['_sdc_lsn'])
+        del updated_message['data']['_sdc_lsn']
+
+        self.assertEqual(updated_message['action'], 'upsert')
 
         expected_updated_rec = {'our_varchar' : 'THIS HAS BEEN UPDATED',
                                 'id' : 1,
@@ -845,13 +848,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                 'our_money' : '$56.81'
         }
 
-        self.assertEqual(set(update_message['data'].keys()), set(expected_updated_rec.keys()),
-                         msg="keys for expected_record_1 are wrong: {}".format(set(update_message['data'].keys()).symmetric_difference(set(expected_updated_rec.keys()))))
-
-
-        for k,v in update_message['data'].items():
-            self.assertEqual(v, expected_updated_rec[k], msg="{} != {} for key {}".format(v, expected_updated_rec[k], k))
-
+        self.assertDictEqual(expected_updated_rec, updated_message['data'])
         print("updated record is correct")
 
         #check state again
@@ -881,7 +878,7 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
                                                                    conn_id,
                                                                    self.expected_sync_streams(),
                                                                    self.expected_pks())
-        #we will get the previous update record again
+        # we will get the previous update record again
         self.assertEqual(record_count_by_stream, {'postgres_logical_replication_test': 1})
         # TODO the next line is not grabing the record from the latest sync, opening potential for false negatives
         update_message = records_by_stream['postgres_logical_replication_test']['messages'][2]
