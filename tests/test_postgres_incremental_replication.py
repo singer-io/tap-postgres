@@ -8,7 +8,6 @@ import json
 import pytz
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
-from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -805,6 +804,3 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         self.assertEqual(bookmark['version'], table_version)
         self.assertEqual(bookmark['replication_key'], expected_replication_key)
         self.assertEqual(bookmark['replication_key_value'], self.expected_records[5][expected_replication_key])
-
-
-SCENARIOS.add(PostgresIncrementalTable)

@@ -3,7 +3,6 @@ import unittest
 
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
-from tap_tester.scenario import SCENARIOS
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -99,8 +98,3 @@ class PostgresDropTable(unittest.TestCase):
 
         # When discovery mode finds 0 tables, the tap returns an error
         self.assertEqual(exit_status['discovery_exit_status'], 1)
-
-
-
-
-SCENARIOS.add(PostgresDropTable)

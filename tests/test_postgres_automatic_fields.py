@@ -8,7 +8,6 @@ import json
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
 import pytz
-from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -458,6 +457,3 @@ CREATE TABLE {} (id            SERIAL PRIMARY KEY,
         # Verify that only the automatic fields are sent to the target
         for actual_fields in record_messages_keys:
             self.assertSetEqual(expected_automatic_fields, actual_fields)
-
-
-SCENARIOS.add(PostgresAutomaticFields)
