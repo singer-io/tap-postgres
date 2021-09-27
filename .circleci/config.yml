@@ -34,7 +34,7 @@ jobs:
           command: |
             source dev_env.sh
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
-            pip install psycopg2==2.7.4
+            pip install psycopg2-binary==2.7.4
             run-test --tap=tap-postgres tests
       - slack/notify-on-failure:
           only_for_branches: master
