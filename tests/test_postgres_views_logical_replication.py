@@ -4,7 +4,6 @@ import unittest
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
 from singer import metadata
-from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -209,8 +208,3 @@ class PostgresViewsLogicalReplication(unittest.TestCase):
         # verify state and bookmarks
         state = menagerie.get_state(conn_id)
         self.assertEqual(state, {}, msg="expected state to be empty")
-
-
-
-
-SCENARIOS.add(PostgresViewsLogicalReplication)

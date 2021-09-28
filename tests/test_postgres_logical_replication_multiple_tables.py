@@ -3,7 +3,6 @@ import unittest
 
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
-from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -312,7 +311,3 @@ class PostgresLogicalRepMultipleTables(unittest.TestCase):
 
         #table_version does NOT change
         self.assertEqual(cows_bookmark['version'], table_version_cows, msg="expected bookmark for stream public-postgres_logical_replication_test to match version")
-
-
-
-SCENARIOS.add(PostgresLogicalRepMultipleTables)

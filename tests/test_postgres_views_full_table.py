@@ -4,7 +4,6 @@ import unittest
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
 from singer import metadata
-from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -241,6 +240,3 @@ class PostgresViewsFullTable(unittest.TestCase):
         self.assertIsNone(state['currently_syncing'], msg="expected state's currently_syncing to be None")
         self.assertEqual(chicken_bookmark['version'], table_version,
                          msg="expected bookmark for stream ROOT-CHICKEN to match version")
-
-
-SCENARIOS.add(PostgresViewsFullTable)

@@ -8,7 +8,6 @@ import uuid
 import pytz
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
-from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -354,5 +353,3 @@ CREATE TABLE {} (id                      SERIAL PRIMARY KEY,
 
         self.assertIsNone(bookmark.get('lsn'),
                           msg="expected bookmark for stream to have NO lsn because we are using full-table replication")
-
-SCENARIOS.add(PostgresFullTableRepArrays)

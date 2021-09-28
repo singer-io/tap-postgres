@@ -8,7 +8,6 @@ import json
 from psycopg2.extensions import quote_ident
 import psycopg2.extras
 import pytz
-from tap_tester.scenario import (SCENARIOS)
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -476,5 +475,3 @@ CREATE TABLE {} (id                   SERIAL PRIMARY KEY,
 
                 # Verify schema types match expectations
                 self.assertDictEqual(expected_fields_to_datatypes, actual_fields_to_datatypes)
-
-SCENARIOS.add(PostgresDiscovery)
