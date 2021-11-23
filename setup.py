@@ -11,7 +11,7 @@ setup(name='tap-postgres',
       install_requires=[
           'singer-python==5.3.1',
           'psycopg2==2.8.6',
-          'strict-rfc3339==0.7'
+          'strict-rfc3339==0.7',
           'simplejson'
       ],
       extras_require={
