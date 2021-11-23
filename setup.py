@@ -12,7 +12,7 @@ setup(name='tap-postgres',
           'singer-python==5.3.1',
           'psycopg2==2.8.6',
           'strict-rfc3339==0.7',
-          'simplejson'
+          'simplejson==3.17.6'
       ],
       extras_require={
           'dev': [
