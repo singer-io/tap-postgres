@@ -3,14 +3,14 @@
 from setuptools import setup
 
 setup(name='tap-postgres',
-      version='0.2.0',
+      version='0.2.1',
       description='Singer.io tap for extracting data from PostgreSQL',
       author='Stitch',
       url='https://singer.io',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       install_requires=[
           'singer-python==5.3.1',
-          'psycopg2==2.8.6',
+          'psycopg2==2.7.4',
           'strict-rfc3339==0.7',
       ],
       extras_require={
