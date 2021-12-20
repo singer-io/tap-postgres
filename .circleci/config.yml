@@ -28,7 +28,6 @@ jobs:
             source dev_env.sh
             make test
             pylint tap_postgres -d missing-docstring,invalid-name,line-too-long,too-many-locals,too-few-public-methods,fixme,stop-iteration-return,duplicate-code,useless-import-alias,bare-except,raise-missing-from
-      - add_ssh_keys
       - run:
           when: always
           name: 'Integration Tests'
@@ -43,18 +42,18 @@ jobs:
 
 workflows:
   version: 2
-  commit:
+  commit: &commit_jobs
     jobs:
       - build:
-          context: circleci-user
+          context:
+            - circleci-user
+            - tier-1-tap-user
   build_daily:
+    <<: *commit_jobs
     triggers:
       - schedule:
-          cron: "0 6 * * *"
+          cron: "0 1 * * *"
           filters:
             branches:
               only:
                 - master
-    jobs:
-      - build:
-          context: circleci-user
