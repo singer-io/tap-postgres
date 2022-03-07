@@ -165,13 +165,14 @@ def compute_tap_stream_id(database_name, schema_name, table_name):
 
 #NB> numeric/decimal columns in postgres without a specified scale && precision
 #default to 'up to 131072 digits before the decimal point; up to 16383
-#digits after the decimal point'. For practical reasons, we are capping this at 74/38
+#digits after the decimal point'. For practical reasons, we are capping this at 100/38
 #  https://www.postgresql.org/docs/10/static/datatype-numeric.html#DATATYPE-NUMERIC-TABLE
 MAX_SCALE = 38
 MAX_PRECISION = 100
 
 def numeric_precision(c):
     if c.numeric_precision is None:
+        LOGGER.warning('capping decimal precision to 100.  THIS MAY CAUSE TRUNCATION')
         return MAX_PRECISION
 
     if c.numeric_precision > MAX_PRECISION:
@@ -182,7 +183,9 @@ def numeric_precision(c):
 
 def numeric_scale(c):
     if c.numeric_scale is None:
+        LOGGER.warning('capping decimal scale to 38.  THIS MAY CAUSE TRUNCATION')
         return MAX_SCALE
+
     if c.numeric_scale > MAX_SCALE:
         LOGGER.warning('capping decimal scale to 38.  THIS MAY CAUSE TRUNCATION')
         return MAX_SCALE
