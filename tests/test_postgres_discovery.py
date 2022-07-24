@@ -345,11 +345,7 @@ CREATE TABLE {} (id                   SERIAL PRIMARY KEY,
             - Verify schema and db match expectations for a given stream.
             - Verify schema types match expectations for a given stream.
         """
-        ##########################################################################
-        ### TODO
-        ###   [] Generate multiple tables (streams) and maybe dbs too?
-        ###   [] Investigate potential bug, see DOCS_BUG_1
-        ##########################################################################
+        # TODO Generate multiple tables (streams) and maybe dbs too?
 
         # run discovery (check mode)
         check_job_name = runner.run_check_mode(self, conn_id)
@@ -432,9 +428,10 @@ CREATE TABLE {} (id                   SERIAL PRIMARY KEY,
                 self.assertSetEqual(expected_primary_keys, actual_automatic_fields)
 
 
-                # DOCS_BUG_1 ? | The following types were converted and selected, but docs say unsupported.
-                #                Still need to investigate how the tap handles values of these datatypes
-                #                during sync.
+                # DOCS_BUG_1 | https://stitchdata.atlassian.net/browse/DOC-1643
+                #              The following types were converted and selected, but docs say unsupported.
+                #              Still need to investigate how the tap handles values of these datatypes
+                #              during sync.
                 KNOWN_MISSING = {
                     'invalid_bigserial', # BIGSERIAL -> bigint
                     'invalid_serial',  # SERIAL -> integer
