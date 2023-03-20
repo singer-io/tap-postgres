@@ -2,6 +2,10 @@ import os
 import psycopg2
 from psycopg2.extensions import quote_ident
 
+# steal top_map method from singer-python so we can remove singer imports from tests
+def to_map(raw_metadata):
+    return {tuple(md['breadcrumb']): md['metadata'] for md in raw_metadata}
+
 def ensure_environment_variables_set():
     missing_envs = [x for x in [os.getenv('TAP_POSTGRES_HOST'),
                                 os.getenv('TAP_POSTGRES_USER'),

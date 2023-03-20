@@ -3,7 +3,6 @@ import unittest
 
 import psycopg2.extras
 from psycopg2.extensions import quote_ident
-from singer import metadata
 import tap_tester.connections as connections
 import tap_tester.menagerie   as menagerie
 import tap_tester.runner      as runner
@@ -184,7 +183,7 @@ class PostgresViewsFullTable(unittest.TestCase):
              ('properties', 'age'): {'inclusion': 'available', 'sql-datatype': 'integer', 'selected-by-default': True},
              ('properties', 'size'): {'inclusion': 'available', 'sql-datatype': 'character varying', 'selected-by-default': True},
              ('properties', 'id'): {'inclusion': 'available', 'sql-datatype': 'integer', 'selected-by-default': True}},
-            metadata.to_map(md))
+            db_utils.to_map(md))
 
 
         # 'ID' selected as view-key-properties
