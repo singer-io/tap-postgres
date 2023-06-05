@@ -404,7 +404,7 @@ CREATE TABLE {} (id                   SERIAL PRIMARY KEY,
                 )
                 actual_fields_to_datatypes = {
                     item['breadcrumb'][1]: item['metadata'].get('sql-datatype')
-                    for item in stream_metadata[1:]
+                    for item in stream_metadata if item['breadcrumb'] != []
                 }
 
                 # Verify there is only 1 top level breadcrumb in metadata
