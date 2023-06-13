@@ -49,7 +49,7 @@ workflows:
       - build:
           context:
             - circleci-user
-            - tier-1-tap-user
+            - tap-tester-user
   build_daily:
     <<: *commit_jobs
     triggers:
