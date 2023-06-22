@@ -5,7 +5,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:stitch-tap-tester
+      - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:stitch-tap-tester-18.04
       - image: singerio/postgres:9.6-wal2json-2.2-ssl
         environment:
           POSTGRES_USER: postgres
@@ -49,7 +49,7 @@ workflows:
       - build:
           context:
             - circleci-user
-            - tier-1-tap-user
+            - tap-tester-user
   build_daily:
     <<: *commit_jobs
     triggers:
