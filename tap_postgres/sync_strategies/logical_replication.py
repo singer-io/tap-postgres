@@ -148,18 +148,24 @@ def selected_value_to_singer_value_impl(elem, og_sql_datatype, conn_info):
     if elem is None:
         return elem
     if sql_datatype == 'timestamp without time zone':
-        return parse(elem).isoformat() + '+00:00'
+        return singer.utils.strftime(singer.utils.strptime_to_utc(elem))
     if sql_datatype == 'timestamp with time zone':
         if isinstance(elem, datetime.datetime):
-            return elem.isoformat()
+            return singer.utils.strftime(elem.astimezone(tz=pytz.UTC))
 
-        return parse(elem).isoformat()
+        return singer.utils.strftime(singer.utils.strptime_to_utc(elem))
     if sql_datatype == 'date':
         if  isinstance(elem, datetime.date):
             #logical replication gives us dates as strings UNLESS they from an array
-            return elem.isoformat() + 'T00:00:00+00:00'
-        return parse(elem).isoformat() + "+00:00"
+            return elem.isoformat() + 'T00:00:00Z'
+
+        return parse(elem).isoformat() + "Z"
     if sql_datatype == 'time with time zone':
+        #NB> to be consistent, we should probably being using the latter method
+        #>>> dateutil.parser.parse(t).isoformat().split('T')[1]
+        # '05:30:10+00:00'
+        #>>> singer.utils.strftime(singer.utils.strptime_to_utc(t)).split('T')[1]
+        #'05:30:10.000000Z'
         return parse(elem).isoformat().split('T')[1]
     if sql_datatype == 'bit':
         #for arrays, elem will == True

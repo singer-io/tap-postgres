@@ -4,6 +4,7 @@ import math
 import psycopg2
 import psycopg2.extras
 import singer
+import pytz
 LOGGER = singer.get_logger()
 
 cursor_iter_size = 20000
@@ -81,11 +82,11 @@ def selected_value_to_singer_value_impl(elem, sql_datatype):
         cleaned_elem = elem
     elif isinstance(elem, datetime.datetime):
         if sql_datatype == 'timestamp with time zone':
-            cleaned_elem = elem.isoformat()
+            cleaned_elem = singer.utils.strftime(elem.astimezone(tz=pytz.UTC))
         else: #timestamp WITH OUT time zone
-            cleaned_elem = elem.isoformat() + '+00:00'
+            cleaned_elem = singer.utils.strftime(elem.replace(tzinfo=pytz.UTC))
     elif isinstance(elem, datetime.date):
-        cleaned_elem = elem.isoformat() + 'T00:00:00+00:00'
+        cleaned_elem = elem.isoformat() + 'T00:00:00Z'
     elif sql_datatype == 'bit':
         cleaned_elem = elem == '1'
     elif sql_datatype == 'boolean':
