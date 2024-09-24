@@ -1,0 +1,8 @@
+{
+    "host": "HOSTNAME",
+    "port": 5432,
+    "dbname": "DATABASE",
+    "user": "USER",
+    "password": "PASSWORD",
+    "schema": "public"
+}
